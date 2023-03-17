@@ -129,7 +129,8 @@ class Redis:
     async def ping(self):
         try:
             result = await self.lock.execute(
-                self.handler.execute('PING'),
+                self.handler.ping(),
+                #self.handler.execute('PING'),
                 timeout = self.config['COMMAND_TIMEOUT']
             )
         except asyncp.LockTimeoutError:
@@ -139,7 +140,7 @@ class Redis:
         except asyncp.ExecutionError:
             self.helper.err(106, self.alias)
         else:
-            if result == b'PONG':
+            if result is True:
                 return True
             else:
                 self.helper.err(106, self.alias)
@@ -181,7 +182,8 @@ class Redis:
         func = asyncp.execute if self.block else self.lock.execute
         try:
             data = await func(
-                self.handler.execute(b'GET', key.encode()),
+                self.handler.get(key),
+                #self.handler.execute(b'GET', key.encode()),
                 timeout = self.config['COMMAND_TIMEOUT']
             )
         except asyncp.LockTimeoutError:
@@ -212,8 +214,9 @@ class Redis:
         func = asyncp.execute if self.block else self.lock.execute
         params = [ arg.encode() if type(arg).__name__ == 'str' else arg for arg in args ]
         try:
+            ex = gettatr(self.handler, command.lower())
             data = await func(
-                self.handler.execute(command.encode(), *params),
+                ex(*params),
                 timeout = self.config['COMMAND_TIMEOUT']
             )
         except asyncp.LockTimeoutError:
@@ -257,7 +260,8 @@ class Redis:
         params = [ arg.encode() if type(arg).__name__ == 'str' else arg for arg in args ]
         try:
             result = await func(
-                self.handler.execute(b'SET', key.encode(), data, *params),
+                self.handler.set(key, data, *params),
+                #self.handler.execute(b'SET', key.encode(), data, *params),
                 timeout = self.config['COMMAND_TIMEOUT']
             )
         except asyncp.LockTimeoutError:
