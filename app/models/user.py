@@ -1,3 +1,7 @@
+from app.core.context import get_api_context
+
+
+
 ####################################################################
 class User:
 
@@ -40,4 +44,4 @@ class User:
                         id = $1""",
                 id
             )
-            self.__dict__ = { **self.__dict__, dict(data) }
+            self.__dict__ = { **self.__dict__, **dict(data) }

@@ -21,12 +21,12 @@ def jsonb_decoder(value):
 
 ####################################################################
 def timestamp_encoder(value):
-    return datetime.fromtimestamp(value / 1000).strftime('%Y-%m-%d %H:%M:%S')
+    return datetime.fromtimestamp(value / 1000).strftime('%Y-%m-%d %H:%M:%S.%f')
 
 
 ####################################################################
 def timestamp_decoder(value):
-    return round(datetime.strptime(value, '%Y-%m-%d %H:%M:%S').timestamp() * 1000)
+    return round(datetime.strptime(value, '%Y-%m-%d %H:%M:%S.%f').timestamp() * 1000)
 
 
 

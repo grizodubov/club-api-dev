@@ -32,6 +32,7 @@ class API:
             on_notice = partial(self.log, 'Notice'),
             on_error = self.err,
         )
+        self.stream_mail = Stream('mail', timeout = 1, retry_error = True, timeout_error = 5)
 
 
     ################################################################

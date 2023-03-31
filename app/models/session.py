@@ -70,7 +70,7 @@ class Session:
             if result == 0:
                 break
         self.token_next = token_next
-        await api.redis.tokens.exec('SET', token_next, str(self.id), 'EX', api.config.settings['AUTH']['TOKEN_LIFETIME'])
+        await api.redis.tokens.exec('SET', token_next, self.id, ex = api.config.settings['AUTH']['TOKEN_LIFETIME'])
         api.redis.tokens.release()
 
 

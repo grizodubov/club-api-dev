@@ -210,13 +210,13 @@ class Redis:
 
 
     ################################################################
-    async def exec(self, command, *args):
+    async def exec(self, command, *args, **kwargs):
         func = asyncp.execute if self.block else self.lock.execute
-        params = [ arg.encode() if type(arg).__name__ == 'str' else arg for arg in args ]
+        # params = [ arg.encode() if type(arg).__name__ == 'str' else arg for arg in args ]
         try:
-            ex = gettatr(self.handler, command.lower())
+            exe = getattr(self.handler, command.lower())
             data = await func(
-                ex(*params),
+                exe(*args, **kwargs),
                 timeout = self.config['COMMAND_TIMEOUT']
             )
         except asyncp.LockTimeoutError:

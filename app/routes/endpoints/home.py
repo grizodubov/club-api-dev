@@ -8,12 +8,21 @@ def routes():
     return [
         Route('/', homepage, methods = [ 'GET' ]),
         Route('/', homepage, methods = [ 'POST' ]),
+        Route('/acquire', acquire, methods = [ 'POST' ]),
     ]
 
 
 
-async def homepage(request):
+def homepage(request):
     return OrjsonResponse({
         'api': 'club',
         'description': 'Закрытый клуб для поставщиков товаров и услуг на тендерном рынке.',
+    })
+
+
+
+def acquire(request):
+    return OrjsonResponse({
+        'api': 'https://beta.digitender.ru:5602',
+        'wso': 'wss://beta.digitender.ru:5602',
     })
