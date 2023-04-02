@@ -1,9 +1,28 @@
 import aiohttp
+import orjson
+from jinja2 import Template
 
 
 
 ################################################################
-async def send_mobile_message(recepient, message):
+def dumps(*args):
+    return orjson.dumps(args[0]).decode()
+
+
+
+################################################################
+def send_mobile_message(stream, phone, message, data = {}):
+    message_template = Template(message)
+    stream.register(
+        send,
+        phone = phone,
+        message = message_template.render(data),
+    )
+
+
+
+################################################################
+async def send(phone, message):
     body = None
     async with aiohttp.ClientSession(json_serialize = dumps) as session:
         try:
@@ -15,7 +34,7 @@ async def send_mobile_message(recepient, message):
                     'action': 'post_sms',
                     'sender': 'club_germes',
                     'message': message,
-                    'target': recepient,
+                    'target': phone,
                 },
             ) as response:
                 if response.status == 200:

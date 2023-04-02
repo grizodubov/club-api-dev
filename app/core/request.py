@@ -59,14 +59,16 @@ async def before_request(request):
         request.state.params = {}
     # request.session
     request.state.session = Session()
-    if params:
-        if '_key' in params:
-            await request.state.session.auth_by_key(key = params['_key'])
-        else:
-            await request.state.session.auth_by_token(token = params['_token'] if '_token' in params else '')
+    if request.url.path != '/acquire':
+        if params:
+            if '_key' in params:
+                await request.state.session.auth_by_key(key = params['_key'])
+            else:
+                await request.state.session.auth_by_token(token = params['_token'] if '_token' in params else '')
     # request.user
     request.state.user = User()
-    await request.state.user.set(id = request.state.session.user_id)
+    if request.url.path != '/acquire':
+        await request.state.user.set(id = request.state.session.user_id)
     # request.filters
     request.state.filters = {}
     print('---- Before request: end')
@@ -76,8 +78,9 @@ async def before_request(request):
 ####################################################################
 async def after_request(request, response):
     print('---- After request: begin')
-    if request.state.session.token_next:
-        response.headers['x-binding-messages'] = '0'
+    if request.url.path != '/acquire':
+        if request.state.session.token_next:
+            response.headers['x-binding-messages'] = '0'
     print('---- After request: end')
 
 

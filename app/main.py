@@ -7,6 +7,7 @@ from app.core.request import ReqMiddleware
 from app.core.api import API
 from app.core.request import extend_request
 from app.routes.http import routes as http_routes
+from app.routes.websocket import routes as websocket_routes
 
 
 
@@ -39,6 +40,7 @@ app = Starlette(
     ],
     routes = [
         *http_routes,
+        *websocket_routes,
     ],
     on_startup = [
         startup,

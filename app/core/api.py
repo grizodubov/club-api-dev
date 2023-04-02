@@ -8,6 +8,8 @@ from app.core.redis import RedisBank
 from app.core.pg import PgBank
 from app.core.mq import MQBank
 
+from app.core.stream import Stream
+
 
 
 ####################################################################
@@ -32,7 +34,11 @@ class API:
             on_notice = partial(self.log, 'Notice'),
             on_error = self.err,
         )
-        self.stream_mail = Stream('mail', timeout = 1, retry_error = True, timeout_error = 5)
+        self.store = {
+            'websockets': [],
+        }
+        self.stream_email = Stream('mail', timeout = 1, retry_error = True, timeout_error = 5)
+        self.stream_mobile = Stream('mobile', timeout = 1, retry_error = True, timeout_error = 5)
 
 
     ################################################################
@@ -57,3 +63,44 @@ class API:
     ################################################################
     def log(self, type, detail):
         print(f'{type}: {detail}')
+
+
+    ################################################################
+    def websocket_append(self, websocket, user_id = 0, session_id = 0):
+        self.store['websockets'].append({
+            'handler': websocket,
+            'user_id': user_id,
+            'session_id': session_id,
+        })
+
+
+    ################################################################
+    def websocket_set(self, websocket, user_id, session_id):
+        for ws in self.store['websockets']:
+            if ws['handler'] == websocket:
+                ws['user_id'] = user_id
+                ws['session_id'] = session_id
+
+
+    ################################################################
+    def websocket_update(self, session_id, user_id):
+        for ws in self.store['websockets']:
+            if ws['session_id'] == session_id:
+                ws['user_id'] = user_id
+
+
+    ################################################################
+    def websocket_remove(self, websocket):
+        temp = []
+        for index, ws in enumerate(self.store['websockets']):
+            if ws['handler'] == websocket:
+                temp.append(index)
+        for index in reversed(temp):
+            self.store['websockets'].pop(index)
+
+
+    ################################################################
+    async def websocket_send(self, user_id, message):
+        for ws in self.store['websockets']:
+            if ws['user_id'] == user_id:
+                await ws['handler'].send_text(message)

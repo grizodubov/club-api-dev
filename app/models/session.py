@@ -131,5 +131,8 @@ async def check_by_token(token):
                 session_id
             )
             if data:
-                return data
+                return {
+                    'session_id': data['session_id'],
+                    'user_id': data['user_id'],
+                }
     return None
