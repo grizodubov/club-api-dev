@@ -4,7 +4,6 @@ from starlette.routing import Route
 
 from app.core.request import err
 from app.core.response import OrjsonResponse
-from app.core.context import get_api_context
 from app.utils.validate import validate
 from app.models.user import User
 from app.helpers.email import send_email
@@ -115,7 +114,7 @@ async def logout(request):
 
 ################################################################
 async def login_email(request):
-    await asyncio.sleep(.5)
+    await asyncio.sleep(.25)
     if validate(request.params, MODELS['login_email']):
         user = User()
         if await user.find(email = request.params['account']):
@@ -132,13 +131,27 @@ async def login_email(request):
 
 ################################################################
 async def login_email_validate(request):
-    pass
+    await asyncio.sleep(.5)
+    if validate(request.params, MODELS['login_email_validate']):
+        user = User()
+        if await user.find(email = request.params['account']):
+            if await user.check_validation_code(code = request.params['code']):
+                await request.session.assign(user.id)
+                await request.user.copy(user = user)
+                request.api.websocket_update(request.session.id, request.user.id)
+                return OrjsonResponse({})
+            else:
+                return err(403, 'Код не верен')
+        else:
+            return err(404, 'Пользователь не найден')
+    else:
+        return err(400, 'Не указан email')
 
 
 
 ################################################################
 async def login_mobile(request):
-    await asyncio.sleep(.5)
+    await asyncio.sleep(.25)
     if validate(request.params, MODELS['login_phone']):
         user = User()
         if await user.find(phone = request.params['account']):
@@ -155,4 +168,18 @@ async def login_mobile(request):
 
 ################################################################
 async def login_mobile_validate(request):
-    pass
+    await asyncio.sleep(.5)
+    if validate(request.params, MODELS['login_mobile_validate']):
+        user = User()
+        if await user.find(email = request.params['account']):
+            if await user.check_validation_code(code = request.params['code']):
+                await request.session.assign(user.id)
+                await request.user.copy(user = user)
+                request.api.websocket_update(request.session.id, request.user.id)
+                return OrjsonResponse({})
+            else:
+                return err(403, 'Код не верен')
+        else:
+            return err(404, 'Пользователь не найден')
+    else:
+        return err(400, 'Не указан email')
