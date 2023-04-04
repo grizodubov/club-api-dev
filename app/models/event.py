@@ -20,6 +20,29 @@ class Event:
 
     
     ################################################################
+    @classmethod
+    async def list(cls):
+        api = get_api_context()
+        result = []
+        data = await api.pg.club.fetch(
+            """SELECT
+                        t1.id, t1.time_create, t1.time_update,
+                        t1.name, t1.format, t1.place, t1.time_event,
+                        t1.detail, coalesce(t2.thumbs_up, 0) AS thumbs_up
+                    FROM
+                        events t1
+                    LEFT JOIN
+                        (SELECT item_id, count(user_id) AS thumbs_up FROM items_thumbsup GROUP BY item_id) t2 ON t2.item_id = t1.id
+                    ORDER BY t1.time_event DESC"""
+        )
+        for row in data:
+            item = Event()
+            item.__dict__ = dict(row)
+            result.append(item)
+        return result
+
+
+    ################################################################
     def show(self):
         return { k: v for k, v in self.__dict__.items() if not k.startswith('_') }
 

@@ -93,7 +93,7 @@ async def login(request):
         user = User()        
         if await user.check(request.params['account'], request.params['password']):
             await request.session.assign(user.id)
-            await request.user.copy(user = user)
+            request.user.copy(user = user)
             request.api.websocket_update(request.session.id, request.user.id)
             return OrjsonResponse({})
         else:
@@ -105,11 +105,13 @@ async def login(request):
 
 ################################################################
 async def logout(request):
-    await request.session.assign(0)
-    request.user.reset()
-    request.api.websocket_update(request.session.id, request.user.id)
-    return OrjsonResponse({})
-
+    if request.user.id:
+        await request.session.assign(0)
+        request.user.reset()
+        request.api.websocket_update(request.session.id, request.user.id)
+        return OrjsonResponse({})
+    else:
+        return err(403, 'Нет доступа')
 
 
 ################################################################
@@ -137,7 +139,7 @@ async def login_email_validate(request):
         if await user.find(email = request.params['account']):
             if await user.check_validation_code(code = request.params['code']):
                 await request.session.assign(user.id)
-                await request.user.copy(user = user)
+                request.user.copy(user = user)
                 request.api.websocket_update(request.session.id, request.user.id)
                 return OrjsonResponse({})
             else:
@@ -174,7 +176,7 @@ async def login_mobile_validate(request):
         if await user.find(email = request.params['account']):
             if await user.check_validation_code(code = request.params['code']):
                 await request.session.assign(user.id)
-                await request.user.copy(user = user)
+                request.user.copy(user = user)
                 request.api.websocket_update(request.session.id, request.user.id)
                 return OrjsonResponse({})
             else:

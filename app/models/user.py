@@ -19,7 +19,7 @@ class User:
         self.phone = ''
         self.company = ''
         self.position = ''
-        self.description = ''
+        self.detail = ''
         self.status = ''
         self.tags = ''
         self._password = ''
@@ -34,7 +34,7 @@ class User:
             """SELECT
                     t1.id, t1.time_create, t1.time_update,
                     t1.name, t1.login, t1.email, t1.phone,
-                    t3.company, t3.position, t3.description,
+                    t3.company, t3.position, t3.detail,
                     t3.status, coalesce(t2.tags, '') AS tags,
                     t1.password AS _password
                 FROM
@@ -46,7 +46,7 @@ class User:
                 WHERE
                     t1.active IS TRUE AND
                     to_tsvector(
-                        concat_ws(' ', t1.name, t1.email, t1.phone, t3.company, t3.position, t3.description, t2.tags)
+                        concat_ws(' ', t1.name, t1.email, t1.phone, t3.company, t3.position, t3.detail, t2.tags)
                     ) @@ to_tsquery($1)""",
             re.sub(r'\s+', ' | ', text)
         )
@@ -59,7 +59,8 @@ class User:
     
     ################################################################
     def show(self):
-        return { k: v for k, v in self.__dict__.items() if not k.startswith('_') }
+        filter = { 'time_create', 'time_update', 'login', 'email', 'phone' }
+        return { k: v for k, v in self.__dict__.items() if not k.startswith('_') and k not in filter }
 
 
     ################################################################
@@ -70,7 +71,7 @@ class User:
                 """SELECT
                         t1.id, t1.time_create, t1.time_update,
                         t1.name, t1.login, t1.email, t1.phone,
-                        t3.company, t3.position, t3.description,
+                        t3.company, t3.position, t3.detail,
                         t3.status, coalesce(t2.tags, '') AS tags,
                         t1.password AS _password
                     FROM
@@ -114,7 +115,7 @@ class User:
                     """SELECT
                             t1.id, t1.time_create, t1.time_update,
                             t1.name, t1.login, t1.email, t1.phone,
-                            t3.company, t3.position, t3.description,
+                            t3.company, t3.position, t3.detail,
                             t3.status, coalesce(t2.tags, '') AS tags,
                             t1.password AS _password
                         FROM
@@ -142,7 +143,7 @@ class User:
                 """SELECT
                         t1.id, t1.time_create, t1.time_update,
                         t1.name, t1.login, t1.email, t1.phone,
-                        t3.company, t3.position, t3.description,
+                        t3.company, t3.position, t3.detail,
                         t3.status, coalesce(t2.tags, '') AS tags,
                         t1.password AS _password
                     FROM
@@ -271,7 +272,7 @@ class User:
     ################################################################
     async def add_contact(self, contact_id):
         api = get_api_context()
-        data = await api.pg.club.fetch(
+        data = await api.pg.club.execute(
             """INSERT INTO users_contacts (user_id, contact_id) VALUES ($1, $2) ON CONFLICT (user_id, contact_id) DO NOTHING""",
             self.id, contact_id
         )
@@ -280,7 +281,7 @@ class User:
     ################################################################
     async def del_contact(self, contact_id):
         api = get_api_context()
-        data = await api.pg.club.fetch(
+        data = await api.pg.club.execute(
             """DELETE FROM users_contacts WHERE user_id = $1 AND contact_id = $2""",
             self.id, contact_id
         )
@@ -289,7 +290,7 @@ class User:
     ################################################################
     async def add_event(self, event_id):
         api = get_api_context()
-        data = await api.pg.club.fetch(
+        data = await api.pg.club.execute(
             """INSERT INTO events_users (event_id, user_id) VALUES ($1, $2) ON CONFLICT (event_id, user_id) DO NOTHING""",
             event_id, self.id
         )
@@ -298,7 +299,46 @@ class User:
     ################################################################
     async def del_event(self, event_id):
         api = get_api_context()
-        data = await api.pg.club.fetch(
+        data = await api.pg.club.execute(
             """DELETE FROM events_users WHERE event_id = $1 AND user_id = $2""",
             event_id, self.id
         )
+
+
+    ################################################################
+    async def filter_selected_events(self, events_ids):
+        api = get_api_context()
+        data = await api.pg.club.fetch(
+            """SELECT
+                    event_id
+                FROM
+                    events_users
+                WHERE
+                    user_id = $1 AND event_id = ANY($2)""",
+            self.id, tuple(events_ids)
+        )
+        return [ row['event_id'] for row in data ]
+
+
+    ################################################################
+    async def thumbsup(self, item_id):
+        api = get_api_context()
+        data = await api.pg.club.execute(
+            """INSERT INTO items_thumbsup (item_id, user_id) VALUES ($1, $2) ON CONFLICT (item_id, user_id) DO NOTHING""",
+            item_id, self.id
+        )
+
+
+    ################################################################
+    async def filter_thumbsup(self, items_ids):
+        api = get_api_context()
+        data = await api.pg.club.fetch(
+            """SELECT
+                    item_id
+                FROM
+                    items_thumbsup
+                WHERE
+                    user_id = $1 AND item_id = ANY($2)""",
+            self.id, tuple(items_ids)
+        )
+        return [ row['item_id'] for row in data ]
