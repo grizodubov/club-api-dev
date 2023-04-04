@@ -1,6 +1,8 @@
 import os
 import uuid
 import socket
+import asyncio
+import orjson
 from functools import partial
 
 from app.core.config import Config
@@ -104,3 +106,9 @@ class API:
         for ws in self.store['websockets']:
             if ws['user_id'] == user_id:
                 await ws['handler'].send_text(message)
+
+
+    ################################################################
+    def websocket_mass_send(self, message):
+        for ws in self.store['websockets']:
+            asyncio.create_task(ws['handler'].send_text(orjson.dumps(message).decode()))

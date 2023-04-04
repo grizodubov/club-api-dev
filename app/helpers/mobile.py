@@ -32,7 +32,7 @@ async def send(phone, message):
                     'pass': '@H6HLSO4m',
                     'gzip': 'none',
                     'action': 'post_sms',
-                    'sender': 'club_germes',
+                    'sender': 'digitender',
                     'message': message,
                     'target': phone,
                 },

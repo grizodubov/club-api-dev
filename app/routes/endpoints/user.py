@@ -4,8 +4,10 @@ from starlette.routing import Route
 
 from app.core.request import err
 from app.core.response import OrjsonResponse
+from app.core.event import dispatch
 from app.utils.validate import validate
 from app.models.user import User
+from app.models.event import Event
 from app.models.item import Item
 
 
@@ -142,6 +144,7 @@ async def user_add_contact(request):
             await user.set(id = request.params['contact_id'])
             if user.id:
                 await request.user.add_contact(user.id)
+                dispatch('user_add_contact', request)
                 return OrjsonResponse({})
             else:
                 return err(404, 'Контакт не найден')
@@ -160,6 +163,7 @@ async def user_del_contact(request):
             await user.set(id = request.params['contact_id'])
             if user.id:
                 await request.user.del_contact(user.id)
+                dispatch('user_del_contact', request)
                 return OrjsonResponse({})
             else:
                 return err(404, 'Контакт не найден')
@@ -178,6 +182,7 @@ async def user_add_event(request):
             await event.set(id = request.params['event_id'])
             if event.id:
                 await request.user.add_event(event.id)
+                dispatch('user_add_event', request)
                 return OrjsonResponse({})
             else:
                 return err(404, 'Событие не найдено')
@@ -191,11 +196,12 @@ async def user_add_event(request):
 ################################################################
 async def user_del_event(request):
     if request.user.id:
-        if validate(request.params, MODELS['user_thumbs_up']):
+        if validate(request.params, MODELS['user_del_event']):
             event = Event()
             await event.set(id = request.params['event_id'])
             if event.id:
                 await request.user.del_event(event.id)
+                dispatch('user_del_event', request)
                 return OrjsonResponse({})
             else:
                 return err(404, 'Событие не найдено')
@@ -209,11 +215,12 @@ async def user_del_event(request):
 ################################################################
 async def user_thumbs_up(request):
     if request.user.id:
-        if validate(request.params, MODELS['user_add_event']):
+        if validate(request.params, MODELS['user_thumbs_up']):
             item = Item()
             await item.set(id = request.params['item_id'])
             if item.id:
                 await request.user.thumbsup(item.id)
+                dispatch('user_thumbs_up', request)
                 return OrjsonResponse({})
             else:
                 return err(404, 'Объект не найдено')

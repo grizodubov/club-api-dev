@@ -4,11 +4,13 @@ from starlette.routing import Route
 
 from app.core.request import err
 from app.core.response import OrjsonResponse
+from app.core.event import dispatch
 from app.utils.validate import validate
 from app.models.user import User
 from app.helpers.email import send_email
 from app.helpers.mobile import send_mobile_message
 from app.helpers.templates import VERIFICATION_CODE
+
 
 
 def routes():
@@ -95,23 +97,13 @@ async def login(request):
             await request.session.assign(user.id)
             request.user.copy(user = user)
             request.api.websocket_update(request.session.id, request.user.id)
+            dispatch('user_login', request)
             return OrjsonResponse({})
         else:
             return err(403, 'Пользователь и / или пароль не верны')
     else:
         return err(400, 'Не указаны логин и / или пароль')
 
-
-
-################################################################
-async def logout(request):
-    if request.user.id:
-        await request.session.assign(0)
-        request.user.reset()
-        request.api.websocket_update(request.session.id, request.user.id)
-        return OrjsonResponse({})
-    else:
-        return err(403, 'Нет доступа')
 
 
 ################################################################
@@ -141,6 +133,7 @@ async def login_email_validate(request):
                 await request.session.assign(user.id)
                 request.user.copy(user = user)
                 request.api.websocket_update(request.session.id, request.user.id)
+                dispatch('user_login', request)
                 return OrjsonResponse({})
             else:
                 return err(403, 'Код не верен')
@@ -178,6 +171,7 @@ async def login_mobile_validate(request):
                 await request.session.assign(user.id)
                 request.user.copy(user = user)
                 request.api.websocket_update(request.session.id, request.user.id)
+                dispatch('user_login', request)
                 return OrjsonResponse({})
             else:
                 return err(403, 'Код не верен')
@@ -185,3 +179,17 @@ async def login_mobile_validate(request):
             return err(404, 'Пользователь не найден')
     else:
         return err(400, 'Не указан email')
+
+
+
+################################################################
+async def logout(request):
+    if request.user.id:
+        user_id = request.user.id
+        await request.session.assign(0)
+        request.user.reset()
+        request.api.websocket_update(request.session.id, request.user.id)
+        dispatch('user_logout', request, user_id)
+        return OrjsonResponse({})
+    else:
+        return err(403, 'Нет доступа')

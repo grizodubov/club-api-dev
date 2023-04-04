@@ -58,6 +58,11 @@ class User:
     
     
     ################################################################
+    def reset(self):
+        self.__init__()
+
+
+    ################################################################
     def show(self):
         filter = { 'time_create', 'time_update', 'login', 'email', 'phone' }
         return { k: v for k, v in self.__dict__.items() if not k.startswith('_') and k not in filter }

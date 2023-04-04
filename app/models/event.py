@@ -59,7 +59,7 @@ class Event:
                     FROM
                         events t1
                     LEFT JOIN
-                        (SELECT item_id, count(user_id) AS thumbs_up FROM items_thumbs_up GROUP BY item_id) t2 ON t2.item_id = t1.id
+                        (SELECT item_id, count(user_id) AS thumbs_up FROM items_thumbsup GROUP BY item_id) t2 ON t2.item_id = t1.id
                     WHERE
                         id = $1""",
                 id
