@@ -3,6 +3,7 @@ from app.core.context import get_api_context
 
 
 async def get_chats(user_id, chat_id = None):
+    api = get_api_context()
     data = await api.pg.club.fetch(
         """SELECT
                 t3.chat_id,
@@ -70,51 +71,117 @@ async def get_chats(user_id, chat_id = None):
             'message_text': None,
             'message_time_create': None,
         })
-    return {
-        'chats': chats,
-    }
+    return chats
 
 
 
-async def get_messages(user_id, chat_id, chat_model, slice = None, before = False):
-    query = ''
-    args = []
-    if slice:
-        if before:
-
-
-    if chat_model = 'group':
-        data = await api.pg.club.fetch(
+async def get_messages(user_id, chat_id, chat_model, init = False, vector = None):
+    api = get_api_context()
+    fragments = []
+    if init:
+        last_read_message_id = await api.pg.club.fetchval(
             """SELECT
-                    t1.id, t1.time_create, t1.author_id, t3.name AS author_name, t1.text, t4.time_view
+                    max(t1.id)
                 FROM
                     messages t1
                 INNER JOIN
-                    groups_users t2 ON t2.group_id = t1.target_id
-                INNER JOIN
-                    users t3 ON t3.id = t1.author_id
-                LEFT JOIN
-                    items_views t4 ON t4.item_id = t1.id AND t4.user_id = $1
+                    items_views t2 ON t2.item_id = t1.id
                 WHERE
-                    t1.target_id = $2 AND t2.user_id = $1
-                ORDER BY
-                    t1 DESC""",
-            user_id, chat_id
+                    t2.user_id = $1""",
+            user_id
+        )
+        if last_read_message_id:
+            fragments = [
+                { 'reverse': True, 'id': last_read_message_id, 'include': True },
+                { 'reverse': False, 'id': last_read_message_id, 'include': False },
+            ]
+        else:
+            fragments = [
+                { 'reverse': False, 'id': None, 'include': False },
+            ]
+    elif vector:
+        fragments = [
+            { 'reverse': vector['reverse'], 'id': vector['id'], 'include': False },
+        ]
+    if fragments:
+        return await query_messages(user_id, chat_id, chat_model, fragments)
+    return []
+
+
+
+async def query_messages(user_id, chat_id, chat_model, fragments):
+    # fragment { reverse: True | False, id: [bigint], include: True | False }
+    api = get_api_context()
+    args = [ user_id, chat_id ]
+    queries = []
+    for fragment in fragments:
+        if chat_model == 'group':
+            query1 = """
+                INNER JOIN
+                    groups_users t2 ON t2.group_id = t1.target_id"""
+            query2 = """
+                    (t1.target_id = $2 AND t2.user_id = $1)"""
+        else:
+            query1 = ''
+            query2 = """
+                    ((t1.author_id = $1 AND t1.target_id = $2) OR
+                    (t1.author_id = $2 AND t1.target_id = $1))"""
+        if fragment['id']:
+            if fragment['reverse']:
+                op = '<=' if fragment['include'] else '<'
+            else:
+                op = '>=' if fragment['include'] else '>'
+            query2 += ' AND t1.id ' + op + ' $' + str(len(args) + 1)
+            args.append(fragment['id'])
+        query = """
+            (SELECT
+                t1.id, t1.time_create, t1.author_id, t3.name AS author_name, t1.text, t4.time_view
+            FROM
+                messages t1 """ + query1 + """
+            INNER JOIN
+                users t3 ON t3.id = t1.author_id
+            LEFT JOIN
+                items_views t4 ON t4.item_id = t1.id AND t4.user_id = $1
+            WHERE """ + query2 + """
+            ORDER BY t1"""
+        if fragment['reverse']:
+            query += ' DESC'
+        query += ' LIMIT 30)'
+        queries.append(query)
+    if len(queries) == 1:
+        #print(queries[0])
+        data = await api.pg.club.fetch(
+            queries[0],
+            *args
         )
     else:
+        #print("""SELECT t.* FROM (""" + ' UNION ALL '.join(queries) + """) t ORDER BY t.id""")
         data = await api.pg.club.fetch(
-            """SELECT
-                    t1.id, t1.time_create, t1.author_id, t3.name AS author_name, t1.text, t4.time_view
-                FROM
-                    messages t1
-                INNER JOIN
-                    users t3 ON t3.id = t1.author_id
-                LEFT JOIN
-                    items_views t4 ON t4.item_id = t1.id AND t4.user_id = $1
-                WHERE
-                    (t1.author_id = $1 AND t1.target_id = $2) OR
-                    (t1.author_id = $2 AND t1.target_id = $1)
-                ORDER BY
-                    t1 DESC""",
-            user_id, chat_id
+            """SELECT t.* FROM (""" + ' UNION ALL '.join(queries) + """) t ORDER BY t.id""",
+            *args
         )
+    return [ dict(item) for item in data ]
+
+
+
+async def add_message(user_id, chat_id, chat_model, text):
+    api = get_api_context()
+    data = await api.pg.club.fetchrow( 
+        """INSERT INTO messages
+                (author_id, target_id, target_model, text)
+            VALUES
+                ($1, $2, $3, $4)
+            RETURNING
+                id, time_create, author_id, text""",
+        user_id, chat_id, chat_model, text
+    )
+    message = dict(data)
+    await api.pg.club.execute( 
+        """INSERT INTO items_views
+                (item_id, user_id, time_view)
+            VALUES
+                ($1, $2, $3)""",
+        message['id'], user_id, message['time_create']
+    )
+    message['time_view'] = message['time_create']
+    return message

@@ -381,3 +381,20 @@ class User:
             self.id, tuple(items_ids)
         )
         return [ row['item_id'] for row in data ]
+
+
+    ################################################################
+    async def group_access(self, group_id):
+        api = get_api_context()
+        data = await api.pg.club.fetchval(
+            """SELECT
+                    group_id
+                FROM
+                    groups_users
+                WHERE
+                    user_id = $1 AND group_id = $2""",
+            self.id, group_id
+        )
+        if data == group_id:
+            return True
+        return False
