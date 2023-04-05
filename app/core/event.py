@@ -9,6 +9,7 @@ from app.core.context import get_api_context
 EVENTS = {
     'user_login': { 'send': False, 'filter_params': { 'password', 'code' } },
     'user_logout': { 'send': False, 'filter_params': None },
+    'user_update': { 'send': True, 'filter_params': None },
     'user_add_contact': { 'send': True, 'filter_params': None },
     'user_del_contact': { 'send': True, 'filter_params': None },
     'user_add_event': { 'send': True, 'filter_params': None },

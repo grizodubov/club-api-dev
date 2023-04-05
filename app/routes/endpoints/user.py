@@ -15,6 +15,7 @@ from app.models.item import Item
 def routes():
     return [
         Route('/user/{id:int}/info', user_info, methods = [ 'POST' ]),
+        Route('/user/update', user_update, methods = [ 'POST' ]),
         Route('/user/summary', user_summary, methods = [ 'POST' ]),
         Route('/user/contacts', user_contacts, methods = [ 'POST' ]),
         Route('/user/search', user_search, methods = [ 'POST' ]),
@@ -33,6 +34,29 @@ MODELS = {
 			'required': True,
 			'type': 'int',
             'value_min': 1,
+		},
+	},
+	'user_update': {
+		'name': {
+			'required': True,
+			'type': 'str',
+            'length_min': 2,
+		},
+		'company': {
+			'required': True,
+			'type': 'str',
+		},
+		'position': {
+			'required': True,
+			'type': 'str',
+		},
+		'detail': {
+			'required': True,
+			'type': 'str',
+		},
+		'tags': {
+			'required': True,
+			'type': 'str',
 		},
 	},
 	'user_search': {
@@ -84,13 +108,34 @@ MODELS = {
 ################################################################
 async def user_info(request):
     if request.user.id:
-        if validate(request.params, MODELS['user_search']):
+        if validate(request.path_params, MODELS['user_info']):
             user = User()
             await user.set(id = request.path_params['id'])
             if user.id:
-                return OrjsonResponse(user.show())
+                result = user.show()
+                result.update({ 'contacts_cache': False })
+                contacts = await request.user.get_contacts()
+                for contact in contacts:
+                    if contact['id'] == user.id:
+                        result['contacts_cache'] = True
+                        break
+                return OrjsonResponse(result)
             else:
                 return err(404, 'Пользователь не найден')
+        else:
+            return err(400, 'Неверный поиск')
+    else:
+        return err(403, 'Нет доступа')
+
+
+
+################################################################
+async def user_update(request):
+    if request.user.id:
+        if validate(request.params, MODELS['user_update']):
+            await request.user.update(**request.params)
+            dispatch('user_update', request)
+            return OrjsonResponse({})
         else:
             return err(400, 'Неверный поиск')
     else:

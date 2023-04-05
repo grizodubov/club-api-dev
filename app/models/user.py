@@ -94,6 +94,40 @@ class User:
 
 
     ################################################################
+    async def update(self, **kwargs):
+        api = get_api_context()
+        await api.pg.club.execute(
+            """UPDATE
+                    users
+                SET
+                    name = $1
+                WHERE
+                    id = $2""",
+            kwargs['name'], self.id
+        )
+        await api.pg.club.execute(
+            """UPDATE
+                    users_info
+                SET
+                    company = $1,
+                    position = $2,
+                    detail = $3
+                WHERE
+                    user_id = $4""",
+            kwargs['company'], kwargs['position'], kwargs['detail'], self.id
+        )
+        await api.pg.club.execute(
+            """UPDATE
+                    users_tags
+                SET
+                    tags = $1
+                WHERE
+                    user_id = $2""",
+            kwargs['tags'], self.id
+        )
+
+
+    ################################################################
     def copy(self, user):
         self.__dict__ = user.__dict__.copy()
 
