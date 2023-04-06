@@ -1,5 +1,3 @@
-import asyncio
-from random import randint
 from starlette.routing import Route
 
 from app.core.request import err
@@ -69,7 +67,7 @@ async def chats_list(request):
     if request.user.id:
         if validate(request.params, MODELS['chats_list']):
             return OrjsonResponse({
-                'chats': await get_chats(request.user.id)
+                'chats': await get_chats(request.user.id, request.params['chat_id'])
             })
         else:
             return err(400, 'Неверный запрос')
@@ -96,6 +94,7 @@ async def messages_list(request):
                             'id': request.params['vector_id'],
                         }
                     return OrjsonResponse({
+                        'load_type': request.params['vector_type'],
                         'messages': await get_messages(
                             user_id = request.user.id,
                             chat_id = item.id,
