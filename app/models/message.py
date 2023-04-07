@@ -10,16 +10,18 @@ async def get_chats(user_id, chat_id = None):
                 t3.chat_model,
                 coalesce(t5.name, t6.name) AS chat_name,
                 t3.messages_unread,
-                t3.message_id,
-                t4.text AS message_text,
-                t4.time_create AS message_time_create
+                t3.min_message_id,
+                t3.max_message_id,
+                t4.text AS max_message_text,
+                t4.time_create AS max_message_time_create
             FROM
             (
             --
             SELECT
                 t1.chat_id,
                 (array_agg(chat_model))[1] AS chat_model,
-                max(t1.id) AS message_id,
+                min(t1.id) AS min_message_id,
+                max(t1.id) AS max_message_id,
                 sum(CASE WHEN t2.time_view IS NULL THEN 1 ELSE 0 END) AS messages_unread,
                 bool_or(CASE WHEN t2.time_view IS NULL THEN TRUE ELSE FALSE END) AS messages_unread_exist
             FROM
@@ -47,7 +49,7 @@ async def get_chats(user_id, chat_id = None):
             --
             ) t3
             LEFT JOIN
-                messages t4 ON t4.id = t3.message_id
+                messages t4 ON t4.id = t3.max_message_id
             LEFT JOIN
                 users t5 ON t5.id = t3.chat_id
             LEFT JOIN
@@ -67,9 +69,10 @@ async def get_chats(user_id, chat_id = None):
             'chat_model': 'user',
             'chat_name': name,
             'messages_unread': 0,
-            'message_id': None,
-            'message_text': None,
-            'message_time_create': None,
+            'min_message_id': None,
+            'max_message_id': None,
+            'max_message_text': None,
+            'max_message_time_create': None,
         })
     return chats
 

@@ -11,7 +11,6 @@ from app.models.message import get_chats, get_messages, add_message
 
 def routes():
     return [
-        Route('/chat/list', chats_list, methods = [ 'POST' ]),
         Route('/message/list', messages_list, methods = [ 'POST' ]),
         Route('/message/add', message_add, methods = [ 'POST' ]),
     ]
@@ -19,19 +18,18 @@ def routes():
 
 
 MODELS = {
-	'chats_list': {
-		'chat_id': {
-            'required': True,
+	'messages_list': {
+		'future_chat_id': {
+			'required': True,
 			'type': 'int',
             'value_min': 1,
             'null': True,
 		},
-	},
-	'messages_list': {
 		'chat_id': {
 			'required': True,
 			'type': 'int',
             'value_min': 1,
+            'null': True,
 		},
         'vector_type': {
             'required': True,
@@ -63,50 +61,41 @@ MODELS = {
 
 
 ################################################################
-async def chats_list(request):
-    if request.user.id:
-        if validate(request.params, MODELS['chats_list']):
-            return OrjsonResponse({
-                'chats': await get_chats(request.user.id, request.params['chat_id'])
-            })
-        else:
-            return err(400, 'Неверный запрос')
-    else:
-        return err(403, 'Нет доступа')
-
-
-
-################################################################
 async def messages_list(request):
     if request.user.id:
         if validate(request.params, MODELS['messages_list']):
-            item = Item()
-            await item.set(id = request.params['chat_id'])
-            if item.id:
-                access = True
-                if item.model == 'group':
-                    access = await request.user.group_access(group_id = item.id)
-                if access:
-                    vector = None
-                    if request.params['vector_type'] != 'init':
-                        vector = {
-                            'reverse': request.params['vector_type'] == 'reverse',
-                            'id': request.params['vector_id'],
-                        }
-                    return OrjsonResponse({
-                        'load_type': request.params['vector_type'],
-                        'messages': await get_messages(
+            chats = await get_chats(request.user.id, request.params['future_chat_id'])
+            messages = []
+            if request.params['chat_id']:
+                item = Item()
+                await item.set(id = request.params['chat_id'])
+                if item.id:
+                    access = True
+                    if item.model == 'group':
+                        access = await request.user.group_access(group_id = item.id)
+                    if access:
+                        vector = None
+                        if request.params['vector_type'] != 'init':
+                            vector = {
+                                'reverse': request.params['vector_type'] == 'reverse',
+                                'id': request.params['vector_id'],
+                            }
+                        messages = await get_messages(
                             user_id = request.user.id,
                             chat_id = item.id,
                             chat_model = item.model,
                             init = request.params['vector_type'] == 'init',
                             vector = vector,
                         )
-                    })
+                    else:
+                        return err(403, 'Нет доступа')
                 else:
-                    return err(403, 'Нет доступа')
-            else:
-                return err(404, 'Сообщения не найдены')
+                    return err(404, 'Сообщения не найдены')
+            return OrjsonResponse({
+                'vector_type': request.params['vector_type'],
+                'chats': chats,
+                'messages': sorted(messages, key = lambda m: m['id']),
+            })
         else:
             return err(400, 'Неверный запрос')
     else:

@@ -15,7 +15,7 @@ EVENTS = {
     'user_add_event': { 'send': True, 'filter_params': None },
     'user_del_event': { 'send': True, 'filter_params': None },
     'user_thumbs_up': { 'send': True, 'filter_params': None },
-    'add_message': { 'send': True, 'filter_params': None },
+    'message_add': { 'send': True, 'filter_params': None },
 }
 
 
