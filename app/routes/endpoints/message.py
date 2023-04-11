@@ -5,7 +5,7 @@ from app.core.response import OrjsonResponse
 from app.core.event import dispatch
 from app.utils.validate import validate
 from app.models.item import Item
-from app.models.message import get_chats, get_messages, add_message
+from app.models.message import get_chats, get_messages, add_message, view_message
 
 
 
@@ -13,6 +13,8 @@ def routes():
     return [
         Route('/message/list', messages_list, methods = [ 'POST' ]),
         Route('/message/add', message_add, methods = [ 'POST' ]),
+        Route('/message/{id:int}/view', message_view, methods = [ 'POST' ]),
+        Route('/message/view/multiple', messages_view, methods = [ 'POST' ]),
     ]
 
 
@@ -55,6 +57,21 @@ MODELS = {
 			'type': 'str',
             'length_min': 1,
         }
+	},
+	'message_view': {
+		'id': {
+			'required': True,
+			'type': 'int',
+            'value_min': 1,
+		},
+	},
+	'messages_view': {
+		'ids': {
+			'required': True,
+			'type': 'int',
+            'value_min': 1,
+            'list': True,
+		},
 	},
 }
 
@@ -131,5 +148,55 @@ async def message_add(request):
                 return err(404, 'Сообщения не найдены')
         else:
             return err(400, 'Неверный запрос')
+    else:
+        return err(403, 'Нет доступа')
+
+
+
+################################################################
+async def message_view(request):
+    if request.user.id:
+        if validate(request.path_params, MODELS['message_view']):
+            item = Item()
+            await item.set(id = request.path_params['id'])
+            if item.id and item.model == 'message':
+                time_view = await view_message(request.user.id, item.id)
+                dispatch('message_view', request)
+                return OrjsonResponse({
+                    'message_id': item.id,
+                    'time_view': time_view,
+                })
+            else:
+                return err(404, 'Сообщение не найдено')
+        else:
+            return err(400, 'Неверный поиск')
+    else:
+        return err(403, 'Нет доступа')
+
+
+
+################################################################
+async def messages_view(request):
+    if request.user.id:
+        if validate(request.params, MODELS['messages_view']):
+            items = Items()
+            await items.set(ids = request.params['id'])
+            if items.list and items.check_model('message'):
+                
+                
+                
+                time_view = await view_messages(request.user.id, )
+                dispatch('message_view', request)
+                return OrjsonResponse({
+                    'message_id': item.id,
+                    'time_view': time_view,
+                })
+
+
+
+            else:
+                return err(404, 'Сообщение не найдено')
+        else:
+            return err(400, 'Неверный поиск')
     else:
         return err(403, 'Нет доступа')

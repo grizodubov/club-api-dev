@@ -170,7 +170,8 @@ async def query_messages(user_id, chat_id, chat_model, fragments):
 async def add_message(user_id, chat_id, chat_model, text):
     api = get_api_context()
     data = await api.pg.club.fetchrow( 
-        """INSERT INTO messages
+        """INSERT INTO
+                messages
                 (author_id, target_id, target_model, text)
             VALUES
                 ($1, $2, $3, $4)
@@ -180,11 +181,33 @@ async def add_message(user_id, chat_id, chat_model, text):
     )
     message = dict(data)
     await api.pg.club.execute( 
-        """INSERT INTO items_views
+        """INSERT INTO
+                items_views
                 (item_id, user_id, time_view)
             VALUES
-                ($1, $2, $3)""",
+                ($1, $2, $3)
+            ON CONFLICT
+                (item_id, user_id)
+            DO NOTHING""",
         message['id'], user_id, message['time_create']
     )
     message['time_view'] = message['time_create']
     return message
+
+
+
+async def view_message(user_id, message_id):
+    api = get_api_context()
+    time_view = await api.pg.club.fetchval( 
+        """INSERT INTO
+                items_views
+                (item_id, user_id)
+            VALUES
+                ($1, $2)
+            ON CONFLICT
+                (item_id, user_id)
+            DO NOTHING
+            RETURNING time_view""",
+        message_id, user_id
+    )
+    return time_view
