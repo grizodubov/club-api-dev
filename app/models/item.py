@@ -42,7 +42,7 @@ class Items:
     async def set(self, ids):
         api = get_api_context()
         if ids:
-            data = await api.pg.club.fetchrow(
+            data = await api.pg.club.fetch(
                 """SELECT
                         id, model
                     FROM
@@ -58,10 +58,15 @@ class Items:
 
 
     ################################################################
-    def model_check(self, model):
+    def check_model(self, model):
         result = True
         for item in self.list:
             if item.model != model:
                 result = False
                 break
         return result
+
+
+    ################################################################
+    def ids(self):
+        return [ item.id for item in self.list ]

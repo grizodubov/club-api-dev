@@ -4,8 +4,8 @@ from app.core.request import err
 from app.core.response import OrjsonResponse
 from app.core.event import dispatch
 from app.utils.validate import validate
-from app.models.item import Item
-from app.models.message import get_chats, get_messages, add_message, view_message
+from app.models.item import Item, Items
+from app.models.message import get_chats, get_messages, add_message, view_message, view_messages
 
 
 
@@ -14,7 +14,7 @@ def routes():
         Route('/message/list', messages_list, methods = [ 'POST' ]),
         Route('/message/add', message_add, methods = [ 'POST' ]),
         Route('/message/{id:int}/view', message_view, methods = [ 'POST' ]),
-        Route('/message/view/multiple', messages_view, methods = [ 'POST' ]),
+        Route('/message/view', messages_view, methods = [ 'POST' ]),
     ]
 
 
@@ -180,22 +180,25 @@ async def messages_view(request):
     if request.user.id:
         if validate(request.params, MODELS['messages_view']):
             items = Items()
-            await items.set(ids = request.params['id'])
+            await items.set(ids = request.params['ids'])
+            # TODO: проверить доступ к сообщениям
             if items.list and items.check_model('message'):
-                
-                
-                
-                time_view = await view_messages(request.user.id, )
+                if len(items.list) > 1:
+                    data = await view_messages(request.user.id, items.ids())
+                else:
+                    time_view = await view_message(request.user.id, items.list[0].id)
+                    data = [
+                        {
+                            'message_id': items.list[0].id,
+                            'time_view': time_view,
+                        },
+                    ]
                 dispatch('message_view', request)
                 return OrjsonResponse({
-                    'message_id': item.id,
-                    'time_view': time_view,
+                    'views': data,
                 })
-
-
-
             else:
-                return err(404, 'Сообщение не найдено')
+                return err(404, 'Сообщения не найдены')
         else:
             return err(400, 'Неверный поиск')
     else:

@@ -203,11 +203,35 @@ async def view_message(user_id, message_id):
                 items_views
                 (item_id, user_id)
             VALUES
-                ($1, $2)
+                ($2, $1)
             ON CONFLICT
                 (item_id, user_id)
             DO NOTHING
-            RETURNING time_view""",
-        message_id, user_id
+            RETURNING
+                time_view""",
+        user_id, item_id
     )
     return time_view
+
+
+
+async def view_messages(user_id, messages_ids):
+    api = get_api_context()
+    query = []
+    args = []
+    for i, id in enumerate(messages_ids):
+        query.append('($' + str(i + 2) + ', $1)')
+        args.append(id)
+    data = await api.pg.club.fetch( 
+        """INSERT INTO
+                items_views
+                (item_id, user_id)
+            VALUES """ + ', '.join(query) + """
+            ON CONFLICT
+                (item_id, user_id)
+            DO NOTHING
+            RETURNING
+                item_id, time_view""",
+        user_id, *args
+    )
+    return [ { 'message_id': row['item_id'], 'time_view': row['time_view'] } for row in data ]
