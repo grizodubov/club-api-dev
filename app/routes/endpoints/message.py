@@ -118,6 +118,7 @@ async def messages_list(request):
             return OrjsonResponse({
                 'vector_type': request.params['vector_type'],
                 'chats': chats,
+                'chat_id': request.params['chat_id'],
                 'min_unread_message_id': min_unread_message_id,
                 'messages': messages,
             })
