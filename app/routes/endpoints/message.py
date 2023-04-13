@@ -83,6 +83,7 @@ async def messages_list(request):
         if validate(request.params, MODELS['messages_list']):
             chats = await get_chats(request.user.id, request.params['future_chat_id'])
             messages = []
+            min_unread_message_id = None
             if request.params['chat_id']:
                 item = Item()
                 await item.set(id = request.params['chat_id'])
@@ -104,6 +105,12 @@ async def messages_list(request):
                             init = request.params['vector_type'] == 'init',
                             vector = vector,
                         )
+                        messages = sorted(messages, key = lambda m: m['id'])
+                        if request.params['vector_type'] == 'init':
+                            for m in reversed(messages):
+                                if m['time_view']:
+                                    break
+                                min_unread_message_id = m['id']
                     else:
                         return err(403, 'Нет доступа')
                 else:
@@ -111,7 +118,8 @@ async def messages_list(request):
             return OrjsonResponse({
                 'vector_type': request.params['vector_type'],
                 'chats': chats,
-                'messages': sorted(messages, key = lambda m: m['id']),
+                'min_unread_message_id': min_unread_message_id,
+                'messages': messages,
             })
         else:
             return err(400, 'Неверный запрос')
