@@ -2,6 +2,64 @@ from app.core.context import get_api_context
 
 
 
+####################################################################
+class User:
+
+
+    ################################################################
+    def __init__(self):
+        self.id = 0
+        self.time_create = None
+        self.time_update = None
+        self.name = ''
+        self.login = ''
+        self.email = ''
+        self.phone = ''
+        self.company = ''
+        self.position = ''
+        self.detail = ''
+        self.status = ''
+        self.tags = ''
+        self._password = ''
+    
+    
+    ################################################################
+    def reset(self):
+        self.__init__()
+
+
+    ################################################################
+    def show(self):
+        filter = { 'time_create', 'time_update', 'login', 'email', 'phone' }
+        return { k: v for k, v in self.__dict__.items() if not k.startswith('_') and k not in filter }
+
+
+    ################################################################
+    async def set(self, id):
+        api = get_api_context()
+        if id:
+            data = await api.pg.club.fetchrow(
+                """SELECT
+                        t1.id, t1.time_create, t1.time_update,
+                        t1.name, t1.login, t1.email, t1.phone,
+                        t3.company, t3.position, t3.detail,
+                        t3.status, coalesce(t2.tags, '') AS tags,
+                        t1.password AS _password
+                    FROM
+                        users t1
+                    INNER JOIN
+                        users_tags t2 ON t2.user_id = t1.id
+                    INNER JOIN
+                        users_info t3 ON t3.user_id = t1.id
+                    WHERE
+                        id = $1 AND
+                        active IS TRUE""",
+                id
+            )
+            self.__dict__ = dict(data)
+
+
+
 async def get_chats(user_id, chat_id = None):
     api = get_api_context()
     data = await api.pg.club.fetch(
@@ -17,35 +75,35 @@ async def get_chats(user_id, chat_id = None):
             FROM
             (
             --
-            SELECT
-                t1.chat_id,
-                (array_agg(chat_model))[1] AS chat_model,
-                min(t1.id) AS min_message_id,
-                max(t1.id) AS max_message_id,
-                sum(CASE WHEN t2.time_view IS NULL THEN 1 ELSE 0 END) AS messages_unread,
-                bool_or(CASE WHEN t2.time_view IS NULL THEN TRUE ELSE FALSE END) AS messages_unread_exist
-            FROM
-            (
                 SELECT
-                    id, text, time_create, CASE WHEN target_id = $1 THEN author_id ELSE target_id END AS chat_id, 'user'::model AS chat_model
+                    t1.chat_id,
+                    (array_agg(chat_model))[1] AS chat_model,
+                    min(t1.id) AS min_message_id,
+                    max(t1.id) AS max_message_id,
+                    sum(CASE WHEN t2.time_view IS NULL THEN 1 ELSE 0 END) AS messages_unread,
+                    bool_or(CASE WHEN t2.time_view IS NULL THEN TRUE ELSE FALSE END) AS messages_unread_exist
                 FROM
-                    messages
-                WHERE
-                    (target_id = $1 OR author_id = $1) AND
-                    target_model = 'user'::model
+                (
+                    SELECT
+                        id, text, time_create, CASE WHEN target_id = $1 THEN author_id ELSE target_id END AS chat_id, 'user'::model AS chat_model
+                    FROM
+                        messages
+                    WHERE
+                        (target_id = $1 OR author_id = $1) AND
+                        target_model = 'user'::model
 
-                UNION ALL
+                    UNION ALL
 
-                SELECT
-                    id, text, time_create, target_id AS chat_id, 'group'::model AS chat_model
-                FROM
-                    messages
-                WHERE
-                    target_id IN (SELECT group_id FROM groups_users WHERE user_id = $1)
-            ) t1
-            LEFT JOIN
-                items_views t2 ON t2.item_id = t1.id AND t2.user_id = $1
-            GROUP BY t1.chat_id
+                    SELECT
+                        id, text, time_create, target_id AS chat_id, 'group'::model AS chat_model
+                    FROM
+                        messages
+                    WHERE
+                        target_id IN (SELECT group_id FROM groups_users WHERE user_id = $1)
+                ) t1
+                LEFT JOIN
+                    items_views t2 ON t2.item_id = t1.id AND t2.user_id = $1
+                GROUP BY t1.chat_id
             --
             ) t3
             LEFT JOIN
@@ -196,8 +254,30 @@ async def add_message(user_id, chat_id, chat_model, text):
 
 
 
+
+
+
+
+
+
+
+
+
+
 async def view_message(user_id, message_id):
     api = get_api_context()
+    ids = await api.pg.club.fetchval(
+        """SELECT
+                array_agg(t1.id)
+            FROM
+                messages t
+            LEFT JOIN
+                items_views t2 ON t2.item_id = t1.id
+            WHERE
+                t1.id <= $1 AND t2.time_view IS NULL
+            """
+    )
+
     time_view = await api.pg.club.fetchval( 
         """INSERT INTO
                 items_views
