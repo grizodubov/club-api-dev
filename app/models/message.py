@@ -3,7 +3,7 @@ from app.core.context import get_api_context
 
 
 ####################################################################
-class User:
+class Message:
 
 
     ################################################################
@@ -11,17 +11,15 @@ class User:
         self.id = 0
         self.time_create = None
         self.time_update = None
-        self.name = ''
-        self.login = ''
-        self.email = ''
-        self.phone = ''
-        self.company = ''
-        self.position = ''
-        self.detail = ''
-        self.status = ''
-        self.tags = ''
-        self._password = ''
-    
+        self.author_id = None
+        self.author_id_deleted = None
+        self.target_id = None
+        self.target_id_deleted = None
+        self.target_model = None
+        self.reply_to_message_id = None
+        self.reply_to_message_id_deleted = None
+        self.text = ''
+
     
     ################################################################
     def reset(self):
@@ -30,8 +28,7 @@ class User:
 
     ################################################################
     def show(self):
-        filter = { 'time_create', 'time_update', 'login', 'email', 'phone' }
-        return { k: v for k, v in self.__dict__.items() if not k.startswith('_') and k not in filter }
+        return { k: v for k, v in self.__dict__.items() if not k.startswith('_') }
 
 
     ################################################################
