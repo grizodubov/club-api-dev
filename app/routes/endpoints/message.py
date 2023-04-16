@@ -82,8 +82,9 @@ async def messages_list(request):
     if request.user.id:
         if validate(request.params, MODELS['messages_list']):
             chats = await get_chats(request.user.id, request.params['future_chat_id'])
-            messages = []
+            vector_type = None
             min_unread_message_id = None
+            messages = []
             if request.params['chat_id']:
                 item = Item()
                 await item.set(id = request.params['chat_id'])
@@ -92,21 +93,22 @@ async def messages_list(request):
                     if item.model == 'group':
                         access = await request.user.group_access(group_id = item.id)
                     if access:
+                        vector_type = request.params['vector_type']
                         vector = None
-                        if request.params['vector_type'] != 'init':
+                        if vector_type != 'init':
                             vector = {
-                                'reverse': request.params['vector_type'] == 'reverse',
+                                'reverse': vector_type == 'reverse',
                                 'id': request.params['vector_id'],
                             }
                         messages = await get_messages(
                             user_id = request.user.id,
                             chat_id = item.id,
                             chat_model = item.model,
-                            init = request.params['vector_type'] == 'init',
+                            init = vector_type == 'init',
                             vector = vector,
                         )
                         messages = sorted(messages, key = lambda m: m['id'])
-                        if request.params['vector_type'] == 'init':
+                        if vector_type == 'init':
                             for m in reversed(messages):
                                 if m['time_view']:
                                     break
@@ -116,7 +118,7 @@ async def messages_list(request):
                 else:
                     return err(404, 'Сообщения не найдены')
             return OrjsonResponse({
-                'vector_type': request.params['vector_type'],
+                'vector_type': vector_type,
                 'chats': chats,
                 'chat_id': request.params['chat_id'],
                 'min_unread_message_id': min_unread_message_id,

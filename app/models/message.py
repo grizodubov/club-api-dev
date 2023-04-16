@@ -271,7 +271,7 @@ async def view_message(user_id, message_id):
             DO NOTHING
             RETURNING
                 time_view""",
-        user_id, item_id
+        user_id, message_id
     )
     return time_view
 
