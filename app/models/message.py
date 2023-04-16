@@ -13,12 +13,15 @@ class Message:
         self.time_update = None
         self.author_id = None
         self.author_id_deleted = None
+        self.author_name = ''
         self.target_id = None
         self.target_id_deleted = None
         self.target_model = None
+        self.target_name = ''
         self.reply_to_message_id = None
         self.reply_to_message_id_deleted = None
         self.text = ''
+        self.time_view = None
 
     
     ################################################################
@@ -38,22 +41,26 @@ class Message:
             data = await api.pg.club.fetchrow(
                 """SELECT
                         t1.id, t1.time_create, t1.time_update,
-                        t1.name, t1.login, t1.email, t1.phone,
-                        t3.company, t3.position, t3.detail,
-                        t3.status, coalesce(t2.tags, '') AS tags,
-                        t1.password AS _password
+                        t1.author_id, t1.author_id_deleted, t2.name AS author_name,
+                        t1.target_id, t1.target_id_deleted, t1.target_model,
+                        t1.reply_to_message_id, t1.reply_to_message_id_deleted,
+                        t1.text, t3.time_view
                     FROM
-                        users t1
+                        messages t1
                     INNER JOIN
-                        users_tags t2 ON t2.user_id = t1.id
-                    INNER JOIN
-                        users_info t3 ON t3.user_id = t1.id
+                        users t2 ON t2.id = t1.author_id OR t2.id = t1.author_id_deleted
+                    LEFT JOIN
+                        items_views t3 ON t3.item_id = t1.id
                     WHERE
-                        id = $1 AND
-                        active IS TRUE""",
+                        t1.id = $1""",
                 id
             )
             self.__dict__ = dict(data)
+            if self.target_model == 'group' or self.target_model == 'user':
+                self.target_name = await api.pg.club.fetchval(
+                    """SELECT name FROM """ + self.target_model + """s WHERE id = $1""",
+                    self.target_id
+                )
 
 
 
@@ -251,30 +258,8 @@ async def add_message(user_id, chat_id, chat_model, text):
 
 
 
-
-
-
-
-
-
-
-
-
-
 async def view_message(user_id, message_id):
     api = get_api_context()
-    ids = await api.pg.club.fetchval(
-        """SELECT
-                array_agg(t1.id)
-            FROM
-                messages t
-            LEFT JOIN
-                items_views t2 ON t2.item_id = t1.id
-            WHERE
-                t1.id <= $1 AND t2.time_view IS NULL
-            """
-    )
-
     time_view = await api.pg.club.fetchval( 
         """INSERT INTO
                 items_views
