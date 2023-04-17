@@ -23,6 +23,6 @@ def homepage(request):
 
 def acquire(request):
     return OrjsonResponse({
-        'api': 'https://beta.digitender.ru:5602',
-        'wso': 'wss://beta.digitender.ru:5602',
+        'api': 'https://eta.clubgermes.ru:5007',
+        'wso': 'wss://eta.clubgermes.ru:5007',
     })
