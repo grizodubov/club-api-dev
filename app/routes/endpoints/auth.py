@@ -40,7 +40,7 @@ MODELS = {
             'processing': lambda x: x.strip(),
 		},
 	},
-	'login_phone': {
+	'login_mobile': {
 		'account': {
 			'required': True,
 			'type': 'str',
@@ -48,7 +48,7 @@ MODELS = {
             'processing': lambda x: x.strip().lower(),
 		},
 	},
-	'login_phone_validate': {
+	'login_mobile_validate': {
 		'account': {
 			'required': True,
 			'type': 'str',
@@ -147,7 +147,7 @@ async def login_email_validate(request):
 ################################################################
 async def login_mobile(request):
     await asyncio.sleep(.25)
-    if validate(request.params, MODELS['login_phone']):
+    if validate(request.params, MODELS['login_mobile']):
         user = User()
         if await user.find(phone = request.params['account']):
             code = str(randint(1000, 9999))
@@ -166,7 +166,7 @@ async def login_mobile_validate(request):
     await asyncio.sleep(.5)
     if validate(request.params, MODELS['login_mobile_validate']):
         user = User()
-        if await user.find(email = request.params['account']):
+        if await user.find(phone = request.params['account']):
             if await user.check_validation_code(code = request.params['code']):
                 await request.session.assign(user.id)
                 request.user.copy(user = user)

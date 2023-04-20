@@ -214,7 +214,7 @@ class User:
         api = get_api_context()
         k = '_AUTH_' + str(self.id) + '_' + code
         check = await api.redis.data.exec('GET', k)
-        print('CHECK', check)
+        # print('CHECK', check)
         if check:
             await api.redis.data.exec('DELETE', k)
             return True
