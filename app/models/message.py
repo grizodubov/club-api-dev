@@ -1,3 +1,5 @@
+import os.path
+
 from app.core.context import get_api_context
 
 
@@ -120,7 +122,7 @@ async def get_chats(user_id, chat_id = None):
                 t3.messages_unread_exist DESC, t4.time_create DESC""",
         user_id
     )
-    chats = [ dict(item) for item in data ]
+    chats = [ dict(item) | { 'avatar': check_avatar_by_id(item['chat_id']) } for item in data ]
     chats_ids = [ item['chat_id'] for item in chats ]
     if chat_id and chat_id not in chats_ids:
         name = await api.pg.club.fetchval( 
@@ -225,7 +227,11 @@ async def query_messages(user_id, chat_id, chat_model, fragments):
             """SELECT t.* FROM (""" + ' UNION ALL '.join(queries) + """) t ORDER BY t.id""",
             *args
         )
-    return [ dict(item) for item in data ]
+    unique_authors_ids = set([ item['author_id'] for item in data ])
+    authors_avatars = {}
+    for author_id in unique_authors_ids:
+        authors_avatars[str(author_id)] = check_avatar_by_id(author_id)
+    return [ dict(item) | { 'author_avatar': authors_avatars[str(item['author_id'])] } for item in data ]
 
 
 
@@ -297,3 +303,9 @@ async def view_messages(user_id, messages_ids):
         user_id, *args
     )
     return [ { 'message_id': row['item_id'], 'time_view': row['time_view'] } for row in data ]
+
+
+
+################################################################
+def check_avatar_by_id(id):
+    return os.path.isfile('/var/www/media.clubgermes.ru/html/avatars/' + str(id) + '.jpg')

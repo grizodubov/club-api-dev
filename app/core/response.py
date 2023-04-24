@@ -26,6 +26,7 @@ class OrjsonResponse(JSONResponse):
                 'id': request.user.id,
                 'name': request.user.name,
                 'status': request.user.status,
+                'avatar': request.user.avatar,
             }
         }
         return orjson.dumps(content | token | user)

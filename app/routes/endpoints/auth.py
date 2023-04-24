@@ -7,6 +7,7 @@ from app.core.response import OrjsonResponse
 from app.core.event import dispatch
 from app.utils.validate import validate
 from app.models.user import User
+from app.models.session import check_by_token
 from app.helpers.email import send_email
 from app.helpers.mobile import send_mobile_message
 from app.helpers.templates import VERIFICATION_CODE
@@ -21,6 +22,7 @@ def routes():
         Route('/login/email/validate', login_email_validate, methods = [ 'POST' ]),
         Route('/login', login, methods = [ 'POST' ]),
         Route('/logout', logout, methods = [ 'POST' ]),
+        Route('/check/token', check_token, methods = [ 'POST' ]),
     ]
 
 
@@ -82,6 +84,14 @@ MODELS = {
 			'type': 'str',
             'length': 4,
             'pattern': r'^\d{4}$',
+		},
+	},
+	'check_token': {
+		'token': {
+			'required': True,
+			'type': 'str',
+            'length': 64,
+            'pattern': r'^[0-9A-Fa-f]{64}$',
 		},
 	},
 }
@@ -193,3 +203,21 @@ async def logout(request):
         return OrjsonResponse({})
     else:
         return err(403, 'Нет доступа')
+
+
+
+################################################################
+async def check_token(request):
+    if validate(request.params, MODELS['check_token']):
+        if request.user.id == 1010:
+            result = await check_by_token(request.params['token'])
+            if result and result['user_id']:
+                return OrjsonResponse({
+                    'user_id': result['user_id'],
+                })
+            else:
+                return err(404, 'Пользователь не найден')
+        else:
+            return err(403, 'Нет доступа')
+    else:
+        return err(400, 'Неверный токен')

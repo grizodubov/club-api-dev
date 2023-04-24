@@ -1,4 +1,5 @@
 import re
+import os.path
 
 from app.core.context import get_api_context
 
@@ -23,6 +24,7 @@ class User:
         self.status = ''
         self.tags = ''
         self._password = ''
+        self.avatar = False
 
 
     ################################################################
@@ -53,6 +55,7 @@ class User:
         for row in data:
             item = User()
             item.__dict__ = dict(row)
+            item.check_avatar()
             result.append(item)
         return result
     
@@ -91,6 +94,7 @@ class User:
                 id
             )
             self.__dict__ = dict(data)
+            self.check_avatar()
 
 
     ################################################################
@@ -168,6 +172,7 @@ class User:
                 )
                 if data:
                     self.__dict__ = dict(data)
+                    self.check_avatar()
                     return True
         return False
 
@@ -198,6 +203,7 @@ class User:
             )
             if data and data['_password'] == password:
                 self.__dict__ = dict(data)
+                self.check_avatar()
                 return True
         return False
 
@@ -305,7 +311,7 @@ class User:
                     t5.user_id = $1""",
             self.id
         )
-        return [ dict(item) for item in data ]
+        return [ dict(item) | { 'avatar': check_avatar_by_id(item['id']) } for item in data ]
 
 
     ################################################################
@@ -398,3 +404,14 @@ class User:
         if data == group_id:
             return True
         return False
+
+
+    ################################################################
+    def check_avatar(self):
+        self.avatar = os.path.isfile('/var/www/media.clubgermes.ru/html/avatars/' + str(self.id) + '.jpg')
+
+
+
+################################################################
+def check_avatar_by_id(id):
+    return os.path.isfile('/var/www/media.clubgermes.ru/html/avatars/' + str(id) + '.jpg')
