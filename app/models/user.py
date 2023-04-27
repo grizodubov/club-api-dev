@@ -495,6 +495,7 @@ class User:
     async def create(self, **kwargs):
         # TODO: сделать полный register (все поля)
         api = get_api_context()
+        # только мобильники рф
         id = await api.pg.club.fetchval(
             """INSERT INTO
                     users (name, email, phone, password)
@@ -536,7 +537,7 @@ async def validate_registration(email, email_code, phone_code):
     api = get_api_context()
     k = '_REGISTER_' + email + '_' + email_code + '_' + phone_code
     data = await api.redis.data.exec('GET', k)
-    print('DATA', data)
+    # print('DATA', data)
     if data:
         await api.redis.data.exec('DELETE', k)
         return data_unpack(data)

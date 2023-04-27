@@ -326,10 +326,9 @@ async def register_validate(request):
             email_code = request.params['email_code'],
             phone_code = request.params['phone_code'],
         )
-        print(user_data)
-        if await user.find(phone = user_data['phone']):
-            return err(400, 'Телефон уже зарегистрирован')
         if user_data:
+            if await user.find(phone = user_data['phone']):
+                return err(400, 'Телефон уже зарегистрирован')
             await user.create(
                 name = user_data['name'],
                 email = user_data['email'],
