@@ -6,7 +6,7 @@ from app.core.request import err
 from app.core.response import OrjsonResponse
 from app.core.event import dispatch
 from app.utils.validate import validate
-from app.models.user import User
+from app.models.user import User, validate_registration
 from app.models.session import check_by_token
 from app.helpers.email import send_email
 from app.helpers.mobile import send_mobile_message
@@ -23,6 +23,8 @@ def routes():
         Route('/login', login, methods = [ 'POST' ]),
         Route('/logout', logout, methods = [ 'POST' ]),
         Route('/check/token', check_token, methods = [ 'POST' ]),
+        Route('/register', register, methods = [ 'POST' ]),
+        Route('/register/validate', register_validate, methods = [ 'POST' ]),
     ]
 
 
@@ -92,6 +94,62 @@ MODELS = {
 			'type': 'str',
             'length': 64,
             'pattern': r'^[0-9A-Fa-f]{64}$',
+		},
+	},
+	'register': {
+		'name': {
+			'required': True,
+			'type': 'str',
+            'length_min': 2,
+            'processing': lambda x: x.strip(),
+		},
+		'phone': {
+			'required': True,
+			'type': 'str',
+            'pattern': r'^[0-9\(\)\-\+\s]{10,20}$',
+            'processing': lambda x: x.strip(),
+		},
+		'email': {
+			'required': True,
+			'type': 'str',
+            'pattern': r'^[^@]+@[^@]+\.[^@]+$',
+            'processing': lambda x: x.strip().lower(),
+		},
+		'company': {
+			'required': True,
+			'type': 'str',
+            'processing': lambda x: x.strip(),
+		},
+		'position': {
+			'required': True,
+			'type': 'str',
+            'processing': lambda x: x.strip(),
+		},
+		'password': {
+			'required': True,
+			'type': 'str',
+            'length_min': 2,
+            'processing': lambda x: x.strip(),
+		},
+	},
+	'register_validate': {
+		'account': {
+			'required': True,
+			'type': 'str',
+            'length_min': 4,
+            'processing': lambda x: x.strip().lower(),
+		},
+		'email_code': {
+			'required': True,
+			'type': 'str',
+            'length': 4,
+            'pattern': r'^\d{4}$',
+		},
+		'phone_code': {
+			'required': True,
+			'type': 'str',
+            'length': 4,
+            'pattern': r'^\d{4}$',
 		},
 	},
 }
@@ -221,3 +279,72 @@ async def check_token(request):
             return err(403, 'Нет доступа')
     else:
         return err(400, 'Неверный токен')
+
+
+
+################################################################
+async def register(request):
+    await asyncio.sleep(.5)
+    if validate(request.params, MODELS['register']):
+        user = User()
+        if await user.find(email = request.params['email']):
+            return err(400, 'Email уже зарегистрирован')
+        if await user.find(phone = request.params['phone']):
+            return err(400, 'Телефон уже зарегистрирован')
+        email_code = str(randint(1000, 9999))
+        phone_code = str(randint(1000, 9999))
+        await user.prepare(
+            user_data = {
+                'name': request.params['name'],
+                'email': request.params['email'],
+                'phone': request.params['phone'],
+                'company': request.params['company'],
+                'position': request.params['position'],
+                'password': request.params['password'],
+                'roles': [ 10059 ],
+            },
+            email_code = email_code,
+            phone_code = phone_code,
+        )
+        send_email(request.api.stream_email, request.params['email'], VERIFICATION_CODE['subject'], VERIFICATION_CODE['body'], { 'code': email_code })
+        send_mobile_message(request.api.stream_mobile, request.params['phone'], VERIFICATION_CODE['message'], { 'code': phone_code })
+        return OrjsonResponse({})
+    else:
+        return err(400, 'Неверные данные')
+
+
+
+################################################################
+async def register_validate(request):
+    await asyncio.sleep(.5)
+    if validate(request.params, MODELS['register_validate']):
+        user = User()
+        if await user.find(email = request.params['account']):
+            return err(400, 'Email уже зарегистрирован')
+        user_data = await validate_registration(
+            email = request.params['account'],
+            email_code = request.params['email_code'],
+            phone_code = request.params['phone_code'],
+        )
+        print(user_data)
+        if await user.find(phone = user_data['phone']):
+            return err(400, 'Телефон уже зарегистрирован')
+        if user_data:
+            await user.create(
+                name = user_data['name'],
+                email = user_data['email'],
+                phone = user_data['phone'],
+                company = user_data['company'],
+                position = user_data['position'],
+                password = user_data['password'],
+                roles = user_data['roles'],
+            )
+            await request.session.assign(user.id)
+            request.user.copy(user = user)
+            request.api.websocket_update(request.session.id, request.user.id)
+            dispatch('user_register', request)
+            return OrjsonResponse({})
+        else:
+            return err(403, 'Проверочный код не верен')
+    else:
+        return err(400, 'Не указан email')

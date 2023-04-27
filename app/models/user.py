@@ -2,6 +2,7 @@ import re
 import os.path
 
 from app.core.context import get_api_context
+from app.utils.packager import pack as data_pack, unpack as data_unpack
 
 
 
@@ -23,6 +24,7 @@ class User:
         self.detail = ''
         self.status = ''
         self.tags = ''
+        self.roles = []
         self._password = ''
         self.avatar = False
 
@@ -38,6 +40,7 @@ class User:
                     t1.name, t1.login, t1.email, t1.phone,
                     t3.company, t3.position, t3.detail,
                     t3.status, coalesce(t2.tags, '') AS tags,
+                    coalesce(t4.roles, '{}'::text[]) AS roles,
                     t1.password AS _password
                 FROM
                     users t1
@@ -45,6 +48,22 @@ class User:
                     users_tags t2 ON t2.user_id = t1.id
                 INNER JOIN
                     users_info t3 ON t3.user_id = t1.id
+                LEFT JOIN
+                    (
+                        SELECT
+                            r3.user_id, array_agg(r3.alias) AS roles
+                        FROM
+                            (
+                                SELECT
+                                    r1.user_id, r2.alias
+                                FROM
+                                    users_roles r1
+                                INNER JOIN
+                                    roles r2 ON r2.id = r1.role_id
+                            ) r3
+                        GROUP BY
+                            r3.user_id
+                    ) t4 ON t4.user_id = t1.id
                 WHERE
                     t1.active IS TRUE AND
                     to_tsvector(
@@ -67,7 +86,7 @@ class User:
 
     ################################################################
     def show(self):
-        filter = { 'time_create', 'time_update', 'login', 'email', 'phone' }
+        filter = { 'time_create', 'time_update', 'login', 'email', 'phone', 'roles' }
         return { k: v for k, v in self.__dict__.items() if not k.startswith('_') and k not in filter }
 
 
@@ -81,6 +100,7 @@ class User:
                         t1.name, t1.login, t1.email, t1.phone,
                         t3.company, t3.position, t3.detail,
                         t3.status, coalesce(t2.tags, '') AS tags,
+                        coalesce(t4.roles, '{}'::text[]) AS roles,
                         t1.password AS _password
                     FROM
                         users t1
@@ -88,6 +108,24 @@ class User:
                         users_tags t2 ON t2.user_id = t1.id
                     INNER JOIN
                         users_info t3 ON t3.user_id = t1.id
+                    LEFT JOIN
+                        (
+                            SELECT
+                                r3.user_id, array_agg(r3.alias) AS roles
+                            FROM
+                                (
+                                    SELECT
+                                        r1.user_id, r2.alias
+                                    FROM
+                                        users_roles r1
+                                    INNER JOIN
+                                        roles r2 ON r2.id = r1.role_id
+                                ) r3
+                            WHERE
+                                r3.user_id = $1
+                            GROUP BY
+                                r3.user_id
+                        ) t4 ON t4.user_id = t1.id
                     WHERE
                         id = $1 AND
                         active IS TRUE""",
@@ -160,6 +198,7 @@ class User:
                             t1.name, t1.login, t1.email, t1.phone,
                             t3.company, t3.position, t3.detail,
                             t3.status, coalesce(t2.tags, '') AS tags,
+                            coalesce(t4.roles, '{}'::text[]) AS roles,
                             t1.password AS _password
                         FROM
                             users t1
@@ -167,6 +206,22 @@ class User:
                             users_tags t2 ON t2.user_id = t1.id
                         INNER JOIN
                             users_info t3 ON t3.user_id = t1.id
+                        LEFT JOIN
+                            (
+                                SELECT
+                                    r3.user_id, array_agg(r3.alias) AS roles
+                                FROM
+                                    (
+                                        SELECT
+                                            r1.user_id, r2.alias
+                                        FROM
+                                            users_roles r1
+                                        INNER JOIN
+                                            roles r2 ON r2.id = r1.role_id
+                                    ) r3
+                                GROUP BY
+                                    r3.user_id
+                            ) t4 ON t4.user_id = t1.id
                         WHERE t1.active IS TRUE AND """ + ' AND '.join(qr),
                     *ar
                 )
@@ -189,6 +244,7 @@ class User:
                         t1.name, t1.login, t1.email, t1.phone,
                         t3.company, t3.position, t3.detail,
                         t3.status, coalesce(t2.tags, '') AS tags,
+                        coalesce(t4.roles, '{}'::text[]) AS roles,
                         t1.password AS _password
                     FROM
                         users t1
@@ -196,6 +252,22 @@ class User:
                         users_tags t2 ON t2.user_id = t1.id
                     INNER JOIN
                         users_info t3 ON t3.user_id = t1.id
+                    LEFT JOIN
+                        (
+                            SELECT
+                                r3.user_id, array_agg(r3.alias) AS roles
+                            FROM
+                                (
+                                    SELECT
+                                        r1.user_id, r2.alias
+                                    FROM
+                                        users_roles r1
+                                    INNER JOIN
+                                        roles r2 ON r2.id = r1.role_id
+                                ) r3
+                            GROUP BY
+                                r3.user_id
+                        ) t4 ON t4.user_id = t1.id
                     WHERE
                         (login = $1 OR email = $1 OR phone = $2) AND
                         active IS TRUE""",
@@ -411,7 +483,61 @@ class User:
         self.avatar = os.path.isfile('/var/www/media.clubgermes.ru/html/avatars/' + str(self.id) + '.jpg')
 
 
+    ################################################################
+    async def prepare(self, user_data, email_code, phone_code):
+        # TODO: сделать полный prepare (все полня)
+        api = get_api_context()
+        k = '_REGISTER_' + user_data['email'] + '_' + email_code + '_' + phone_code
+        await api.redis.data.exec('SET', k, data_pack(user_data, False), ex = 900)
+
+
+    ################################################################
+    async def create(self, **kwargs):
+        # TODO: сделать полный register (все поля)
+        api = get_api_context()
+        id = await api.pg.club.fetchval(
+            """INSERT INTO
+                    users (name, email, phone, password)
+                VALUES
+                    ($1, $2, $3, $4)
+                RETURNING
+                    id""",
+            kwargs['name'], kwargs['email'], '+7' + ''.join(list(re.sub(r'[^\d]+', '', kwargs['phone']))[-10:]), kwargs['password']
+        )
+        await api.pg.club.execute(
+            """UPDATE
+                    users_info
+                SET
+                    company = $1,
+                    position = $2
+                WHERE
+                    user_id = $3""",
+            kwargs['company'], kwargs['position'], id
+        )
+        await api.pg.club.execute(
+            """INSERT INTO
+                    users_roles (user_id, role_id)
+                VALUES
+                    ($1, $2)""",
+            id, kwargs['roles'][0]
+        )
+        await self.set(id = id)
+
+
 
 ################################################################
 def check_avatar_by_id(id):
     return os.path.isfile('/var/www/media.clubgermes.ru/html/avatars/' + str(id) + '.jpg')
+
+
+
+################################################################
+async def validate_registration(email, email_code, phone_code):
+    api = get_api_context()
+    k = '_REGISTER_' + email + '_' + email_code + '_' + phone_code
+    data = await api.redis.data.exec('GET', k)
+    print('DATA', data)
+    if data:
+        await api.redis.data.exec('DELETE', k)
+        return data_unpack(data)
+    return None
