@@ -25,6 +25,8 @@ def routes():
         Route('/check/token', check_token, methods = [ 'POST' ]),
         Route('/register', register, methods = [ 'POST' ]),
         Route('/register/validate', register_validate, methods = [ 'POST' ]),
+
+        Route('/m/login', moderator_login, methods = [ 'POST' ]),
     ]
 
 
@@ -150,6 +152,21 @@ MODELS = {
 			'type': 'str',
             'length': 4,
             'pattern': r'^\d{4}$',
+		},
+	},
+    # moderator
+	'moderator_login': {
+		'account': {
+			'required': True,
+			'type': 'str',
+            'length_min': 4,
+            'processing': lambda x: x.strip().lower(),
+		},
+		'password': {
+			'required': True,
+			'type': 'str',
+            'length_min': 4,
+            'processing': lambda x: x.strip(),
 		},
 	},
 }
@@ -347,3 +364,24 @@ async def register_validate(request):
             return err(403, 'Проверочный код не верен')
     else:
         return err(400, 'Не указан email')
+
+
+
+################################################################
+async def moderator_login(request):
+    await asyncio.sleep(.5)
+    if validate(request.params, MODELS['moderator_login']):
+        user = User()        
+        if await user.check(request.params['account'], request.params['password']):
+            if set(user.roles) & { 'admin', 'moderator', 'editor' }:
+                await request.session.assign(user.id)
+                request.user.copy(user = user)
+                request.api.websocket_update(request.session.id, request.user.id)
+                # dispatch('user_login', request)
+                return OrjsonResponse({})
+            else:
+                return err(403, 'Нет доступа')
+        else:
+            return err(403, 'Пользователь и / или пароль не верны')
+    else:
+        return err(400, 'Не указаны логин и / или пароль')

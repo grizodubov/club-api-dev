@@ -24,6 +24,8 @@ def routes():
         Route('/user/event/add', user_add_event, methods = [ 'POST' ]),
         Route('/user/event/del', user_del_event, methods = [ 'POST' ]),
         Route('/user/thumbsup', user_thumbs_up, methods = [ 'POST' ]),
+
+        Route('/m/user/search', moderator_user_search, methods = [ 'POST' ]),
     ]
 
 
@@ -100,6 +102,20 @@ MODELS = {
 			'type': 'int',
             'value_min': 1,
 		},
+	},
+    # moderator
+	'moderator_user_search': {
+		'text': {
+			'required': True,
+			'type': 'str',
+            'length_min': 2,
+		},
+        'page': {
+            'required': True,
+            'type': 'int',
+            'value_min': 1,
+            'default': 1,
+        },
 	},
 }
 
@@ -271,5 +287,20 @@ async def user_thumbs_up(request):
                 return err(404, 'Объект не найдено')
         else:
             return err(400, 'Неверный запрос')
+    else:
+        return err(403, 'Нет доступа')
+
+
+
+################################################################
+async def moderator_user_search(request):
+    if request.user.id:
+        if validate(request.params, MODELS['moderator_user_search']):
+            result = await User.search(text = request.params['text'], active_only = False, offset = (request.params['page'] - 1) * 10, limit = 10)
+            return OrjsonResponse({
+                'users': [ item.show() for item in result ],
+            })
+        else:
+            return err(400, 'Неверный поиск')
     else:
         return err(403, 'Нет доступа')

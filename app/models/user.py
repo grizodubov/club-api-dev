@@ -19,6 +19,7 @@ class User:
         self.login = ''
         self.email = ''
         self.phone = ''
+        self.active = False
         self.company = ''
         self.position = ''
         self.detail = ''
@@ -31,13 +32,28 @@ class User:
 
     ################################################################
     @classmethod
-    async def search(cls, text):
+    async def search(cls, text, active_only = True, offset = None, limit = None):
         api = get_api_context()
         result = []
+        slice_query = ''
+        conditions = []
+        condition_query = ''
+        args = []
+        if active_only:
+            conditions.append('t1.active IS TRUE')
+        if text:
+            conditions.append("""to_tsvector(concat_ws(' ', t1.name, t1.email, t1.phone, t3.company, t3.position, t3.detail, t2.tags)) @@ to_tsquery($1)""")
+            args.append(re.sub(r'\s+', ' | ', text))
+        if offset and limit:
+            slice_query = ' OFFSET $2 LIMIT $3'
+            args.extend([ offset, limit ])
+        if conditions:
+            conditions_query = ' WHERE ' + ' AND '.join(conditions)
         data = await api.pg.club.fetch(
             """SELECT
                     t1.id, t1.time_create, t1.time_update,
                     t1.name, t1.login, t1.email, t1.phone,
+                    t1.active,
                     t3.company, t3.position, t3.detail,
                     t3.status, coalesce(t2.tags, '') AS tags,
                     coalesce(t4.roles, '{}'::text[]) AS roles,
@@ -63,13 +79,8 @@ class User:
                             ) r3
                         GROUP BY
                             r3.user_id
-                    ) t4 ON t4.user_id = t1.id
-                WHERE
-                    t1.active IS TRUE AND
-                    to_tsvector(
-                        concat_ws(' ', t1.name, t1.email, t1.phone, t3.company, t3.position, t3.detail, t2.tags)
-                    ) @@ to_tsquery($1)""",
-            re.sub(r'\s+', ' | ', text)
+                    ) t4 ON t4.user_id = t1.id""" + conditions_query + ' ORDER BY t1.name' + slice_query,
+            *args
         )
         for row in data:
             item = User()
@@ -98,6 +109,7 @@ class User:
                 """SELECT
                         t1.id, t1.time_create, t1.time_update,
                         t1.name, t1.login, t1.email, t1.phone,
+                        t1.active,
                         t3.company, t3.position, t3.detail,
                         t3.status, coalesce(t2.tags, '') AS tags,
                         coalesce(t4.roles, '{}'::text[]) AS roles,
@@ -196,6 +208,7 @@ class User:
                     """SELECT
                             t1.id, t1.time_create, t1.time_update,
                             t1.name, t1.login, t1.email, t1.phone,
+                            t1.active,
                             t3.company, t3.position, t3.detail,
                             t3.status, coalesce(t2.tags, '') AS tags,
                             coalesce(t4.roles, '{}'::text[]) AS roles,
@@ -242,6 +255,7 @@ class User:
                 """SELECT
                         t1.id, t1.time_create, t1.time_update,
                         t1.name, t1.login, t1.email, t1.phone,
+                        t1.active,
                         t3.company, t3.position, t3.detail,
                         t3.status, coalesce(t2.tags, '') AS tags,
                         coalesce(t4.roles, '{}'::text[]) AS roles,
