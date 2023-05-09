@@ -108,7 +108,6 @@ MODELS = {
 		'text': {
 			'required': True,
 			'type': 'str',
-            'length_min': 2,
 		},
         'page': {
             'required': True,
@@ -294,11 +293,18 @@ async def user_thumbs_up(request):
 
 ################################################################
 async def moderator_user_search(request):
-    if request.user.id:
+    if request.user.id and request.user.check_roles({ 'admin', 'moderator' }):
         if validate(request.params, MODELS['moderator_user_search']):
-            result = await User.search(text = request.params['text'], active_only = False, offset = (request.params['page'] - 1) * 10, limit = 10)
+            (result, amount) = await User.search(
+                text = request.params['text'],
+                active_only = False,
+                offset = (request.params['page'] - 1) * 10,
+                limit = 10,
+                count = True
+            )
             return OrjsonResponse({
                 'users': [ item.show() for item in result ],
+                'amount': amount,
             })
         else:
             return err(400, 'Неверный поиск')

@@ -32,11 +32,11 @@ class User:
 
     ################################################################
     @classmethod
-    async def search(cls, text, active_only = True, offset = None, limit = None):
+    async def search(cls, text, active_only = True, offset = None, limit = None, count = False):
         api = get_api_context()
         result = []
         slice_query = ''
-        conditions = []
+        conditions = [ 't1.id >= 10000' ]
         condition_query = ''
         args = []
         if active_only:
@@ -87,6 +87,37 @@ class User:
             item.__dict__ = dict(row)
             item.check_avatar()
             result.append(item)
+        if count:
+            amount = len(result)
+            if offset and limit:
+                amount = await api.pg.club.fetchval(
+                    """SELECT
+                            count(t1.id)
+                        FROM
+                            users t1
+                        INNER JOIN
+                            users_tags t2 ON t2.user_id = t1.id
+                        INNER JOIN
+                            users_info t3 ON t3.user_id = t1.id
+                        LEFT JOIN
+                            (
+                                SELECT
+                                    r3.user_id, array_agg(r3.alias) AS roles
+                                FROM
+                                    (
+                                        SELECT
+                                            r1.user_id, r2.alias
+                                        FROM
+                                            users_roles r1
+                                        INNER JOIN
+                                            roles r2 ON r2.id = r1.role_id
+                                    ) r3
+                                GROUP BY
+                                    r3.user_id
+                            ) t4 ON t4.user_id = t1.id""" + conditions_query,
+                    *args
+                )
+            return (result, amount)
         return result
     
     
@@ -495,6 +526,11 @@ class User:
     ################################################################
     def check_avatar(self):
         self.avatar = os.path.isfile('/var/www/media.clubgermes.ru/html/avatars/' + str(self.id) + '.jpg')
+
+
+    ################################################################
+    def check_roles(self, roles):
+        return set(self.roles) & roles
 
 
     ################################################################
