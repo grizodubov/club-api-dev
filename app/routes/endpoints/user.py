@@ -109,6 +109,12 @@ MODELS = {
 			'required': True,
 			'type': 'str',
 		},
+        'applicant': {
+            'required': True,
+            'type': 'bool',
+            'default': False,
+            'null': True,
+        },
         'page': {
             'required': True,
             'type': 'int',
@@ -300,10 +306,11 @@ async def moderator_user_search(request):
                 active_only = False,
                 offset = (request.params['page'] - 1) * 10,
                 limit = 10,
-                count = True
+                count = True,
+                applicant = request.params['applicant'],
             )
             return OrjsonResponse({
-                'users': [ item.show() for item in result ],
+                'users': [ item.dump() for item in result ],
                 'amount': amount,
             })
         else:

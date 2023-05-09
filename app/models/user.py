@@ -32,7 +32,7 @@ class User:
 
     ################################################################
     @classmethod
-    async def search(cls, text, active_only = True, offset = None, limit = None, count = False):
+    async def search(cls, text, active_only = True, offset = None, limit = None, count = False, applicant = None):
         api = get_api_context()
         result = []
         slice_query = ''
@@ -41,6 +41,10 @@ class User:
         args = []
         if active_only:
             conditions.append('t1.active IS TRUE')
+        if applicant is True:
+            conditions.append("""'applicant' = ANY(t4.roles)""")
+        if applicant is False:
+            conditions.append("""'applicant' != ANY(t4.roles)""")
         if text:
             conditions.append("""to_tsvector(concat_ws(' ', t1.name, t1.email, t1.phone, t3.company, t3.position, t3.detail, t2.tags)) @@ to_tsquery($1)""")
             args.append(re.sub(r'\s+', ' | ', text))
@@ -130,6 +134,11 @@ class User:
     def show(self):
         filter = { 'time_create', 'time_update', 'login', 'email', 'phone', 'roles' }
         return { k: v for k, v in self.__dict__.items() if not k.startswith('_') and k not in filter }
+
+
+    ################################################################
+    def dump(self):
+        return { k: v for k, v in self.__dict__.items() }
 
 
     ################################################################
