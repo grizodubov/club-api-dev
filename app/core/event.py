@@ -19,6 +19,8 @@ EVENTS = {
     'user_create': { 'send': False, 'filter_params': None },
     'message_add': { 'send': True, 'filter_params': None },
     'message_view': { 'send': True, 'filter_params': None },
+    'group_create': { 'send': False, 'filter_params': None },
+    'group_update': { 'send': True, 'filter_params': None },
 }
 
 

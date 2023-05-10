@@ -125,7 +125,26 @@ class User:
             return (result, amount)
         return result
     
-    
+
+    ################################################################
+    @classmethod
+    async def hash(cls):
+        api = get_api_context()
+        data = await api.pg.club.fetch(
+            """SELECT
+                    id, name
+                FROM
+                    users
+                WHERE
+                    active IS TRUE AND id >= 10000
+                ORDER BY
+                    name"""
+        )
+        return {
+            str(item['id']): item['name'] for item in data
+        }
+
+
     ################################################################
     def reset(self):
         self.__init__()

@@ -5,6 +5,7 @@ from app.core.response import OrjsonResponse
 from app.core.event import dispatch
 from app.utils.validate import validate
 from app.models.group import Group
+from app.models.user import User
 from app.models.event import Event
 
 
@@ -12,8 +13,8 @@ from app.models.event import Event
 def routes():
     return [
         Route('/m/group/search', moderator_group_search, methods = [ 'POST' ]),
-        Route('/m/user/update', moderator_group_update, methods = [ 'POST' ]),
-        Route('/m/user/create', moderator_group_create, methods = [ 'POST' ]),
+        Route('/m/group/update', moderator_group_update, methods = [ 'POST' ]),
+        Route('/m/group/create', moderator_group_create, methods = [ 'POST' ]),
     ]
 
 
@@ -81,8 +82,10 @@ async def moderator_group_search(request):
                 limit = 10,
                 count = True,
             )
+            users = await User.hash()
             return OrjsonResponse({
                 'groups': [ item.dump() for item in result ],
+                'users': users,
                 'amount': amount,
             })
         else:
