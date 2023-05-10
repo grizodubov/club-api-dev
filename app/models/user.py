@@ -3,6 +3,7 @@ import os.path
 
 from app.core.context import get_api_context
 from app.utils.packager import pack as data_pack, unpack as data_unpack
+from app.models.role import get_roles
 
 
 
@@ -142,9 +143,14 @@ class User:
 
 
     ################################################################
-    async def set(self, id):
+    async def set(self, id, active = True):
         api = get_api_context()
         if id:
+            query = ''
+            if active is True:
+                query = ' AND active IS TRUE'
+            if active is False:
+                query = ' AND active IS FALSE'
             data = await api.pg.club.fetchrow(
                 """SELECT
                         t1.id, t1.time_create, t1.time_update,
@@ -179,8 +185,7 @@ class User:
                                 r3.user_id
                         ) t4 ON t4.user_id = t1.id
                     WHERE
-                        id = $1 AND
-                        active IS TRUE""",
+                        id = $1""" + query,
                 id
             )
             self.__dict__ = dict(data)
@@ -190,25 +195,38 @@ class User:
     ################################################################
     async def update(self, **kwargs):
         api = get_api_context()
-        await api.pg.club.execute(
-            """UPDATE
-                    users
-                SET
-                    name = $1
-                WHERE
-                    id = $2""",
-            kwargs['name'], self.id
-        )
+        cursor = 2
+        query = []
+        args = []
+        for k in { 'active', 'name', 'email', 'phone', 'password' }:
+            if k in kwargs:
+                query.append(k + ' = $' + str(cursor))
+                if k == 'phone':
+                    args.append('+7' + ''.join(list(re.sub(r'[^\d]+', '', kwargs['phone']))[-10:]))
+                else:
+                    args.append(kwargs[k])
+                cursor += 1
+        if query:
+            await api.pg.club.execute(
+                """UPDATE
+                        users
+                    SET
+                        """ + ', '.join(query) + """
+                    WHERE
+                        id = $1""",
+                self.id, *args
+            )
         await api.pg.club.execute(
             """UPDATE
                     users_info
                 SET
-                    company = $1,
-                    position = $2,
-                    detail = $3
+                    company = $2,
+                    position = $3,
+                    detail = $4,
+                    status = $5
                 WHERE
-                    user_id = $4""",
-            kwargs['company'], kwargs['position'], kwargs['detail'], self.id
+                    user_id = $1""",
+            self.id, kwargs['company'], kwargs['position'], kwargs['detail'], kwargs['status'] if 'status' in kwargs else self.status
         )
         await api.pg.club.execute(
             """UPDATE
@@ -219,6 +237,26 @@ class User:
                     user_id = $2""",
             kwargs['tags'], self.id
         )
+        if 'roles' in kwargs:
+            roles = await get_roles()
+            await api.pg.club.execute(
+                """DELETE FROM users_roles WHERE user_id = $1""",
+                self.id
+            )
+            cursor = 2
+            query = []
+            args = []
+            for r in kwargs['roles']:
+                query.append('($1, $' + str(cursor) + ')')
+                args.append(roles[r])
+                cursor += 1
+            if query:
+                await api.pg.club.execute(
+                    """INSERT INTO
+                            users_roles (user_id, role_id)
+                        VALUES """ + ', '.join(query),
+                    self.id, *args
+                )
 
 
     ################################################################
@@ -557,30 +595,52 @@ class User:
         # только мобильники рф
         id = await api.pg.club.fetchval(
             """INSERT INTO
-                    users (name, email, phone, password)
+                    users (name, email, phone, password, active)
                 VALUES
-                    ($1, $2, $3, $4)
+                    ($1, $2, $3, $4, $5)
                 RETURNING
                     id""",
-            kwargs['name'], kwargs['email'], '+7' + ''.join(list(re.sub(r'[^\d]+', '', kwargs['phone']))[-10:]), kwargs['password']
+            kwargs['name'],
+            kwargs['email'],
+            '+7' + ''.join(list(re.sub(r'[^\d]+', '', kwargs['phone']))[-10:]),
+            kwargs['password'],
+            kwargs['active'] if 'active' in kwargs else True,
         )
         await api.pg.club.execute(
             """UPDATE
                     users_info
                 SET
-                    company = $1,
-                    position = $2
+                    company = $2,
+                    position = $3,
+                    detail = $4,
+                    status = $5
                 WHERE
-                    user_id = $3""",
-            kwargs['company'], kwargs['position'], id
+                    user_id = $1""",
+            id,
+            kwargs['company'],
+            kwargs['position'], 
+            kwargs['detail'] if 'detail' in kwargs else '',
+            kwargs['status'] if 'status' in kwargs else 'бронзовый'
         )
-        await api.pg.club.execute(
-            """INSERT INTO
-                    users_roles (user_id, role_id)
-                VALUES
-                    ($1, $2)""",
-            id, kwargs['roles'][0]
-        )
+        roles = await get_roles()
+        if kwargs['roles']:
+            await api.pg.club.execute(
+                """INSERT INTO
+                        users_roles (user_id, role_id)
+                    VALUES
+                        ($1, $2)""",
+                id, kwargs['roles'][0] if type(kwargs['roles'][0]) == int else roles[kwargs['roles'][0]]
+            )
+        if 'tags' in kwargs:
+            await api.pg.club.execute(
+                """UPDATE
+                        users_tags
+                    SET
+                        tags = $1
+                    WHERE
+                        user_id = $2""",
+                kwargs['tags'], id
+            )
         await self.set(id = id)
 
 

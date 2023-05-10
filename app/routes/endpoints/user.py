@@ -26,6 +26,8 @@ def routes():
         Route('/user/thumbsup', user_thumbs_up, methods = [ 'POST' ]),
 
         Route('/m/user/search', moderator_user_search, methods = [ 'POST' ]),
+        Route('/m/user/update', moderator_user_update, methods = [ 'POST' ]),
+        Route('/m/user/create', moderator_user_create, methods = [ 'POST' ]),
     ]
 
 
@@ -121,6 +123,129 @@ MODELS = {
             'value_min': 1,
             'default': 1,
         },
+	},
+	'moderator_user_update': {
+		'id': {
+			'required': True,
+			'type': 'int',
+            'value_min': 1,
+		},
+		'active': {
+			'required': True,
+			'type': 'bool',
+		},
+		'name': {
+			'required': True,
+			'type': 'str',
+            'length_min': 2,
+            'processing': lambda x: x.strip(),
+		},
+		'phone': {
+			'required': True,
+			'type': 'str',
+            'pattern': r'^[0-9\(\)\-\+\s]{10,20}$',
+            'processing': lambda x: x.strip(),
+		},
+		'email': {
+			'required': True,
+			'type': 'str',
+            'pattern': r'^[^@]+@[^@]+\.[^@]+$',
+            'processing': lambda x: x.strip().lower(),
+		},
+		'company': {
+			'required': True,
+			'type': 'str',
+            'processing': lambda x: x.strip(),
+		},
+		'position': {
+			'required': True,
+			'type': 'str',
+            'processing': lambda x: x.strip(),
+		},
+		'password': {
+			'required': True,
+			'type': 'str',
+            'length_min': 2,
+            'processing': lambda x: x.strip(),
+		},
+		'status': {
+			'required': True,
+			'type': 'str',
+            'values': [ 'бронзовый', 'серебряный', 'золотой' ],
+		},
+		'detail': {
+			'required': True,
+			'type': 'str',
+		},
+		'roles': {
+			'required': True,
+			'type': 'str',
+            'list': True,
+            'values': [ 'client', 'manager', 'moderator', 'editor' ],
+		},
+		'tags': {
+			'required': True,
+			'type': 'str',
+		},
+	},
+	'moderator_user_create': {
+		'active': {
+			'required': True,
+			'type': 'bool',
+		},
+		'name': {
+			'required': True,
+			'type': 'str',
+            'length_min': 2,
+            'processing': lambda x: x.strip(),
+		},
+		'phone': {
+			'required': True,
+			'type': 'str',
+            'pattern': r'^[0-9\(\)\-\+\s]{10,20}$',
+            'processing': lambda x: x.strip(),
+		},
+		'email': {
+			'required': True,
+			'type': 'str',
+            'pattern': r'^[^@]+@[^@]+\.[^@]+$',
+            'processing': lambda x: x.strip().lower(),
+		},
+		'company': {
+			'required': True,
+			'type': 'str',
+            'processing': lambda x: x.strip(),
+		},
+		'position': {
+			'required': True,
+			'type': 'str',
+            'processing': lambda x: x.strip(),
+		},
+		'password': {
+			'required': True,
+			'type': 'str',
+            'length_min': 2,
+            'processing': lambda x: x.strip(),
+		},
+		'status': {
+			'required': True,
+			'type': 'str',
+            'values': [ 'бронзовый', 'серебряный', 'золотой' ],
+		},
+		'detail': {
+			'required': True,
+			'type': 'str',
+		},
+		'roles': {
+			'required': True,
+			'type': 'str',
+            'list': True,
+            'values': [ 'client', 'manager' ],
+		},
+		'tags': {
+			'required': True,
+			'type': 'str',
+		},
 	},
 }
 
@@ -315,5 +440,63 @@ async def moderator_user_search(request):
             })
         else:
             return err(400, 'Неверный поиск')
+    else:
+        return err(403, 'Нет доступа')
+
+
+
+################################################################
+async def moderator_user_update(request):
+    if request.user.id and request.user.check_roles({ 'admin', 'moderator' }):
+        if validate(request.params, MODELS['moderator_user_update']):
+            user = User()
+            await user.set(id = request.params['id'], active = None)
+            if user.id:
+                temp = User()
+                if await temp.find(email = request.params['email']):
+                    if temp.id != user.id:
+                        return err(400, 'Email уже зарегистрирован')
+                temp = User()
+                if await temp.find(phone = request.params['phone']):
+                    if temp.id != user.id:
+                        return err(400, 'Телефон уже зарегистрирован')
+                await user.update(**request.params)
+                dispatch('user_update', request)
+                return OrjsonResponse({})
+            else:
+                return err(404, 'Пользователь не найден')
+        else:
+            return err(400, 'Неверный запрос')
+    else:
+        return err(403, 'Нет доступа')
+
+
+
+################################################################
+async def moderator_user_create(request):
+    if request.user.id and request.user.check_roles({ 'admin', 'moderator' }):
+        if validate(request.params, MODELS['moderator_user_create']):
+            user = User()
+            if await user.find(email = request.params['email']):
+                return err(400, 'Email уже зарегистрирован')
+            if await user.find(phone = request.params['phone']):
+                return err(400, 'Телефон уже зарегистрирован')
+            await user.create(
+                name = request.params['name'],
+                email = request.params['email'],
+                phone = request.params['phone'],
+                company = request.params['company'],
+                position = request.params['position'],
+                password = request.params['password'],
+                roles = request.params['roles'],
+                active = request.params['active'],
+                detail = request.params['detail'],
+                status = request.params['status'],
+                tags = request.params['tags'],
+            )
+            dispatch('user_create', request)
+            return OrjsonResponse({})
+        else:
+            return err(400, 'Неверный запрос')
     else:
         return err(403, 'Нет доступа')
