@@ -334,7 +334,7 @@ async def user_search(request):
             result = await User.search(text = request.params['text'], reverse = request.params['reverse'])
             contacts = await request.user.get_contacts()
             return OrjsonResponse({
-                'persons': [ item.show() for item in result ],
+                'persons': [ item.show() for item in result if item.id != request.user.id ],
                 'contacts_cache': { str(contact['id']): True for contact in contacts if contact['type'] == 'person' }
             })
         else:
