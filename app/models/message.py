@@ -128,16 +128,32 @@ async def get_chats(user_id, chat_id = None):
         name = await api.pg.club.fetchval( 
             """SELECT name FROM users WHERE id = $1""", chat_id
         )
-        chats.append({
-            'chat_id': chat_id,
-            'chat_model': 'user',
-            'chat_name': name,
-            'messages_unread': 0,
-            'min_message_id': None,
-            'max_message_id': None,
-            'max_message_text': None,
-            'max_message_time_create': None,
-        })
+        if name:
+            chats.append({
+                'chat_id': chat_id,
+                'chat_model': 'user',
+                'chat_name': name,
+                'messages_unread': 0,
+                'min_message_id': None,
+                'max_message_id': None,
+                'max_message_text': None,
+                'max_message_time_create': None,
+            })
+        else:
+            name = await api.pg.club.fetchval( 
+                """SELECT name FROM groups WHERE id = $1""", chat_id
+            )
+            if name:
+                chats.append({
+                    'chat_id': chat_id,
+                    'chat_model': 'group',
+                    'chat_name': name,
+                    'messages_unread': 0,
+                    'min_message_id': None,
+                    'max_message_id': None,
+                    'max_message_text': None,
+                    'max_message_time_create': None,
+                })
     return chats
 
 
