@@ -62,6 +62,10 @@ MODELS = {
 			'required': True,
 			'type': 'str',
 		},
+		'interests': {
+			'required': True,
+			'type': 'str',
+		},
 	},
 	'user_search': {
 		'text': {
@@ -187,6 +191,10 @@ MODELS = {
 			'required': True,
 			'type': 'str',
 		},
+		'interests': {
+			'required': True,
+			'type': 'str',
+		},
 	},
 	'moderator_user_create': {
 		'active': {
@@ -243,6 +251,10 @@ MODELS = {
             'values': [ 'client', 'manager' ],
 		},
 		'tags': {
+			'required': True,
+			'type': 'str',
+		},
+		'interests': {
 			'required': True,
 			'type': 'str',
 		},
@@ -493,6 +505,7 @@ async def moderator_user_create(request):
                 detail = request.params['detail'],
                 status = request.params['status'],
                 tags = request.params['tags'],
+                interests = request.params['interests'],
             )
             dispatch('user_create', request)
             return OrjsonResponse({})

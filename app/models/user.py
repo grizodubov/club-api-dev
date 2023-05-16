@@ -26,6 +26,7 @@ class User:
         self.detail = ''
         self.status = ''
         self.tags = ''
+        self.interests = ''
         self.roles = []
         self._password = ''
         self.avatar = False
@@ -33,7 +34,7 @@ class User:
 
     ################################################################
     @classmethod
-    async def search(cls, text, active_only = True, offset = None, limit = None, count = False, applicant = None):
+    async def search(cls, text, active_only = True, offset = None, limit = None, count = False, applicant = None, reverse = False):
         api = get_api_context()
         result = []
         slice_query = ''
@@ -47,7 +48,10 @@ class User:
         if applicant is False:
             conditions.append("""'applicant' != ANY(t4.roles)""")
         if text:
-            conditions.append("""to_tsvector(concat_ws(' ', t1.name, t1.email, t1.phone, t3.company, t3.position, t3.detail, t2.tags)) @@ to_tsquery($1)""")
+            if reverse:
+                conditions.append("""to_tsvector(concat_ws(' ', t1.name, t1.email, t1.phone, t3.company, t3.position, t2.interests)) @@ to_tsquery($1)""")
+            else:
+                conditions.append("""to_tsvector(concat_ws(' ', t1.name, t1.email, t1.phone, t3.company, t3.position, t3.detail, t2.tags)) @@ to_tsquery($1)""")
             args.append(re.sub(r'\s+', ' | ', text))
         if offset and limit:
             slice_query = ' OFFSET $2 LIMIT $3'
@@ -60,7 +64,9 @@ class User:
                     t1.name, t1.login, t1.email, t1.phone,
                     t1.active,
                     t3.company, t3.position, t3.detail,
-                    t3.status, coalesce(t2.tags, '') AS tags,
+                    t3.status,
+                    coalesce(t2.tags, '') AS tags,
+                    coalesce(t2.interests, '') AS interests,
                     coalesce(t4.roles, '{}'::text[]) AS roles,
                     t1.password AS _password
                 FROM
@@ -176,7 +182,9 @@ class User:
                         t1.name, t1.login, t1.email, t1.phone,
                         t1.active,
                         t3.company, t3.position, t3.detail,
-                        t3.status, coalesce(t2.tags, '') AS tags,
+                        t3.status,
+                        coalesce(t2.tags, '') AS tags,
+                        coalesce(t2.interests, '') AS interests,
                         coalesce(t4.roles, '{}'::text[]) AS roles,
                         t1.password AS _password
                     FROM
@@ -251,10 +259,11 @@ class User:
             """UPDATE
                     users_tags
                 SET
-                    tags = $1
+                    tags = $1,
+                    interests = $2
                 WHERE
-                    user_id = $2""",
-            kwargs['tags'], self.id
+                    user_id = $3""",
+            kwargs['tags'], kwargs['interests'], self.id
         )
         if 'roles' in kwargs:
             roles = await get_roles()
@@ -307,7 +316,9 @@ class User:
                             t1.name, t1.login, t1.email, t1.phone,
                             t1.active,
                             t3.company, t3.position, t3.detail,
-                            t3.status, coalesce(t2.tags, '') AS tags,
+                            t3.status,
+                            coalesce(t2.tags, '') AS tags,
+                            coalesce(t2.interests, '') AS interests,
                             coalesce(t4.roles, '{}'::text[]) AS roles,
                             t1.password AS _password
                         FROM
@@ -354,7 +365,9 @@ class User:
                         t1.name, t1.login, t1.email, t1.phone,
                         t1.active,
                         t3.company, t3.position, t3.detail,
-                        t3.status, coalesce(t2.tags, '') AS tags,
+                        t3.status,
+                        coalesce(t2.tags, '') AS tags,
+                        coalesce(t2.interests, '') AS interests,
                         coalesce(t4.roles, '{}'::text[]) AS roles,
                         t1.password AS _password
                     FROM
@@ -463,6 +476,7 @@ class User:
                     t2.id, t2.name,
                     t4.company, t4.position, t4.status,
                     coalesce(t3.tags, '') AS tags,
+                    coalesce(t3.interests, '') AS interests,
                     NULL AS description,
                     NULL AS members,
                     'person' AS type
@@ -481,6 +495,7 @@ class User:
                     t6.id, t6.name,
                     NULL AS company, NULL AS position, NULL AS status,
                     NULL AS tags,
+                    NULL AS interests,
                     t6.description,
                     t7.members,
                     'group' AS type
@@ -650,15 +665,26 @@ class User:
                         ($1, $2)""",
                 id, kwargs['roles'][0] if type(kwargs['roles'][0]) == int else roles[kwargs['roles'][0]]
             )
+        i = 1
+        query = []
+        args = [ id ]
         if 'tags' in kwargs:
+            i += 1
+            query,append('tags = $' + str(i))
+            args.append(kwargs['tags'])
+        if 'interests' in kwargs:
+            i += 1
+            query = [ 'interests = $' + str(i) ]
+            args.append(kwargs['interests'])
+        if query:
             await api.pg.club.execute(
                 """UPDATE
                         users_tags
                     SET
-                        tags = $1
+                        """ + ', '.join(query) + """
                     WHERE
-                        user_id = $2""",
-                kwargs['tags'], id
+                        user_id = $1""",
+                *args
             )
         await self.set(id = id)
 
