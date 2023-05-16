@@ -73,6 +73,11 @@ MODELS = {
 			'type': 'str',
             'length_min': 2,
 		},
+        'reverse': {
+			'required': True,
+			'type': 'bool',
+            'default': False,
+		},
 	},
 	'user_add_contact': {
 		'contact_id': {
@@ -326,7 +331,7 @@ async def user_contacts(request):
 async def user_search(request):
     if request.user.id:
         if validate(request.params, MODELS['user_search']):
-            result = await User.search(text = request.params['text'])
+            result = await User.search(text = request.params['text'], reverse = request.params['reverse'])
             contacts = await request.user.get_contacts()
             return OrjsonResponse({
                 'persons': [ item.show() for item in result ],
