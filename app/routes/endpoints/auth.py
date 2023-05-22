@@ -287,8 +287,11 @@ async def check_token(request):
         if request.user.id == 1010:
             result = await check_by_token(request.params['token'])
             if result and result['user_id']:
+                user = User()
+                await user.set(id = result['user_id'])
                 return OrjsonResponse({
                     'user_id': result['user_id'],
+                    'user_roles': user.roles,
                 })
             else:
                 return err(404, 'Пользователь не найден')

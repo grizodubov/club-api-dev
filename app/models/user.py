@@ -520,7 +520,7 @@ class User:
         query2 = ' | '.join([ re.sub(r'\s+', ' & ', t.strip()) for t in self.tags.split(',') ])
         data = await api.pg.club.fetch(
             """SELECT
-                    id, name, company, position, status, tags, search
+                    id, name, company, position, status, tags, search, offer
                 FROM
                     (
                         SELECT * FROM
@@ -530,6 +530,7 @@ class User:
                                     t3.company, t3.position, t3.status,
                                     ts_headline(t2.tags, to_tsquery($1), 'HighlightAll=true, StartSel=~, StopSel=~') AS tags,
                                     $1 AS search,
+                                    'bid' AS offer,
                                     ts_rank_cd(to_tsvector(t2.tags), to_tsquery($1), 32) AS __rank
                                 FROM
                                     users t1
@@ -563,6 +564,7 @@ class User:
                                     t3.company, t3.position, t3.status,
                                     ts_headline(t2.interests, to_tsquery($1), 'HighlightAll=true, StartSel=~, StopSel=~') AS tags,
                                     $2 AS search,
+                                    'ask' AS offer,
                                     ts_rank_cd(to_tsvector(t2.interests), to_tsquery($2), 32) AS __rank
                                 FROM
                                     users t1
@@ -596,6 +598,7 @@ class User:
                         LIMIT 20
                     ) u
                 WHERE
+                    u.id <> $3 AND
                     u.id NOT IN (
                         SELECT contact_id FROM users_contacts WHERE user_id = $3
                     )

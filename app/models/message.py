@@ -138,6 +138,7 @@ async def get_chats(user_id, chat_id = None):
                 'max_message_id': None,
                 'max_message_text': None,
                 'max_message_time_create': None,
+                'avatar': check_avatar_by_id(chat_id),
             })
         else:
             name = await api.pg.club.fetchval( 
@@ -153,6 +154,7 @@ async def get_chats(user_id, chat_id = None):
                     'max_message_id': None,
                     'max_message_text': None,
                     'max_message_time_create': None,
+                    'avatar': check_avatar_by_id(chat_id),
                 })
     return chats
 
