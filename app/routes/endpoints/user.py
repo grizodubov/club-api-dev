@@ -18,6 +18,7 @@ def routes():
         Route('/user/update', user_update, methods = [ 'POST' ]),
         Route('/user/summary', user_summary, methods = [ 'POST' ]),
         Route('/user/contacts', user_contacts, methods = [ 'POST' ]),
+        Route('/user/recommendations', user_recommendations, methods = [ 'POST' ]),
         Route('/user/search', user_search, methods = [ 'POST' ]),
         Route('/user/contact/add', user_add_contact, methods = [ 'POST' ]),
         Route('/user/contact/del', user_del_contact, methods = [ 'POST' ]),
@@ -322,6 +323,16 @@ async def user_contacts(request):
     if request.user.id:
         result = await request.user.get_contacts()
         return OrjsonResponse({ 'contacts': result })
+    else:
+        return err(403, 'Нет доступа')
+
+
+
+################################################################
+async def user_recommendations(request):
+    if request.user.id:
+        result = await request.user.get_recommendations()
+        return OrjsonResponse({ 'recommendations': result })
     else:
         return err(403, 'Нет доступа')
 

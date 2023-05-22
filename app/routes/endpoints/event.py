@@ -1,5 +1,4 @@
 import asyncio
-from random import randint
 from starlette.routing import Route
 
 from app.core.request import err
