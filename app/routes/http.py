@@ -4,6 +4,7 @@ from app.routes.endpoints.user import routes as routes_user
 from app.routes.endpoints.event import routes as routes_event
 from app.routes.endpoints.message import routes as routes_message
 from app.routes.endpoints.group import routes as routes_group
+from app.routes.endpoints.stats import routes as routes_stats
 
 
 routes = [
@@ -13,4 +14,5 @@ routes = [
     *routes_event(),
     *routes_message(),
     *routes_group(),
+    *routes_stats(),
 ]
