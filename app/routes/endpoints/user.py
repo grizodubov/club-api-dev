@@ -93,6 +93,11 @@ MODELS = {
             'values': [ 'tags', 'interests' ],
             'null': True,
 		},
+		'today': {
+			'required': True,
+			'type': 'bool',
+            'default': False,
+		},
 	},
 	'user_add_contact': {
 		'contact_id': {
@@ -355,8 +360,15 @@ async def user_recommendations(request):
 ################################################################
 async def user_suggestions(request):
     if request.user.id:
-        result = await request.user.get_suggestions()
-        return OrjsonResponse({ 'suggestions': result })
+        if validate(request.params, MODELS['user_suggestions']):
+            result = await request.user.get_suggestions(
+                id = request.params['id'],
+                filter = request.params['filter'],
+                today = request.params['today'],
+            )
+            return OrjsonResponse({ 'suggestions': result })
+        else:
+            return err(400, 'Неверный запрос')
     else:
         return err(403, 'Нет доступа')
 
