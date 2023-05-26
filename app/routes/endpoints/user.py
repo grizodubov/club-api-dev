@@ -20,6 +20,7 @@ def routes():
         Route('/user/contacts', user_contacts, methods = [ 'POST' ]),
         Route('/user/recommendations', user_recommendations, methods = [ 'POST' ]),
         Route('/user/suggestions', user_suggestions, methods = [ 'POST' ]),
+        Route('/user/suggestions/stats', user_suggestions_stats, methods = [ 'POST' ]),
         Route('/user/search', user_search, methods = [ 'POST' ]),
         Route('/user/contact/add', user_add_contact, methods = [ 'POST' ]),
         Route('/user/contact/del', user_del_contact, methods = [ 'POST' ]),
@@ -369,6 +370,29 @@ async def user_suggestions(request):
             return OrjsonResponse({ 'suggestions': result })
         else:
             return err(400, 'Неверный запрос')
+    else:
+        return err(403, 'Нет доступа')
+
+
+
+################################################################
+async def user_suggestions_stats(request):
+    if request.user.id:
+        result = await request.user.get_suggestions(
+            id = None,
+            filter = None,
+            today = True,
+        )
+        stats = {
+            'bid': 0,
+            'ask': 0,
+        }
+        for item in result:
+            if item['offer'] == 'bid':
+                stats['bid'] += 1
+            else:
+                stats['ask'] += 1
+        return OrjsonResponse(stats)
     else:
         return err(403, 'Нет доступа')
 

@@ -712,12 +712,12 @@ class User:
         args.append(self.id)
         query_limit = ''
         query_where = ''
-        if query_offset:
-            query_where = ' WHERE '
         if today:
             query_offset.append('time_create >= (now() at time zone \'utc\')::date')
         else:
-            query_limit = ' LIMIT 20'
+            query_limit = ' LIMIT 50'
+        if query_offset:
+            query_where = ' WHERE '
         data = await api.pg.club.fetch(
             """SELECT
                     id, name, time_create, company, position, status, tags, search, offer

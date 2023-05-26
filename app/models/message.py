@@ -110,6 +110,16 @@ async def get_chats(user_id, chat_id = None):
                 LEFT JOIN
                     items_views t2 ON t2.item_id = t1.id AND t2.user_id = $1
                 GROUP BY t1.chat_id
+
+                UNION ALL
+
+                SELECT
+                    1050 AS chat_id, 'user' AS chat_model,
+                    NULL AS min_message_id, NULL AS max_message_id,
+                    0 AS messages_unread, FALSE AS messages_unread_exist
+                WHERE NOT EXISTS (
+                    SELECT id FROM messages WHERE (target_id = $1 AND author_id = 1050) OR (target_id = 1050 AND author_id = $1)
+                )
             --
             ) t3
             LEFT JOIN
@@ -119,7 +129,7 @@ async def get_chats(user_id, chat_id = None):
             LEFT JOIN
                 groups t6 ON t6.id = t3.chat_id
             ORDER BY
-                t3.messages_unread_exist DESC, t4.time_create DESC""",
+                t3.messages_unread_exist DESC, t4.time_create DESC, t3.chat_id""",
         user_id
     )
     chats = [ dict(item) | { 'avatar': check_avatar_by_id(item['chat_id']) } for item in data ]
