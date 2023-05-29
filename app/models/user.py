@@ -514,7 +514,7 @@ class User:
 
 
     ################################################################
-    async def get_recommendations(self):
+    async def get_recommendations(self, amount = 2):
         api = get_api_context()
         query1 = ' | '.join([ re.sub(r'\s+', ' & ', t.strip()) for t in self.interests.split(',') ])
         query2 = ' | '.join([ re.sub(r'\s+', ' & ', t.strip()) for t in self.tags.split(',') ])
@@ -565,8 +565,8 @@ class User:
                         LIMIT 20
                     ) u
                 ORDER BY random()
-                LIMIT 3""",
-            query1, self.id
+                LIMIT $3""",
+            query1, self.id, amount
         )
         data2 = await api.pg.club.fetch(
             """SELECT
@@ -615,8 +615,8 @@ class User:
                         LIMIT 20
                     ) u
                 ORDER BY random()
-                LIMIT 3""",
-            query2, self.id
+                LIMIT $3""",
+            query2, self.id, amount
         )
         return {
             'tags': [ dict(item) | { 'avatar': check_avatar_by_id(item['id']) } for item in data1 ],
