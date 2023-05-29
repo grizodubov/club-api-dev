@@ -352,7 +352,7 @@ async def user_contacts(request):
 async def user_recommendations(request):
     if request.user.id:
         result = await request.user.get_recommendations()
-        return OrjsonResponse({ 'recommendations': result })
+        return OrjsonResponse(result)
     else:
         return err(403, 'Нет доступа')
 

@@ -518,95 +518,110 @@ class User:
         api = get_api_context()
         query1 = ' | '.join([ re.sub(r'\s+', ' & ', t.strip()) for t in self.interests.split(',') ])
         query2 = ' | '.join([ re.sub(r'\s+', ' & ', t.strip()) for t in self.tags.split(',') ])
-        data = await api.pg.club.fetch(
+        data1 = await api.pg.club.fetch(
             """SELECT
                     id, name, company, position, status, tags, search, offer
                 FROM
                     (
-                        SELECT * FROM
+                        SELECT
+                            t1.id, t1.name,
+                            t3.company, t3.position, t3.status,
+                            ts_headline(t2.tags, to_tsquery($1), 'HighlightAll=true, StartSel=~, StopSel=~') AS tags,
+                            $1 AS search,
+                            'bid' AS offer,
+                            ts_rank_cd(to_tsvector(t2.tags), to_tsquery($1), 32) AS __rank
+                        FROM
+                            users t1
+                        INNER JOIN
+                            users_tags t2 ON t2.user_id = t1.id
+                        INNER JOIN
+                            users_info t3 ON t3.user_id = t1.id
+                        LEFT JOIN
                             (
                                 SELECT
-                                    t1.id, t1.name,
-                                    t3.company, t3.position, t3.status,
-                                    ts_headline(t2.tags, to_tsquery($1), 'HighlightAll=true, StartSel=~, StopSel=~') AS tags,
-                                    $1 AS search,
-                                    'bid' AS offer,
-                                    ts_rank_cd(to_tsvector(t2.tags), to_tsquery($1), 32) AS __rank
+                                    r3.user_id, array_agg(r3.alias) AS roles
                                 FROM
-                                    users t1
-                                INNER JOIN
-                                    users_tags t2 ON t2.user_id = t1.id
-                                INNER JOIN
-                                    users_info t3 ON t3.user_id = t1.id
-                                LEFT JOIN
                                     (
                                         SELECT
-                                            r3.user_id, array_agg(r3.alias) AS roles
+                                            r1.user_id, r2.alias
                                         FROM
-                                            (
-                                                SELECT
-                                                    r1.user_id, r2.alias
-                                                FROM
-                                                    users_roles r1
-                                                INNER JOIN
-                                                    roles r2 ON r2.id = r1.role_id
-                                            ) r3
-                                        GROUP BY
-                                            r3.user_id
-                                    ) t4 ON t4.user_id = t1.id
-                                WHERE
-                                    t1.id >= 10000 AND
-                                    t1.active IS TRUE AND
-                                    to_tsvector(t2.tags) @@ to_tsquery($1)
-                                UNION ALL
-                                SELECT
-                                    t1.id, t1.name,
-                                    t3.company, t3.position, t3.status,
-                                    ts_headline(t2.interests, to_tsquery($1), 'HighlightAll=true, StartSel=~, StopSel=~') AS tags,
-                                    $2 AS search,
-                                    'ask' AS offer,
-                                    ts_rank_cd(to_tsvector(t2.interests), to_tsquery($2), 32) AS __rank
-                                FROM
-                                    users t1
-                                INNER JOIN
-                                    users_tags t2 ON t2.user_id = t1.id
-                                INNER JOIN
-                                    users_info t3 ON t3.user_id = t1.id
-                                LEFT JOIN
-                                    (
-                                        SELECT
-                                            r3.user_id, array_agg(r3.alias) AS roles
-                                        FROM
-                                            (
-                                                SELECT
-                                                    r1.user_id, r2.alias
-                                                FROM
-                                                    users_roles r1
-                                                INNER JOIN
-                                                    roles r2 ON r2.id = r1.role_id
-                                            ) r3
-                                        GROUP BY
-                                            r3.user_id
-                                    ) t4 ON t4.user_id = t1.id
-                                WHERE
-                                    t1.id >= 10000 AND
-                                    t1.active IS TRUE AND
-                                    to_tsvector(t2.interests) @@ to_tsquery($2)
-                            ) d
+                                            users_roles r1
+                                        INNER JOIN
+                                            roles r2 ON r2.id = r1.role_id
+                                    ) r3
+                                GROUP BY
+                                    r3.user_id
+                            ) t4 ON t4.user_id = t1.id
+                        WHERE
+                            t1.id >= 10000 AND
+                            t1.id <> $2 AND
+                            t1.active IS TRUE AND
+                            t1.id NOT IN (
+                                SELECT contact_id FROM users_contacts WHERE user_id = $2
+                            ) AND
+                            to_tsvector(t2.tags) @@ to_tsquery($1)
                         ORDER BY
                             __rank DESC
                         LIMIT 20
                     ) u
-                WHERE
-                    u.id <> $3 AND
-                    u.id NOT IN (
-                        SELECT contact_id FROM users_contacts WHERE user_id = $3
-                    )
                 ORDER BY random()
                 LIMIT 3""",
-            query1, query2, self.id
+            query1, self.id
         )
-        return [ dict(item) | { 'avatar': check_avatar_by_id(item['id']) } for item in data ]
+        data2 = await api.pg.club.fetch(
+            """SELECT
+                    id, name, company, position, status, tags, search, offer
+                FROM
+                    (
+                        SELECT
+                            t1.id, t1.name,
+                            t3.company, t3.position, t3.status,
+                            ts_headline(t2.interests, to_tsquery($1), 'HighlightAll=true, StartSel=~, StopSel=~') AS tags,
+                            $1 AS search,
+                            'ask' AS offer,
+                            ts_rank_cd(to_tsvector(t2.interests), to_tsquery($1), 32) AS __rank
+                        FROM
+                            users t1
+                        INNER JOIN
+                            users_tags t2 ON t2.user_id = t1.id
+                        INNER JOIN
+                            users_info t3 ON t3.user_id = t1.id
+                        LEFT JOIN
+                            (
+                                SELECT
+                                    r3.user_id, array_agg(r3.alias) AS roles
+                                FROM
+                                    (
+                                        SELECT
+                                            r1.user_id, r2.alias
+                                        FROM
+                                            users_roles r1
+                                        INNER JOIN
+                                            roles r2 ON r2.id = r1.role_id
+                                    ) r3
+                                GROUP BY
+                                    r3.user_id
+                            ) t4 ON t4.user_id = t1.id
+                        WHERE
+                            t1.id >= 10000 AND
+                            t1.id <> $2 AND
+                            t1.active IS TRUE AND
+                            t1.id NOT IN (
+                                SELECT contact_id FROM users_contacts WHERE user_id = $2
+                            ) AND
+                            to_tsvector(t2.interests) @@ to_tsquery($1)
+                        ORDER BY
+                            __rank DESC
+                        LIMIT 20
+                    ) u
+                ORDER BY random()
+                LIMIT 3""",
+            query2, self.id
+        )
+        return {
+            'tags': [ dict(item) | { 'avatar': check_avatar_by_id(item['id']) } for item in data1 ],
+            'interests': [ dict(item) | { 'avatar': check_avatar_by_id(item['id']) } for item in data2 ],
+        }
 
 
 
