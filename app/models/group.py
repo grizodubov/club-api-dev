@@ -175,9 +175,7 @@ class Group:
 
     ################################################################
     async def create(self, **kwargs):
-        # TODO: сделать полный register (все поля)
         api = get_api_context()
-        # только мобильники рф
         id = await api.pg.club.fetchval(
             """INSERT INTO
                     groups (name, description)

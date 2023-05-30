@@ -6,7 +6,6 @@ from app.core.event import dispatch
 from app.utils.validate import validate
 from app.models.group import Group
 from app.models.user import User
-from app.models.event import Event
 
 
 

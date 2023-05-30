@@ -76,6 +76,48 @@ class Event:
 
 
     ################################################################
+    async def update(self, **kwargs):
+        api = get_api_context()
+        cursor = 2
+        query = []
+        args = []
+        for k in { 'name', 'format', 'place', 'time_event', 'detail' }:
+            if k in kwargs:
+                query.append(k + ' = $' + str(cursor))
+                args.append(kwargs[k])
+                cursor += 1
+        if query:
+            await api.pg.club.execute(
+                """UPDATE
+                        events
+                    SET
+                        """ + ', '.join(query) + """
+                    WHERE
+                        id = $1""",
+                self.id, *args
+            )
+
+
+    ################################################################
+    async def create(self, **kwargs):
+        api = get_api_context()
+        id = await api.pg.club.fetchval(
+            """INSERT INTO
+                    events (name, format, place, time_event, detail)
+                VALUES
+                    ($1, $2, $3, $4, $5)
+                RETURNING
+                    id""",
+            kwargs['name'],
+            kwargs['format'],
+            kwargs['place'],
+            kwargs['time_event'],
+            kwargs['detail']
+        )
+        await self.set(id = id)
+
+
+    ################################################################
     def check_icon(self):
         self.icon = os.path.isfile('/var/www/static.clubgermes.ru/html/events/' + str(self.id) + '/icon.png')
 
