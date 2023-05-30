@@ -1,3 +1,5 @@
+import os.path
+
 from app.core.context import get_api_context
 
 
@@ -17,6 +19,9 @@ class Event:
         self.time_event = None
         self.detail = ''
         self.thumbs_up = 0
+        self.icon = False
+        self.image = False
+        self.files = False
 
     
     ################################################################
@@ -38,6 +43,9 @@ class Event:
         for row in data:
             item = Event()
             item.__dict__ = dict(row)
+            item.check_icon()
+            item.check_image()
+            item.check_files()
             result.append(item)
         return result
 
@@ -65,3 +73,19 @@ class Event:
                 id
             )
             self.__dict__ = dict(data)
+
+
+    ################################################################
+    def check_icon(self):
+        self.icon = os.path.isfile('/var/www/static.clubgermes.ru/html/events/' + str(self.id) + '/icon.png')
+
+
+    ################################################################
+    def check_image(self):
+        self.image = os.path.isfile('/var/www/static.clubgermes.ru/html/events/' + str(self.id) + '/img.jpg')
+
+
+    ################################################################
+    def check_files(self):
+        self.files = os.path.isfile('/var/www/static.clubgermes.ru/html/events/' + str(self.id) + '/index.html') and \
+                os.path.isfile('/var/www/static.clubgermes.ru/html/events/' + str(self.id) + '/menu.json')
