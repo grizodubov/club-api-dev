@@ -99,6 +99,12 @@ MODELS = {
 			'type': 'bool',
             'default': False,
 		},
+        'page': {
+            'required': True,
+            'type': 'int',
+            'value_min': 1,
+            'default': 1,
+        },
 	},
 	'user_add_contact': {
 		'contact_id': {

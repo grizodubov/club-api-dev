@@ -38,6 +38,7 @@ class User:
     async def search(cls, text, active_only = True, offset = None, limit = None, count = False, applicant = None, reverse = False):
         api = get_api_context()
         result = []
+        amount = None
         slice_query = ''
         conditions = [ 't1.id >= 10000' ]
         condition_query = ''
@@ -54,8 +55,8 @@ class User:
             else:
                 conditions.append("""to_tsvector(concat_ws(' ', t1.name, t1.email, t1.phone, t3.company, t3.position, t3.detail, t2.tags)) @@ to_tsquery($1)""")
             args.append(re.sub(r'\s+', ' | ', text))
-        if offset and limit:
-            slice_query = ' OFFSET $2 LIMIT $3'
+        if offset is not None and limit is not None:
+            slice_query = ' OFFSET $' + str(len(args) + 1) + ' LIMIT $' + str(len(args) + 2)
             args.extend([ offset, limit ])
         if conditions:
             conditions_query = ' WHERE ' + ' AND '.join(conditions)
@@ -101,7 +102,8 @@ class User:
             result.append(item)
         if count:
             amount = len(result)
-            if offset and limit:
+            if offset is not None and limit is not None:
+                args_count = args[:len(args) - 2]
                 amount = await api.pg.club.fetchval(
                     """SELECT
                             count(t1.id)
@@ -127,7 +129,7 @@ class User:
                                 GROUP BY
                                     r3.user_id
                             ) t4 ON t4.user_id = t1.id""" + conditions_query,
-                    *args
+                    *args_count
                 )
             return (result, amount)
         return result
@@ -433,7 +435,7 @@ class User:
                 FROM
                     messages t1
                 LEFT JOIN
-                    items_views t2 ON t2.item_id = t1.id
+                    items_views t2 ON t2.item_id = t1.id AND t2.user_id = $1
                 WHERE
                     (
                         t1.target_id = $1 OR
@@ -626,7 +628,7 @@ class User:
 
 
     ################################################################
-    async def get_suggestions(self, id = None, filter = None, today = False):
+    async def get_suggestions(self, id = None, filter = None, today = False, limit = False, offset = False):
         api = get_api_context()
         query_tags = """SELECT
                                 t1.id, t1.name, t1.time_create,
