@@ -149,7 +149,7 @@ async def moderator_event_update(request):
 async def moderator_event_create(request):
     if request.user.id and request.user.check_roles({ 'admin', 'editor' }):
         if validate(request.params, MODELS['moderator_event_create']):
-            event = event()
+            event = Event()
             await event.create(**request.params)
             dispatch('event_create', request)
             return OrjsonResponse({})
