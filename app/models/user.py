@@ -628,13 +628,13 @@ class User:
 
 
     ################################################################
-    async def get_suggestions(self, id = None, filter = None, today = False, limit = False, offset = False):
+    async def get_suggestions(self, id = None, filter = None, today = False, from_id = None):
         api = get_api_context()
         query_tags = """SELECT
                                 t1.id, t1.name, t1.time_create,
                                 t3.company, t3.position, t3.status,
                                 ts_headline(t2.tags, to_tsquery(${i}), 'HighlightAll=true, StartSel=~, StopSel=~') AS tags,
-                                $1 AS search,
+                                ${i} AS search,
                                 'bid' AS offer,
                                 ts_rank_cd(to_tsvector(t2.tags), to_tsquery(${i}), 32) AS __rank
                             FROM
@@ -667,7 +667,7 @@ class User:
                                     t1.id, t1.name, t1.time_create,
                                     t3.company, t3.position, t3.status,
                                     ts_headline(t2.interests, to_tsquery(${i}), 'HighlightAll=true, StartSel=~, StopSel=~') AS tags,
-                                    $2 AS search,
+                                    ${i} AS search,
                                     'ask' AS offer,
                                     ts_rank_cd(to_tsvector(t2.interests), to_tsquery(${i}), 32) AS __rank
                                 FROM
@@ -727,17 +727,19 @@ class User:
                     )"""
         query_condition = query_condition.format(i = i)
         args.append(self.id)
-        query_limit = ''
+        i += 1
+        if from_id:
+            query_condition += ' AND u.id > ${i}'.format(i = i)
+            args.append(from_id)
+            i += 1
         query_where = ''
         if today:
             query_offset.append('time_create >= (now() at time zone \'utc\')::date')
-        else:
-            query_limit = ' LIMIT 50'
         if query_offset:
             query_where = ' WHERE '
         data = await api.pg.club.fetch(
             """SELECT
-                    id, name, time_create, company, position, status, tags, search, offer
+                    id, name, time_create, company, position, status, tags, search, offer, count(*) OVER() AS amount
                 FROM
                     (
                         SELECT * FROM
@@ -745,9 +747,8 @@ class User:
                             ) d""" + query_where + ' AND '.join(query_offset) + """
                         ORDER BY
                             time_create DESC
-                        """ + query_limit + """
                     ) u
-                WHERE """ + query_condition,
+                WHERE """ + query_condition + """ LIMIT 50""",
             *args
         )
         return [ dict(item) | { 'avatar': check_avatar_by_id(item['id']) } for item in data ]

@@ -99,12 +99,12 @@ MODELS = {
 			'type': 'bool',
             'default': False,
 		},
-        'page': {
+        'from_id': {
             'required': True,
             'type': 'int',
             'value_min': 1,
-            'default': 1,
-        },
+            'null': True,
+        }
 	},
 	'user_add_contact': {
 		'contact_id': {
@@ -372,6 +372,7 @@ async def user_suggestions(request):
                 id = request.params['id'],
                 filter = request.params['filter'],
                 today = request.params['today'],
+                from_id = request.params['from_id'],
             )
             return OrjsonResponse({ 'suggestions': result })
         else:
@@ -408,7 +409,12 @@ async def user_suggestions_stats(request):
 async def user_search(request):
     if request.user.id:
         if validate(request.params, MODELS['user_search']):
-            result = await User.search(text = request.params['text'], reverse = request.params['reverse'])
+            result = await User.search(
+                text = request.params['text'],
+                reverse = request.params['reverse'],
+                offset = 0,
+                limit = 50,
+            )
             contacts = await request.user.get_contacts()
             return OrjsonResponse({
                 'persons': [ item.show() for item in result if item.id != request.user.id ],
