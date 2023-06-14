@@ -34,6 +34,10 @@ MODELS = {
 			'type': 'int',
             'value_min': 1,
 		},
+        'active': {
+			'required': True,
+			'type': 'bool',
+		},
 		'name': {
 			'required': True,
 			'type': 'str',
@@ -43,9 +47,18 @@ MODELS = {
 		'detail': {
 			'required': True,
 			'type': 'str',
+		},
+        'time_news': {
+			'required': True,
+			'type': 'int',
+            'null': True,
 		},
 	},
 	'moderator_news_create': {
+        'active': {
+			'required': True,
+			'type': 'bool',
+		},
 		'name': {
 			'required': True,
 			'type': 'str',
@@ -55,6 +68,11 @@ MODELS = {
 		'detail': {
 			'required': True,
 			'type': 'str',
+		},
+        'time_news': {
+			'required': True,
+			'type': 'int',
+            'null': True,
 		},
 	},
 }

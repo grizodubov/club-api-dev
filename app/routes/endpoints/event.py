@@ -36,6 +36,10 @@ MODELS = {
 			'type': 'int',
             'value_min': 1,
 		},
+        'active': {
+			'required': True,
+			'type': 'bool',
+		},
 		'name': {
 			'required': True,
 			'type': 'str',
@@ -62,6 +66,10 @@ MODELS = {
 		},
 	},
 	'moderator_event_create': {
+        'active': {
+			'required': True,
+			'type': 'bool',
+		},
 		'name': {
 			'required': True,
 			'type': 'str',
@@ -94,7 +102,8 @@ MODELS = {
 ################################################################
 async def events_feed(request):
     if request.user.id:
-        result = await Event.list()
+        result = await Event.list(active_only = True)
+        result = result[0:50]
         events_ids = [ item.id for item in result ]
         events_ids_selected = await request.user.filter_selected_events(events_ids)
         events_ids_thumbsup = await request.user.filter_thumbsup(events_ids)

@@ -18,6 +18,7 @@ class Event:
         self.place = ''
         self.time_event = None
         self.detail = ''
+        self.active = False
         self.thumbs_up = 0
         self.icon = False
         self.image = False
@@ -26,19 +27,23 @@ class Event:
     
     ################################################################
     @classmethod
-    async def list(cls):
+    async def list(cls, active_only = False):
         api = get_api_context()
         result = []
+        where = ''
+        if active_only:
+            where = ' WHERE t1.active IS TRUE '
         data = await api.pg.club.fetch(
             """SELECT
                         t1.id, t1.time_create, t1.time_update,
                         t1.name, t1.format, t1.place, t1.time_event,
-                        t1.detail, coalesce(t2.thumbs_up, 0) AS thumbs_up
+                        t1.detail, t1.active,
+                        coalesce(t2.thumbs_up, 0) AS thumbs_up
                     FROM
                         events t1
                     LEFT JOIN
                         (SELECT item_id, count(user_id) AS thumbs_up FROM items_thumbsup GROUP BY item_id) t2 ON t2.item_id = t1.id
-                    ORDER BY t1.time_event DESC"""
+                    """ + where + """ORDER BY t1.time_event DESC"""
         )
         for row in data:
             item = Event()
@@ -63,7 +68,8 @@ class Event:
                 """SELECT
                         t1.id, t1.time_create, t1.time_update,
                         t1.name, t1.format, t1.place, t1.time_event,
-                        t1.detail, coalesce(t2.thumbs_up, 0) AS thumbs_up
+                        t1.detail, t1.active,
+                        coalesce(t2.thumbs_up, 0) AS thumbs_up
                     FROM
                         events t1
                     LEFT JOIN
@@ -81,7 +87,7 @@ class Event:
         cursor = 2
         query = []
         args = []
-        for k in { 'name', 'format', 'place', 'time_event', 'detail' }:
+        for k in { 'active', 'name', 'format', 'place', 'time_event', 'detail' }:
             if k in kwargs:
                 query.append(k + ' = $' + str(cursor))
                 args.append(kwargs[k])
@@ -103,11 +109,12 @@ class Event:
         api = get_api_context()
         id = await api.pg.club.fetchval(
             """INSERT INTO
-                    events (name, format, place, time_event, detail)
+                    events (active, name, format, place, time_event, detail)
                 VALUES
-                    ($1, $2, $3, $4, $5)
+                    ($1, $2, $3, $4, $5, $6)
                 RETURNING
                     id""",
+            kwargs['active'],
             kwargs['name'],
             kwargs['format'],
             kwargs['place'],
