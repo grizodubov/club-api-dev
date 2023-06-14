@@ -31,14 +31,16 @@ async def get_feed():
                 UNION ALL
 
                 SELECT
-                        t3.id, t3.time_create, t3.time_update,
-                        t3.name, NULL AS format, NULL AS place, NULL AS time_event, t3.time_news,
-                        t3.detail, t3.active, t3.time_news AS time_sort,
-                        coalesce(t4.thumbs_up, 0) AS thumbs_up
-                    FROM
-                        news t3
-                    LEFT JOIN
-                        (SELECT item_id, count(user_id) AS thumbs_up FROM items_thumbsup GROUP BY item_id) t4 ON t4.item_id = t3.id
+                    t3.id, t3.time_create, t3.time_update,
+                    t3.name, NULL AS format, NULL AS place, NULL AS time_event, t3.time_news,
+                    t3.detail, t3.active, t3.time_news AS time_sort,
+                    coalesce(t4.thumbs_up, 0) AS thumbs_up
+                FROM
+                    news t3
+                LEFT JOIN
+                    (SELECT item_id, count(user_id) AS thumbs_up FROM items_thumbsup GROUP BY item_id) t4 ON t4.item_id = t3.id
+                WHERE
+                    t3.active IS TRUE
             ) t5
             ORDER BY
                 t5.time_sort DESC
