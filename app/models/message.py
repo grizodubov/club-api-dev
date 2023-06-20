@@ -73,6 +73,7 @@ async def get_chats(user_id, chat_id = None):
                 t3.chat_id,
                 t3.chat_model,
                 coalesce(t5.name, t6.name) AS chat_name,
+                t5_1.status AS chat_status,
                 t3.messages_unread,
                 t3.min_message_id,
                 t3.max_message_id,
@@ -126,6 +127,8 @@ async def get_chats(user_id, chat_id = None):
                 messages t4 ON t4.id = t3.max_message_id
             LEFT JOIN
                 users t5 ON t5.id = t3.chat_id
+            LEFT JOIN
+                users_info t5_1 ON t5_1.user_id = t5.id
             LEFT JOIN
                 groups t6 ON t6.id = t3.chat_id
             ORDER BY
