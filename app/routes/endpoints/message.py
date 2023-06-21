@@ -5,6 +5,7 @@ from app.core.response import OrjsonResponse
 from app.core.event import dispatch
 from app.utils.validate import validate
 from app.models.item import Item, Items
+from app.models.user import User
 from app.models.message import get_chats, get_messages, add_message, view_message, view_messages
 
 
@@ -141,6 +142,10 @@ async def message_add(request):
                 access = True
                 if item.model == 'group':
                     access = await request.user.group_access(group_id = item.id)
+                if item.model == 'user':
+                    user = User()
+                    await user.set(id = item.id)
+                    access = await request.user.check_access(user)
                 if access:
                     message = await add_message(
                         user_id = request.user.id,

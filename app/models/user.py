@@ -5,6 +5,7 @@ import os.path
 from app.core.context import get_api_context
 from app.utils.packager import pack as data_pack, unpack as data_unpack
 from app.models.role import get_roles
+from app.models.message import check_recepient, check_recepients
 
 
 
@@ -930,6 +931,51 @@ class User:
                 *args
             )
         await self.set(id = id)
+
+
+    ################################################################
+    async def check_access(self, user):
+        if self.status == 'золотой':
+            return True
+        if self.status == 'серебряный' and (user.status == 'серебряный' or user.status == 'бронзовый'):
+            return True
+        if self.status == 'бронзовый' and user.status == 'бронзовый':
+            return True
+        return await check_recepient(self.id, user.id)
+
+
+    ################################################################
+    async def check_multiple_access(self, users):
+        result = {}
+        recepients_ids = []
+        for user in users:
+            if self.status == 'золотой':
+                result[str(user.id)] = True
+                continue
+            if self.status == 'серебряный' and (user.status == 'серебряный' or user.status == 'бронзовый'):
+                result[str(user.id)] = True
+                continue
+            if self.status == 'бронзовый' and user.status == 'бронзовый':
+                result[str(user.id)] = True
+                continue
+            recepients_ids.append(user.id)
+        if recepients_ids:
+            data = await check_recepients(self.id, recepients_ids)
+            for id in recepients_ids:
+                if str(id) in data and data[str(id)] is True:
+                    result[str(id)] = True
+                else:
+                    result[str(id)] = False
+        return result
+
+
+    ################################################################
+    async def terminate(self):
+        api = get_api_context()
+        data = await api.pg.club.execute(
+            """UPDATE users SET active = FALSE WHERE id = $1""",
+            self.id
+        )
 
 
 

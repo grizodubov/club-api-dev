@@ -340,3 +340,39 @@ async def view_messages(user_id, messages_ids):
 ################################################################
 def check_avatar_by_id(id):
     return os.path.isfile('/var/www/media.clubgermes.ru/html/avatars/' + str(id) + '.jpg')
+
+
+
+################################################################
+async def check_recepient(user_id, recepient_id):
+    api = get_api_context()
+    amount = await api.pg.club.fetchval( 
+        """SELECT
+                count(id)
+            FROM
+                messages
+            WHERE
+                target_id = $1 AND author_id = $2""",
+        user_id, recepient_id
+    )
+    return True if amount else False
+
+
+
+################################################################
+async def check_recepients(user_id, recepients_ids):
+    api = get_api_context()
+    data = await api.pg.club.fetch( 
+        """SELECT
+                author_id, count(id) AS amount
+            FROM
+                messages
+            WHERE
+                target_id = $1 AND author_id = ANY($2)
+            GROUP BY
+                author_id""",
+        user_id, recepients_ids
+    )
+    return {
+        str(row['author_id']): True if row['amount'] else False for row in data
+    }

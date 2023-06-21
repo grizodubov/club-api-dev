@@ -25,6 +25,7 @@ def routes():
         Route('/check/token', check_token, methods = [ 'POST' ]),
         Route('/register', register, methods = [ 'POST' ]),
         Route('/register/validate', register_validate, methods = [ 'POST' ]),
+        Route('/terminate', terminate, methods = [ 'POST' ]),
 
         Route('/m/login', moderator_login, methods = [ 'POST' ]),
     ]
@@ -388,3 +389,18 @@ async def moderator_login(request):
             return err(403, 'Пользователь и / или пароль не верны')
     else:
         return err(400, 'Не указаны логин и / или пароль')
+
+
+
+################################################################
+async def terminate(request):
+    if request.user.id:
+        await request.user.terminate()
+        user_id = request.user.id
+        await request.session.assign(0)
+        request.user.reset()
+        request.api.websocket_update(request.session.id, request.user.id)
+        dispatch('user_logout', request, user_id)
+        return OrjsonResponse({})
+    else:
+        return err(403, 'Нет доступа')

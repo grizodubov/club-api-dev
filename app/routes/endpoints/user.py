@@ -303,12 +303,16 @@ async def user_info(request):
             await user.set(id = request.path_params['id'])
             if user.id:
                 result = user.show()
-                result.update({ 'contacts_cache': False })
+                result.update({
+                    'contacts_cache': False,
+                    'allow_contact': False,
+                })
                 contacts = await request.user.get_contacts()
                 for contact in contacts:
                     if contact['id'] == user.id:
                         result['contacts_cache'] = True
                         break
+                result['allow_contact'] = await request.user.check_access(user)
                 return OrjsonResponse(result)
             else:
                 return err(404, 'Пользователь не найден')
@@ -416,9 +420,13 @@ async def user_search(request):
                 limit = 50,
             )
             contacts = await request.user.get_contacts()
+            allow_contacts = {}
+            if result:
+                allow_contacts = await request.user.check_multiple_access([ item for item in result if item.id != request.user.id ])
             return OrjsonResponse({
                 'persons': [ item.show() for item in result if item.id != request.user.id ],
-                'contacts_cache': { str(contact['id']): True for contact in contacts if contact['type'] == 'person' }
+                'contacts_cache': { str(contact['id']): True for contact in contacts if contact['type'] == 'person' },
+                'allow_contacts': allow_contacts,
             })
         else:
             return err(400, 'Неверный поиск')
@@ -434,9 +442,13 @@ async def user_add_contact(request):
             user = User()
             await user.set(id = request.params['contact_id'])
             if user.id:
-                await request.user.add_contact(user.id)
-                dispatch('user_add_contact', request)
-                return OrjsonResponse({})
+                access = await request.user.check_access(user)
+                if access:
+                    await request.user.add_contact(user.id)
+                    dispatch('user_add_contact', request)
+                    return OrjsonResponse({})
+                else:
+                    return err(403, 'Нет доступа')
             else:
                 return err(404, 'Контакт не найден')
         else:
