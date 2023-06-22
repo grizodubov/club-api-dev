@@ -21,6 +21,8 @@ EVENTS = {
     'message_view': { 'send': True, 'filter_params': None },
     'group_create': { 'send': False, 'filter_params': None },
     'group_update': { 'send': True, 'filter_params': None },
+    'community_create': { 'send': False, 'filter_params': None },
+    'community_update': { 'send': True, 'filter_params': None },
     'event_create': { 'send': True, 'filter_params': None },
     'event_update': { 'send': True, 'filter_params': None },
     'news_create': { 'send': True, 'filter_params': None },
