@@ -291,7 +291,7 @@ async def add_message(user_id, chat_id, chat_model, text):
         message['id'], user_id, message['time_create']
     )
     message['time_view'] = message['time_create']
-    return message
+    return message | { 'author_avatar': check_avatar_by_id(user_id) }
 
 
 
