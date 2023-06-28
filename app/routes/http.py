@@ -1,4 +1,5 @@
 from app.routes.endpoints.home import routes as routes_home
+from app.routes.endpoints.item import routes as routes_item
 from app.routes.endpoints.auth import routes as routes_auth
 from app.routes.endpoints.user import routes as routes_user
 from app.routes.endpoints.event import routes as routes_event
@@ -12,6 +13,7 @@ from app.routes.endpoints.stats import routes as routes_stats
 
 routes = [
     *routes_home(),
+    *routes_item(),
     *routes_auth(),
     *routes_user(),
     *routes_event(),

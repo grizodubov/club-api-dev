@@ -191,3 +191,35 @@ class Community:
 ################################################################
 def check_avatar_by_id(id):
     return os.path.isfile('/var/www/media.clubgermes.ru/html/avatars/' + str(id) + '.jpg')
+
+
+
+###############################################################
+async def get_stats(communities_ids, user_id):
+    api = get_api_context()
+    data = await api.pg.club.fetch(
+        """SELECT
+                t1.community_id,
+                count(t1.id) FILTER (WHERE t1.reply_to_post_id IS NULL) AS subjects_open,
+                count(t1.id) FILTER (WHERE t1.reply_to_post_id IS NULL AND t2.time_view IS NULL) AS subjects_new,
+                count(t1.id) FILTER (WHERE t1.reply_to_post_id IS NOT NULL AND t2.time_view IS NULL) AS answers_new,
+                max(t1.time_create) AS time_last_post
+            FROM
+                posts t1
+            LEFT JOIN
+                items_views t2 ON t2.item_id = t1.id AND t2.user_id = $2
+            WHERE
+                t1.community_id = ANY($1)
+            GROUP BY
+                t1.community_id""",
+        communities_ids, user_id
+    )
+    return {
+        str(row['community_id']): {
+            'subjects_open': row['subjects_open'],
+            'subjects_new': row['subjects_new'],
+            'answers_new': row['answers_new'],
+            'time_last_post': row['time_last_post'],
+        }
+        for row in data
+    }

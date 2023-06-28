@@ -28,6 +28,25 @@ class Item:
             self.__dict__ = dict(data)
 
 
+    ################################################################
+    async def view(self, user_id):
+        api = get_api_context()
+        time_view = await api.pg.club.fetchval( 
+            """INSERT INTO
+                    items_views
+                    (item_id, user_id)
+                VALUES
+                    ($2, $1)
+                ON CONFLICT
+                    (item_id, user_id)
+                DO NOTHING
+                RETURNING
+                    time_view""",
+            user_id, self.id
+        )
+        return time_view
+
+
 
 ####################################################################
 class Items:
@@ -70,3 +89,26 @@ class Items:
     ################################################################
     def ids(self):
         return [ item.id for item in self.list ]
+
+
+    ################################################################
+    async def view(self, user_id):
+        api = get_api_context()
+        query = []
+        args = []
+        for i, item in enumerate(self.list, 2):
+            query.append('($' + str(i) + ', $1)')
+            args.append(item.id)
+        data = await api.pg.club.fetch( 
+            """INSERT INTO
+                    items_views
+                    (item_id, user_id)
+                VALUES """ + ', '.join(query) + """
+                ON CONFLICT
+                    (item_id, user_id)
+                DO NOTHING
+                RETURNING
+                    time_view""",
+            user_id, *self.ids()
+        )
+        return data[0]['time_view']
