@@ -4,7 +4,7 @@ from app.core.request import err
 from app.core.response import OrjsonResponse
 from app.core.event import dispatch
 from app.utils.validate import validate
-from app.models.community import Community, get_stats
+from app.models.community import Community, get_stats, get_posts
 from app.models.user import User
 from app.models.item_ import Items
 
@@ -80,9 +80,15 @@ async def community_list(request):
         communities = Items()
         await communities.search('community')
         stats = await get_stats([ item['id'] for item in communities.items ], request.user.id)
+        #if request.params['community_id']:
+        #    community_id = request.params['community_id']
+        #else:
+        community_id = communities.items[0]['id']
+        posts = await get_posts(community_id, request.user.id)
         return OrjsonResponse({
             'communities': communities.items,
             'stats': stats,
+            'posts': posts,
         })
     else:
         return err(403, 'Нет доступа')

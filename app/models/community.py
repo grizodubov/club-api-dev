@@ -223,3 +223,62 @@ async def get_stats(communities_ids, user_id):
         }
         for row in data
     }
+
+
+
+###############################################################
+async def get_posts(community_id, user_id):
+    api = get_api_context()
+    data = await api.pg.club.fetch(
+        """SELECT
+                *
+            FROM (
+                SELECT
+                    t1.id,
+                    t1.time_create,
+                    t1.time_update,
+                    t1.community_id,
+                    t1.text,
+                    t1.reply_to_post_id,
+                    t1.author_id,
+                    t1.closed,
+                    t1.helpful,
+                    t2.name AS author_name,
+                    t3.time_view,
+                    coalesce(t1.reply_to_post_id, t1.id) AS question_id
+                FROM
+                    posts t1
+                INNER JOIN
+                    users t2
+                ON
+                    t2.id = t1.author_id
+                LEFT JOIN
+                    items_views t3
+                ON
+                    t3.item_id = t1.id AND t3.user_id = $2
+                WHERE
+                    t1.community_id = $1
+            ) t4
+            ORDER BY
+                t4.question_id, t4.time_create""",
+        community_id, user_id
+    )
+    unique_authors_ids = set([ item['author_id'] for item in data ])
+    authors_avatars = {}
+    for author_id in unique_authors_ids:
+        authors_avatars[str(author_id)] = check_avatar_by_id(author_id)
+    temp = {}
+    for item in data:
+        if item['reply_to_post_id'] is None:
+            q = str(item['question_id'])
+            if q not in temp:
+                temp[q] = {
+                    'question': dict(item) | { 'author_avatar': authors_avatars[str(item['author_id'])] },
+                    'answers': []
+                }
+    for item in data:
+        if item['reply_to_post_id'] is not None:
+            q = str(item['question_id'])
+            if q in temp:
+                temp[q]['answers'].append(dict(item) | { 'author_avatar': authors_avatars[str(item['author_id'])] })
+    return [ v for v in temp.values() ]
