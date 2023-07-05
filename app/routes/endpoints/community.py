@@ -4,7 +4,7 @@ from app.core.request import err
 from app.core.response import OrjsonResponse
 from app.core.event import dispatch
 from app.utils.validate import validate
-from app.models.community import Community, get_stats, get_posts
+from app.models.community import Community, get_stats, get_posts, sort_communities, add_post, check_post
 from app.models.user import User
 from app.models.item_ import Items
 
@@ -13,6 +13,8 @@ from app.models.item_ import Items
 def routes():
     return [
         Route('/community/list', community_list, methods = [ 'POST' ]),
+        Route('/community/post/add', community_add_post, methods = [ 'POST' ]),
+        Route('/community/post/update', community_update_post, methods = [ 'POST' ]),
 
         Route('/m/community/search', moderator_community_search, methods = [ 'POST' ]),
         Route('/m/community/update', moderator_community_update, methods = [ 'POST' ]),
@@ -22,6 +24,50 @@ def routes():
 
 
 MODELS = {
+	'community_list': {
+		'community_id': {
+			'required': True,
+			'type': 'int',
+            'value_min': 1,
+            'null': True,
+		},
+	},
+	'community_add_post': {
+		'community_id': {
+			'required': True,
+			'type': 'int',
+            'value_min': 1,
+		},
+        'text': {
+            'required': True,
+			'type': 'str',
+            'length_min': 1,
+        },
+		'reply_to_post_id': {
+			'required': True,
+			'type': 'int',
+            'value_min': 1,
+            'null': True,
+		},
+	},
+	'community_update_post': {
+		'post_id': {
+			'required': True,
+			'type': 'int',
+            'value_min': 1,
+		},
+        'closed': {
+            'required': False,
+            'type': 'bool',
+            'null': True,
+        },
+        'helpful': {
+            'required': False,
+            'type': 'bool',
+            'null': True,
+        },
+	},
+
     # moderator
 	'moderator_community_search': {
 		'text': {
@@ -79,17 +125,81 @@ async def community_list(request):
     if request.user.id:
         communities = Items()
         await communities.search('community')
-        stats = await get_stats([ item['id'] for item in communities.items ], request.user.id)
-        #if request.params['community_id']:
-        #    community_id = request.params['community_id']
-        #else:
-        community_id = communities.items[0]['id']
+        communities_ids = [ item['id'] for item in communities.items ]
+        stats = await get_stats(communities_ids, request.user.id)
+        communities_sorted = sort_communities(communities.items, stats)
+        print(communities_sorted)
+        community_id = None
+        if request.params['community_id'] and request.params['community_id'] in communities_ids:
+            community_id = request.params['community_id']
+        else:
+            if communities_sorted:
+                community_id = communities_sorted[0]['id']
         posts = await get_posts(community_id, request.user.id)
         return OrjsonResponse({
-            'communities': communities.items,
+            'communities': communities_sorted,
             'stats': stats,
+            'community_id': community_id,
             'posts': posts,
         })
+    else:
+        return err(403, 'Нет доступа')
+
+
+
+################################################################
+async def community_add_post(request):
+    if request.user.id:
+        if validate(request.params, MODELS['community_add_post']):
+            community = Community()
+            await community.set(id = request.params['community_id'])
+            if community.id:
+                if request.params['reply_to_post_id']:
+                    if await check_post(request.params['community_id'], request.params['reply_to_post_id']):
+                        await add_post(request.params['community_id'], request.user.id, request.params['text'], request.params['reply_to_post_id'])
+                    else:
+                        return err(400, 'Сообщение недоступно')
+                else:
+                    await add_post(request.params['community_id'], request.user.id, request.params['text'])
+                posts = await get_posts(community_id, request.user.id)
+                return OrjsonResponse({
+                    'posts': posts,
+                })
+            else:
+                return err(400, 'Сообщество не найдено')
+        else:
+            return err(400, 'Неверный запрос')
+    else:
+        return err(403, 'Нет доступа')
+
+
+
+################################################################
+async def community_update_post(request):
+    if request.user.id:
+        if validate(request.params, MODELS['community_update_post']):
+            if request.params['closed'] is not None:
+                community_id = await check_question(request.params['post_id'], request.user.id)
+                if community_id:
+                    posts = await get_posts(community_id, request.user.id)
+                    return OrjsonResponse({
+                        'posts': posts,
+                    })
+                else:
+                    return err(400, 'Сообщение недоступно')
+            elif request.params['helpful'] is not None:
+                community_id = await check_answer(request.params['post_id'], request.user.id)
+                if community_id:
+                    posts = await get_posts(community_id, request.user.id)
+                    return OrjsonResponse({
+                        'posts': posts,
+                    })
+                else:
+                    return err(400, 'Сообщение недоступно')
+            else:
+                return err(400, 'Неверный запрос')
+        else:
+            return err(400, 'Неверный запрос')
     else:
         return err(403, 'Нет доступа')
 

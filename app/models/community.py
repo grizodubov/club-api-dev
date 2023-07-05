@@ -1,5 +1,6 @@
 import re
 import os.path
+from functools import cmp_to_key
 
 from app.core.context import get_api_context
 
@@ -196,6 +197,8 @@ def check_avatar_by_id(id):
 
 ###############################################################
 async def get_stats(communities_ids, user_id):
+    if not communities_ids:
+        return {}
     api = get_api_context()
     data = await api.pg.club.fetch(
         """SELECT
@@ -228,6 +231,8 @@ async def get_stats(communities_ids, user_id):
 
 ###############################################################
 async def get_posts(community_id, user_id):
+    if not community_id:
+        return []
     api = get_api_context()
     data = await api.pg.club.fetch(
         """SELECT
@@ -260,7 +265,7 @@ async def get_posts(community_id, user_id):
                     t1.community_id = $1
             ) t4
             ORDER BY
-                t4.question_id, t4.time_create""",
+                t4.question_id, t4.id""",
         community_id, user_id
     )
     unique_authors_ids = set([ item['author_id'] for item in data ])
@@ -274,11 +279,120 @@ async def get_posts(community_id, user_id):
             if q not in temp:
                 temp[q] = {
                     'question': dict(item) | { 'author_avatar': authors_avatars[str(item['author_id'])] },
-                    'answers': []
+                    'answers': [],
+                    'max_time_create': item['time_create'],
+                    'max_time_create_new': item['time_create'] if item['time_view'] else None
                 }
     for item in data:
         if item['reply_to_post_id'] is not None:
             q = str(item['question_id'])
             if q in temp:
                 temp[q]['answers'].append(dict(item) | { 'author_avatar': authors_avatars[str(item['author_id'])] })
+                if temp[q]['max_time_create'] < item['time_create']:
+                    temp[q]['max_time_create'] = item['time_create']
+                if item['time_view'] is not None:
+                    if temp[q]['max_time_create_new'] is None or temp[q]['max_time_create_new'] < item['time_create']:
+                        temp[q]['max_time_create_new'] = item['time_create']
     return [ v for v in temp.values() ]
+
+
+
+###############################################################
+async def add_post(community_id, user_id, text, reply_to_post_id = None):
+    api = get_api_context()
+    data = await api.pg.club.fetchrow( 
+        """INSERT INTO
+                posts
+                (author_id, community_id, reply_to_post_id, text)
+            VALUES
+                ($1, $2, $3, $4)
+            RETURNING
+                id, time_create""",
+        user_id, community_id, reply_to_post_id, text
+    )
+    await api.pg.club.execute( 
+        """INSERT INTO
+                items_views
+                (item_id, user_id, time_view)
+            VALUES
+                ($1, $2, $3)
+            ON CONFLICT
+                (item_id, user_id)
+            DO NOTHING""",
+        data['id'], user_id, data['time_create']
+    )
+
+
+
+###############################################################
+async def check_post(community_id, reply_to_post_id):
+    api = get_api_context()
+    data = await api.pg.club.fetchval( 
+        """SELECT id FROM posts WHERE community_id = $1 AND id = $2 AND reply_to_post_id IS NULL AND closed IS FALSE""",
+        community_id, reply_to_post_id
+    )
+    if data:
+        return True
+    return False
+
+
+
+###############################################################
+async def check_question(post_id, user_id):
+    api = get_api_context()
+    community_id = await api.pg.club.fetchval( 
+        """SELECT community_id FROM posts WHERE id = $1 AND author_id = $2 AND reply_to_post_id IS NULL""",
+        post_id, user_id
+    )
+    if community_id:
+        return community_id
+    return None
+
+
+
+###############################################################
+async def check_answer(post_id, user_id):
+    api = get_api_context()
+    community_id = await api.pg.club.fetchval( 
+        """SELECT
+                t1.community_id
+            FROM
+                posts t1
+            INNER JOIN
+                posts t2 ON t2.id = t1.reply_to_post_id
+            WHERE
+                t1.id = $1 AND t2.author_id = $2""",
+        post_id, user_id
+    )
+    if community_id:
+        return community_id
+    return None
+
+
+
+###############################################################
+def sort_communities(communities, stats):
+    def communities_compare(a, b):
+        id_a = str(a['id'])
+        id_b = str(b['id'])
+        weight_a = 0
+        weight_b = 0
+        if id_a in stats and id_b in stats:
+            if stats[id_a]['subjects_open']:
+                weight_a += 100
+            if stats[id_b]['subjects_open']:
+                weight_b += 100
+            if stats[id_a]['subjects_new'] or stats[id_a]['answers_new']:
+                weight_a += 10
+            if stats[id_b]['subjects_new'] or stats[id_b]['answers_new']:
+                weight_b += 10
+            if stats[id_a]['time_last_post'] > stats[id_b]['time_last_post']:
+                weight_a += 1
+            elif stats[id_a]['time_last_post'] < stats[id_b]['time_last_post']:
+                weight_b += 1
+            if weight_a < weight_b:
+                return 1
+            if weight_a > weight_b:
+                return -1
+        return 0
+    return sorted(communities, key = cmp_to_key(communities_compare))
