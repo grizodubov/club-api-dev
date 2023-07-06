@@ -4,7 +4,7 @@ from app.core.request import err
 from app.core.response import OrjsonResponse
 from app.core.event import dispatch
 from app.utils.validate import validate
-from app.models.community import Community, get_stats, get_posts, sort_communities, add_post, check_post
+from app.models.community import Community, get_stats, get_posts, sort_communities, add_post, update_post, check_post, check_question, check_answer
 from app.models.user import User
 from app.models.item_ import Items
 
@@ -182,6 +182,7 @@ async def community_update_post(request):
             if request.params['closed'] is not None:
                 community_id = await check_question(request.params['post_id'], request.user.id)
                 if community_id:
+                    await update_post(request.params['post_id'], { 'closed': request.params['closed'] })
                     posts = await get_posts(community_id, request.user.id)
                     dispatch('post_update', request)
                     return OrjsonResponse({
@@ -192,6 +193,7 @@ async def community_update_post(request):
             elif request.params['helpful'] is not None:
                 community_id = await check_answer(request.params['post_id'], request.user.id)
                 if community_id:
+                    await update_post(request.params['post_id'], { 'helpful': request.params['helpful'] })
                     posts = await get_posts(community_id, request.user.id)
                     dispatch('post_update', request)
                     return OrjsonResponse({

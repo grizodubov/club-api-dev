@@ -206,7 +206,8 @@ async def get_stats(communities_ids, user_id):
                 count(t1.id) FILTER (WHERE t1.reply_to_post_id IS NULL) AS subjects_open,
                 count(t1.id) FILTER (WHERE t1.reply_to_post_id IS NULL AND t2.time_view IS NULL) AS subjects_new,
                 count(t1.id) FILTER (WHERE t1.reply_to_post_id IS NOT NULL AND t2.time_view IS NULL) AS answers_new,
-                max(t1.time_create) AS time_last_post
+                max(t1.time_create) AS time_last_post,
+                max(t1.time_create) FILTER (WHERE t2.time_view IS NULL) AS time_last_post_new
             FROM
                 posts t1
             LEFT JOIN
@@ -223,6 +224,7 @@ async def get_stats(communities_ids, user_id):
             'subjects_new': row['subjects_new'],
             'answers_new': row['answers_new'],
             'time_last_post': row['time_last_post'],
+            'time_last_post_new': row['time_last_post_new'],
         }
         for row in data
     }
@@ -280,19 +282,19 @@ async def get_posts(community_id, user_id):
                 temp[q] = {
                     'question': dict(item) | { 'author_avatar': authors_avatars[str(item['author_id'])] },
                     'answers': [],
-                    'max_time_create': item['time_create'],
-                    'max_time_create_new': item['time_create'] if item['time_view'] else None
+                    'time_last_post': item['time_create'],
+                    'time_last_post_new': item['time_create'] if item['time_view'] else None
                 }
     for item in data:
         if item['reply_to_post_id'] is not None:
             q = str(item['question_id'])
             if q in temp:
                 temp[q]['answers'].append(dict(item) | { 'author_avatar': authors_avatars[str(item['author_id'])] })
-                if temp[q]['max_time_create'] < item['time_create']:
-                    temp[q]['max_time_create'] = item['time_create']
+                if temp[q]['time_last_post'] < item['time_create']:
+                    temp[q]['time_last_post'] = item['time_create']
                 if item['time_view'] is not None:
-                    if temp[q]['max_time_create_new'] is None or temp[q]['max_time_create_new'] < item['time_create']:
-                        temp[q]['max_time_create_new'] = item['time_create']
+                    if temp[q]['time_last_post_new'] is None or temp[q]['time_last_post_new'] < item['time_create']:
+                        temp[q]['time_last_post_new'] = item['time_create']
     return [ v for v in temp.values() ]
 
 
@@ -321,6 +323,29 @@ async def add_post(community_id, user_id, text, reply_to_post_id = None):
             DO NOTHING""",
         data['id'], user_id, data['time_create']
     )
+
+
+
+###############################################################
+async def update_post(post_id, params):
+    api = get_api_context()
+    query = []
+    args = []
+    i = 2
+    for k, v in params.items():
+        if k in { 'closed', 'helpful' }:
+            query.append(k + ' = $' + str(i))
+            args.append(v)
+            i += 1
+    if query:
+        await api.pg.club.fetchrow( 
+            """UPDATE
+                    posts
+                SET """ + ', '.join(query) + """
+                WHERE
+                    id = $1""",
+            post_id, *args
+        )
 
 
 
