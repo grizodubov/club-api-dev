@@ -28,6 +28,8 @@ EVENTS = {
     'news_create': { 'send': True, 'filter_params': None },
     'news_update': { 'send': True, 'filter_params': None },
     'item_view': { 'send': True, 'filter_params': None },
+    'post_add': { 'send': True, 'filter_params': None },
+    'post_update': { 'send': True, 'filter_params': None },
 }
 
 

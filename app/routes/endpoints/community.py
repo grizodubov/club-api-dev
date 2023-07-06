@@ -161,7 +161,8 @@ async def community_add_post(request):
                         return err(400, 'Сообщение недоступно')
                 else:
                     await add_post(request.params['community_id'], request.user.id, request.params['text'])
-                posts = await get_posts(community_id, request.user.id)
+                posts = await get_posts(request.params['community_id'], request.user.id)
+                dispatch('post_add', request)
                 return OrjsonResponse({
                     'posts': posts,
                 })
@@ -182,6 +183,7 @@ async def community_update_post(request):
                 community_id = await check_question(request.params['post_id'], request.user.id)
                 if community_id:
                     posts = await get_posts(community_id, request.user.id)
+                    dispatch('post_update', request)
                     return OrjsonResponse({
                         'posts': posts,
                     })
@@ -191,6 +193,7 @@ async def community_update_post(request):
                 community_id = await check_answer(request.params['post_id'], request.user.id)
                 if community_id:
                     posts = await get_posts(community_id, request.user.id)
+                    dispatch('post_update', request)
                     return OrjsonResponse({
                         'posts': posts,
                     })
