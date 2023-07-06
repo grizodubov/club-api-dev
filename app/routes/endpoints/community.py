@@ -4,7 +4,7 @@ from app.core.request import err
 from app.core.response import OrjsonResponse
 from app.core.event import dispatch
 from app.utils.validate import validate
-from app.models.community import Community, get_stats, get_posts, sort_communities, add_post, update_post, check_post, check_question, check_answer
+from app.models.community import Community, get_stats, get_posts, sort_communities, add_post, update_post, check_post, check_question, check_answer, check_avatar_by_id
 from app.models.user import User
 from app.models.item_ import Items
 
@@ -128,7 +128,6 @@ async def community_list(request):
         communities_ids = [ item['id'] for item in communities.items ]
         stats = await get_stats(communities_ids, request.user.id)
         communities_sorted = sort_communities(communities.items, stats)
-        print(communities_sorted)
         community_id = None
         if request.params['community_id'] and request.params['community_id'] in communities_ids:
             community_id = request.params['community_id']
@@ -137,7 +136,7 @@ async def community_list(request):
                 community_id = communities_sorted[0]['id']
         posts = await get_posts(community_id, request.user.id)
         return OrjsonResponse({
-            'communities': communities_sorted,
+            'communities': [ community | { 'avatar': check_avatar_by_id(community['id']) } for community in communities_sorted ],
             'stats': stats,
             'community_id': community_id,
             'posts': posts,
@@ -154,17 +153,22 @@ async def community_add_post(request):
             community = Community()
             await community.set(id = request.params['community_id'])
             if community.id:
+                result = { 'post_id': None, 'time_create': None }
                 if request.params['reply_to_post_id']:
                     if await check_post(request.params['community_id'], request.params['reply_to_post_id']):
-                        await add_post(request.params['community_id'], request.user.id, request.params['text'], request.params['reply_to_post_id'])
+                        result = await add_post(request.params['community_id'], request.user.id, request.params['text'], request.params['reply_to_post_id'])
                     else:
                         return err(400, 'Сообщение недоступно')
                 else:
-                    await add_post(request.params['community_id'], request.user.id, request.params['text'])
+                    result = await add_post(request.params['community_id'], request.user.id, request.params['text'])
                 posts = await get_posts(request.params['community_id'], request.user.id)
                 dispatch('post_add', request)
                 return OrjsonResponse({
                     'posts': posts,
+                    'community_id': request.params['community_id'],
+                    'reply_to_post_id': request.params['reply_to_post_id'],
+                    'post_id': result['id'],
+                    'time_create': result['time_create'],
                 })
             else:
                 return err(400, 'Сообщество не найдено')

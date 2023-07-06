@@ -43,7 +43,7 @@ async def item_view(request):
             item = Item()
             await item.set(id = request.path_params['id'])
             if item.id:
-                time_view = await item.set_view(request.user.id)
+                time_view = await item.view(request.user.id)
                 dispatch('item_view', request)
                 return OrjsonResponse({
                     'item_id': item.id,
@@ -65,7 +65,7 @@ async def items_view(request):
             items = Items()
             await items.set(ids = request.params['ids'])
             if items.list:
-                time_view = await items.set_view(request.user.id)
+                time_view = await items.view(request.user.id)
                 dispatch('item_view', request)
                 return OrjsonResponse({
                     'items_ids': items.ids(),

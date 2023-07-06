@@ -41,13 +41,13 @@ class Community:
         data = await api.pg.club.fetch(
             """SELECT
                     t1.id, t1.time_create, t1.time_update,
-                    t1.name, t1.description, coalesce(t2.users, '{}'::bigint[]) AS users
+                    t1.name, t1.description, coalesce(t2.members, '{}'::bigint[]) AS members
                 FROM
                     communities t1
                 LEFT JOIN
                     (
                         SELECT
-                            community_id, array_agg(user_id) AS users
+                            community_id, array_agg(user_id) AS members
                         FROM
                             communities_members
                         GROUP BY
@@ -97,13 +97,13 @@ class Community:
             data = await api.pg.club.fetchrow(
                 """SELECT
                         t1.id, t1.time_create, t1.time_update,
-                        t1.name, t1.description, coalesce(t2.users, '{}'::bigint[]) AS users
+                        t1.name, t1.description, coalesce(t2.members, '{}'::bigint[]) AS members
                     FROM
                         communities t1
                     LEFT JOIN
                         (
                             SELECT
-                                community_id, array_agg(user_id) AS users
+                                community_id, array_agg(user_id) AS members
                             FROM
                                 communities_members
                             GROUP BY
@@ -283,7 +283,7 @@ async def get_posts(community_id, user_id):
                     'question': dict(item) | { 'author_avatar': authors_avatars[str(item['author_id'])] },
                     'answers': [],
                     'time_last_post': item['time_create'],
-                    'time_last_post_new': item['time_create'] if item['time_view'] else None
+                    'time_last_post_new': item['time_create'] if item['time_view'] is None else None
                 }
     for item in data:
         if item['reply_to_post_id'] is not None:
@@ -292,7 +292,7 @@ async def get_posts(community_id, user_id):
                 temp[q]['answers'].append(dict(item) | { 'author_avatar': authors_avatars[str(item['author_id'])] })
                 if temp[q]['time_last_post'] < item['time_create']:
                     temp[q]['time_last_post'] = item['time_create']
-                if item['time_view'] is not None:
+                if item['time_view'] is None:
                     if temp[q]['time_last_post_new'] is None or temp[q]['time_last_post_new'] < item['time_create']:
                         temp[q]['time_last_post_new'] = item['time_create']
     return [ v for v in temp.values() ]
@@ -323,6 +323,7 @@ async def add_post(community_id, user_id, text, reply_to_post_id = None):
             DO NOTHING""",
         data['id'], user_id, data['time_create']
     )
+    return dict(data)
 
 
 
