@@ -1,4 +1,5 @@
 import asyncio
+from datetime import datetime
 from random import randint
 from starlette.routing import Route
 
@@ -6,7 +7,7 @@ from app.core.request import err
 from app.core.response import OrjsonResponse
 from app.core.event import dispatch
 from app.utils.validate import validate
-from app.models.user import User, validate_registration
+from app.models.user import User, validate_registration, validate_registration_new
 from app.models.session import check_by_token
 from app.helpers.email import send_email
 from app.helpers.mobile import send_mobile_message
@@ -28,6 +29,9 @@ def routes():
         Route('/terminate', terminate, methods = [ 'POST' ]),
 
         Route('/m/login', moderator_login, methods = [ 'POST' ]),
+
+        Route('/new/validate', new_validate, methods = [ 'POST' ]),
+        Route('/new/register', new_register, methods = [ 'POST' ]),
     ]
 
 
@@ -168,6 +172,131 @@ MODELS = {
 			'type': 'str',
             'length_min': 4,
             'processing': lambda x: x.strip(),
+		},
+	},
+    # new
+    'new_validate': {
+		'email': {
+			'required': True,
+			'type': 'str',
+            'pattern': r'^[^@]+@[^@]+\.[^@]+$',
+            'processing': lambda x: x.strip().lower(),
+		},
+		'phone': {
+			'required': True,
+			'type': 'str',
+            'pattern': r'^[0-9\(\)\-\+\s]{10,20}$',
+            'processing': lambda x: x.strip(),
+		},
+	},
+    'new_register': {
+		'email': {
+			'required': True,
+			'type': 'str',
+            'pattern': r'^[^@]+@[^@]+\.[^@]+$',
+            'processing': lambda x: x.strip().lower(),
+		},
+		'phone': {
+			'required': True,
+			'type': 'str',
+            'pattern': r'^[0-9\(\)\-\+\s]{10,20}$',
+            'processing': lambda x: x.strip(),
+		},
+		'email_code': {
+			'required': True,
+			'type': 'str',
+            'length': 4,
+            'pattern': r'^\d{4}$',
+		},
+		'phone_code': {
+			'required': True,
+			'type': 'str',
+            'length': 4,
+            'pattern': r'^\d{4}$',
+		},
+		'name': {
+			'required': True,
+			'type': 'str',
+            'length_min': 2,
+            'processing': lambda x: x.strip(),
+		},
+		'company': {
+			'required': True,
+			'type': 'str',
+            'processing': lambda x: x.strip(),
+		},
+		'position': {
+			'required': True,
+			'type': 'str',
+            'processing': lambda x: x.strip(),
+		},
+		'password': {
+			'required': True,
+			'type': 'str',
+            'length_min': 2,
+            'processing': lambda x: x.strip(),
+		},
+		'annual': {
+			'required': True,
+			'type': 'str',
+            'processing': lambda x: x.strip(),
+		},
+		'annual_privacy': {
+			'required': True,
+			'type': 'str',
+            'processing': lambda x: x.strip(),
+		},
+		'employees': {
+			'required': True,
+			'type': 'str',
+            'processing': lambda x: x.strip(),
+		},
+		'employees_privacy': {
+			'required': True,
+			'type': 'str',
+            'processing': lambda x: x.strip(),
+		},
+		'catalog': {
+			'required': True,
+			'type': 'str',
+            'processing': lambda x: x.strip(),
+		},
+		'tags': {
+			'required': True,
+			'type': 'str',
+            'processing': lambda x: x.strip(),
+		},
+		'interests': {
+			'required': True,
+			'type': 'str',
+            'processing': lambda x: x.strip(),
+		},
+		'city': {
+			'required': True,
+			'type': 'str',
+            'processing': lambda x: x.strip(),
+		},
+		'hobby': {
+			'required': True,
+			'type': 'str',
+            'processing': lambda x: x.strip(),
+		},
+		'birthdate': {
+			'required': True,
+			'type': 'str',
+            'processing': lambda x: datetime.strptime(x.strip(), "%d/%m/%Y"),
+            'null': True,
+		},
+		'birthdate_privacy': {
+			'required': True,
+			'type': 'str',
+            'processing': lambda x: x.strip(),
+		},
+		'experience': {
+			'required': True,
+			'type': 'str',
+            'processing': lambda x: x.strip(),
+            'null': True,
 		},
 	},
 }
@@ -404,3 +533,75 @@ async def terminate(request):
         return OrjsonResponse({})
     else:
         return err(403, 'Нет доступа')
+
+
+
+################################################################
+async def new_validate(request):
+    await asyncio.sleep(.5)
+    if validate(request.params, MODELS['new_validate']):
+        user = User()
+        if await user.find(email = request.params['email']):
+            return err(400, 'Email уже зарегистрирован')
+        if await user.find(phone = request.params['phone']):
+            return err(400, 'Телефон уже зарегистрирован')
+        email_code = str(randint(1000, 9999))
+        phone_code = str(randint(1000, 9999))
+        await user.prepare_new(
+            user_data = {
+                'email': request.params['email'],
+                'phone': request.params['phone'],
+                'roles': [ 10059 ],
+            },
+            email_code = email_code,
+            phone_code = phone_code,
+        )
+        send_email(request.api.stream_email, request.params['email'], VERIFICATION_CODE['subject'], VERIFICATION_CODE['body'], { 'code': email_code })
+        send_mobile_message(request.api.stream_mobile, request.params['phone'], VERIFICATION_CODE['message'], { 'code': phone_code })
+        return OrjsonResponse({})
+    else:
+        return err(400, 'Неверные данные')
+
+
+
+################################################################
+async def new_register(request):
+    await asyncio.sleep(.5)
+    if validate(request.params, MODELS['new_register']):
+        user = User()
+        if await user.find(email = request.params['email']):
+            return err(400, 'Email уже зарегистрирован')
+        if await user.find(phone = request.params['phone']):
+            return err(400, 'Телефон уже зарегистрирован')
+        user_data = await validate_registration_new(
+            email = request.params['email'],
+            email_code = request.params['email_code'],
+            phone_code = request.params['phone_code'],
+        )
+        if user_data:
+            await user.create(
+                name = request.params['name'],
+                email = user_data['email'],
+                phone = user_data['phone'],
+                company = request.params['company'],
+                position = request.params['position'],
+                password = request.params['password'],
+                roles = user_data['roles'],
+                annual = request.params['annual'],
+                annual_privacy = request.params['annual_privacy'],
+                employees = request.params['employees'],
+                employees_privacy = request.params['employees_privacy'],
+                catalog = request.params['catalog'],
+                tags = request.params['tags'],
+                interests = request.params['interests'],
+                city = request.params['city'],
+                hobby = request.params['hobby'],
+                birthdate = request.params['birthdate'],
+                birthdate_privacy = request.params['birthdate_privacy'],
+                experience = request.params['experience'],
+            )
+            return OrjsonResponse({})
+        else:
+            return err(403, 'Проверочный код не верен')
+    else:
+        return err(400, 'Не указан email')

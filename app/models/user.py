@@ -27,6 +27,16 @@ class User:
         self.position = ''
         self.detail = ''
         self.status = ''
+        self.annual = ''
+        self.annual_privacy = ''
+        self.employees = ''
+        self.employees_privacy = ''
+        self.catalog = ''
+        self.city = ''
+        self.hobby = ''
+        self.birthdate = None
+        self.birthdate_privacy = ''
+        self.experience = None
         self.tags = ''
         self.interests = ''
         self.roles = []
@@ -68,6 +78,11 @@ class User:
                     t1.active,
                     t3.company, t3.position, t3.detail,
                     t3.status,
+                    t3.annual, t3.annual_privacy,
+                    t3.employees, t3.employees_privacy,
+                    t3.catalog, t3.city, t3.hobby,
+                    to_char(t3.birthdate, 'DD/MM/YYYY') AS birthdate, t3.birthdate_privacy,
+                    to_char(t3.experience, 'YYYY') AS experience,
                     coalesce(t2.tags, '') AS tags,
                     coalesce(t2.interests, '') AS interests,
                     coalesce(t4.roles, '{}'::text[]) AS roles,
@@ -162,7 +177,7 @@ class User:
 
     ################################################################
     def show(self):
-        filter = { 'time_create', 'time_update', 'login', 'email', 'phone', 'roles' }
+        filter = { 'time_create', 'time_update', 'login', 'email', 'phone', 'roles', 'annual', 'annual_privacy', 'employees', 'employees_privacy', 'birthdate', 'birthdate_privacy' }
         return { k: v for k, v in self.__dict__.items() if not k.startswith('_') and k not in filter }
 
 
@@ -187,6 +202,11 @@ class User:
                         t1.active,
                         t3.company, t3.position, t3.detail,
                         t3.status,
+                        t3.annual, t3.annual_privacy,
+                        t3.employees, t3.employees_privacy,
+                        t3.catalog, t3.city, t3.hobby,
+                        to_char(t3.birthdate, 'DD/MM/YYYY') AS birthdate, t3.birthdate_privacy,
+                        to_char(t3.experience, 'YYYY') AS experience,
                         coalesce(t2.tags, '') AS tags,
                         coalesce(t2.interests, '') AS interests,
                         coalesce(t4.roles, '{}'::text[]) AS roles,
@@ -254,10 +274,33 @@ class User:
                     company = $2,
                     position = $3,
                     detail = $4,
-                    status = $5
+                    status = $5,
+
+                    annual = $6,
+                    annual_privacy = $7,
+                    employees = $8,
+                    employees_privacy = $9,
+                    catalog = $10,
+                    city = $11,
+                    hobby = $12,
+                    birthdate = $13,
+                    birthdate_privacy = $14,
+                    experience = $15
+
                 WHERE
                     user_id = $1""",
-            self.id, kwargs['company'], kwargs['position'], kwargs['detail'], kwargs['status'] if 'status' in kwargs else self.status
+            self.id, kwargs['company'], kwargs['position'], kwargs['detail'], kwargs['status'] if 'status' in kwargs else self.status,
+
+            kwargs['annual'] if 'annual' in kwargs else '',
+            kwargs['annual_privacy'] if 'annual_privacy' in kwargs else '',
+            kwargs['employees'] if 'employees' in kwargs else '',
+            kwargs['employees_privacy'] if 'employees_privacy' in kwargs else '',
+            kwargs['catalog'] if 'catalog' in kwargs else '',
+            kwargs['city'] if 'city' in kwargs else '',
+            kwargs['hobby'] if 'hobby' in kwargs else '',
+            kwargs['birthdate'] if 'birthdate' in kwargs else None,
+            kwargs['birthdate_privacy'] if 'birthdate_privacy' in kwargs else '',
+            kwargs['experience'] if 'experience' in kwargs else None
         )
         await api.pg.club.execute(
             """UPDATE
@@ -321,6 +364,11 @@ class User:
                             t1.active,
                             t3.company, t3.position, t3.detail,
                             t3.status,
+                            t3.annual, t3.annual_privacy,
+                            t3.employees, t3.employees_privacy,
+                            t3.catalog, t3.city, t3.hobby,
+                            to_char(t3.birthdate, 'DD/MM/YYYY') AS birthdate, t3.birthdate_privacy,
+                            to_char(t3.experience, 'YYYY') AS experience,
                             coalesce(t2.tags, '') AS tags,
                             coalesce(t2.interests, '') AS interests,
                             coalesce(t4.roles, '{}'::text[]) AS roles,
@@ -370,6 +418,11 @@ class User:
                         t1.active,
                         t3.company, t3.position, t3.detail,
                         t3.status,
+                        t3.annual, t3.annual_privacy,
+                        t3.employees, t3.employees_privacy,
+                        t3.catalog, t3.city, t3.hobby,
+                        to_char(t3.birthdate, 'DD/MM/YYYY') AS birthdate, t3.birthdate_privacy,
+                        to_char(t3.experience, 'YYYY') AS experience,
                         coalesce(t2.tags, '') AS tags,
                         coalesce(t2.interests, '') AS interests,
                         coalesce(t4.roles, '{}'::text[]) AS roles,
@@ -867,6 +920,14 @@ class User:
 
 
     ################################################################
+    async def prepare_new(self, user_data, email_code, phone_code):
+        # TODO: сделать полный prepare (все полня)
+        api = get_api_context()
+        k = '_REGISTER_NEW_' + user_data['email'] + '_' + email_code + '_' + phone_code
+        await api.redis.data.exec('SET', k, data_pack(user_data, False), ex = 1800)
+
+
+    ################################################################
     async def create(self, **kwargs):
         # TODO: сделать полный register (все поля)
         api = get_api_context()
@@ -891,14 +952,36 @@ class User:
                     company = $2,
                     position = $3,
                     detail = $4,
-                    status = $5
+                    status = $5,
+
+                    annual = $6,
+                    annual_privacy = $7,
+                    employees = $8,
+                    employees_privacy = $9,
+                    catalog = $10,
+                    city = $11,
+                    hobby = $12,
+                    birthdate = $13,
+                    birthdate_privacy = $14,
+                    experience = $15
                 WHERE
                     user_id = $1""",
             id,
             kwargs['company'],
             kwargs['position'], 
             kwargs['detail'] if 'detail' in kwargs else '',
-            kwargs['status'] if 'status' in kwargs else 'бронзовый'
+            kwargs['status'] if 'status' in kwargs else 'бронзовый',
+
+            kwargs['annual'] if 'annual' in kwargs else '',
+            kwargs['annual_privacy'] if 'annual_privacy' in kwargs else '',
+            kwargs['employees'] if 'employees' in kwargs else '',
+            kwargs['employees_privacy'] if 'employees_privacy' in kwargs else '',
+            kwargs['catalog'] if 'catalog' in kwargs else '',
+            kwargs['city'] if 'city' in kwargs else '',
+            kwargs['hobby'] if 'hobby' in kwargs else '',
+            kwargs['birthdate'] if 'birthdate' in kwargs else None,
+            kwargs['birthdate_privacy'] if 'birthdate_privacy' in kwargs else '',
+            kwargs['experience'] if 'experience' in kwargs else None
         )
         roles = await get_roles()
         if kwargs['roles']:
@@ -914,7 +997,7 @@ class User:
         args = [ id ]
         if 'tags' in kwargs:
             i += 1
-            query,append('tags = $' + str(i))
+            query.append('tags = $' + str(i))
             args.append(kwargs['tags'])
         if 'interests' in kwargs:
             i += 1
@@ -989,6 +1072,19 @@ def check_avatar_by_id(id):
 async def validate_registration(email, email_code, phone_code):
     api = get_api_context()
     k = '_REGISTER_' + email + '_' + email_code + '_' + phone_code
+    data = await api.redis.data.exec('GET', k)
+    # print('DATA', data)
+    if data:
+        await api.redis.data.exec('DELETE', k)
+        return data_unpack(data)
+    return None
+
+
+
+################################################################
+async def validate_registration_new(email, email_code, phone_code):
+    api = get_api_context()
+    k = '_REGISTER_NEW_' + email + '_' + email_code + '_' + phone_code
     data = await api.redis.data.exec('GET', k)
     # print('DATA', data)
     if data:
