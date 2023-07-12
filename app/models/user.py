@@ -992,27 +992,18 @@ class User:
                         ($1, $2)""",
                 id, kwargs['roles'][0] if type(kwargs['roles'][0]) == int else roles[kwargs['roles'][0]]
             )
-        i = 1
-        query = []
-        args = [ id ]
-        if 'tags' in kwargs:
-            i += 1
-            query.append('tags = $' + str(i))
-            args.append(kwargs['tags'])
-        if 'interests' in kwargs:
-            i += 1
-            query = [ 'interests = $' + str(i) ]
-            args.append(kwargs['interests'])
-        if query:
-            await api.pg.club.execute(
-                """UPDATE
-                        users_tags
-                    SET
-                        """ + ', '.join(query) + """
-                    WHERE
-                        user_id = $1""",
-                *args
-            )
+        await api.pg.club.execute(
+            """UPDATE
+                    users_tags
+                SET
+                    tags = $1,
+                    interests = $2
+                WHERE
+                    user_id = $3""",
+            kwargs['tags'] if 'tags' in kwargs and kwargs['tags'] else None,
+            kwargs['interests'] if 'interests' in kwargs and kwargs['interests'] else None,
+            id
+        )
         await self.set(id = id)
 
 

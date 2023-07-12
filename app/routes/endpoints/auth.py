@@ -600,6 +600,10 @@ async def new_register(request):
                 birthdate_privacy = request.params['birthdate_privacy'],
                 experience = request.params['experience'],
             )
+            await request.session.assign(user.id)
+            request.user.copy(user = user)
+            request.api.websocket_update(request.session.id, request.user.id)
+            dispatch('user_register', request)
             return OrjsonResponse({})
         else:
             return err(403, 'Проверочный код не верен')
