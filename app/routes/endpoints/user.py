@@ -6,7 +6,7 @@ from app.core.request import err
 from app.core.response import OrjsonResponse
 from app.core.event import dispatch
 from app.utils.validate import validate
-from app.models.user import User
+from app.models.user import User, get_residents
 from app.models.event import Event
 from app.models.item import Item
 
@@ -31,6 +31,8 @@ def routes():
         Route('/m/user/search', moderator_user_search, methods = [ 'POST' ]),
         Route('/m/user/update', moderator_user_update, methods = [ 'POST' ]),
         Route('/m/user/create', moderator_user_create, methods = [ 'POST' ]),
+
+        Route('/new/user/residents', user_residents, methods = [ 'POST' ]),
     ]
 
 
@@ -611,5 +613,15 @@ async def moderator_user_create(request):
             return OrjsonResponse({})
         else:
             return err(400, 'Неверный запрос')
+    else:
+        return err(403, 'Нет доступа')
+
+
+
+################################################################
+async def user_residents(request):
+    if request.user.id:
+        result = await get_residents()
+        return OrjsonResponse({ 'residents': [ item.show() for item in result ] })
     else:
         return err(403, 'Нет доступа')
