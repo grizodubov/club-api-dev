@@ -39,6 +39,7 @@ class User:
         self.experience = None
         self.tags = ''
         self.interests = ''
+        self.rating = 0
         self.roles = []
         self._password = ''
         self.avatar = False
@@ -1089,3 +1090,63 @@ async def validate_registration_new(email, email_code, phone_code):
         await api.redis.data.exec('DELETE', k)
         return data_unpack(data)
     return None
+
+
+
+################################################################
+async def get_residents():
+    api = get_api_context()
+    result = []
+    data = await api.pg.club.fetch(
+        """SELECT
+                t1.id, t1.time_create, t1.time_update,
+                t1.name, t1.login, t1.email, t1.phone,
+                t1.active,
+                t3.company, t3.position, t3.detail,
+                t3.status,
+                t3.annual, t3.annual_privacy,
+                t3.employees, t3.employees_privacy,
+                t3.catalog, t3.city, t3.hobby,
+                to_char(t3.birthdate, 'DD/MM/YYYY') AS birthdate, t3.birthdate_privacy,
+                to_char(t3.experience, 'YYYY') AS experience,
+                coalesce(t2.tags, '') AS tags,
+                coalesce(t2.interests, '') AS interests,
+                coalesce(t4.roles, '{}'::text[]) AS roles,
+                coalesce(t5.amount, 0) AS rating,
+                t1.password AS _password
+            FROM
+                users t1
+            INNER JOIN
+                users_tags t2 ON t2.user_id = t1.id
+            INNER JOIN
+                users_info t3 ON t3.user_id = t1.id
+            LEFT JOIN
+                (
+                    SELECT
+                        r3.user_id, array_agg(r3.alias) AS roles
+                    FROM
+                        (
+                            SELECT
+                                r1.user_id, r2.alias
+                            FROM
+                                users_roles r1
+                            INNER JOIN
+                                roles r2 ON r2.id = r1.role_id
+                        ) r3
+                    GROUP BY
+                        r3.user_id
+                ) t4 ON t4.user_id = t1.id
+            LEFT JOIN
+                (
+                    SELECT author_id, count(id) AS amount FROM posts WHERE helpful IS TRUE GROUP BY author_id
+                ) t5 ON t5.author_id = t1.id
+            WHERE
+                'client' = ANY(t4.roles) OR t1.id = 10004
+            ORDER BY t1.name"""
+    )
+    for row in data:
+        item = User()
+        item.__dict__ = dict(row)
+        item.check_avatar()
+        result.append(item)
+    return result
