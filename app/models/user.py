@@ -177,7 +177,14 @@ class User:
 
     ################################################################
     def show(self):
-        filter = { 'time_create', 'time_update', 'login', 'email', 'phone', 'roles', 'annual', 'annual_privacy', 'employees', 'employees_privacy', 'birthdate', 'birthdate_privacy' }
+        filter = { 'time_create', 'time_update', 'login', 'email', 'phone', 'roles' }
+        data = { k: v for k, v in self.__dict__.items() if not k.startswith('_') and k not in filter }
+        if self.annual_privacy == 'показывать':
+            data['annual'] = self.annual
+        if self.employees_privacy == 'показывать':
+            data['employees'] = self.employees
+        if self.birthdate_privacy == 'показывать':
+            data['birthdate'] = self.birthdate
         return { k: v for k, v in self.__dict__.items() if not k.startswith('_') and k not in filter }
 
 
