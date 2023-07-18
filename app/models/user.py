@@ -178,15 +178,66 @@ class User:
 
     ################################################################
     def show(self):
-        filter = { 'time_create', 'time_update', 'login', 'email', 'phone', 'roles' }
+        filter = { 'time_create', 'time_update', 'login', 'email', 'phone', 'roles', 'annual', 'annual_privacy', 'employees', 'employees_privacy', 'birthdate', 'birthdate_privacy' }
         data = { k: v for k, v in self.__dict__.items() if not k.startswith('_') and k not in filter }
+        # annual
         if self.annual_privacy == 'показывать':
-            data['annual'] = self.annual
+            data['annual'] = self.annual if self.annual else 'не указано'
+        elif self.annual_privacy == 'показывать диапазон':
+            temp = re.sub(r'[^0-9]+', '', self.annual)
+            if temp:
+                val = int(temp)
+                if val <= 1000000:
+                    data['annual'] = 'до 1 млн.'
+                elif val <= 10000000:
+                    data['annual'] = 'до 10 млн.'
+                elif val <= 100000000:
+                    data['annual'] = 'до 100 млн.'
+                elif val <= 1000000000:
+                    data['annual'] = 'до 1 млрд.'
+                elif val <= 10000000000:
+                    data['annual'] = 'до 10 млрд.'
+                elif val <= 100000000000:
+                    data['annual'] = 'до 100 млрд.'
+                elif val <= 1000000000000:
+                    data['annual'] = 'до 1 трлн.'
+                elif val > 1000000000000:
+                    data['annual'] = 'больше 1 трлн.'
+            else:
+                data['annual'] = 'не указано'
+        else:
+            data['annual'] = 'скрыто'
+        # employees
         if self.employees_privacy == 'показывать':
-            data['employees'] = self.employees
+            data['employees'] = self.employees if self.employees else 'не указано'
+        elif self.employees_privacy == 'показывать диапазон':
+            temp = re.sub(r'[^0-9]+', '', self.employees)
+            if temp:
+                val = int(temp)
+                if val <= 10:
+                    data['employees'] = '1 - 10'
+                elif val > 10 and val <= 100:
+                    data['employees'] = '11 - 100'
+                elif val > 100 and val <= 200:
+                    data['employees'] = '101 - 200'
+                elif val > 200 and val <= 500:
+                    data['employees'] = '201 - 500'
+                elif val > 500 and val <= 1000:
+                    data['employees'] = '501 - 1000'
+                elif val > 1000:
+                    data['employees'] = '1000+'
+            else:
+                data['employees'] = 'не указано'
+        else:
+            data['employees'] = 'скрыто'
+        # birthdate
         if self.birthdate_privacy == 'показывать':
-            data['birthdate'] = self.birthdate
-        return { k: v for k, v in self.__dict__.items() if not k.startswith('_') and k not in filter }
+            data['birthdate'] = self.birthdate if self.birthdate else 'не указано'
+        elif self.employees_privacy == 'показывать год':
+            data['birthdate'] = self.birthdate[-4] if self.birthdate else 'не указано'
+        else:
+            data['birthdate'] = 'скрыто'
+        return data
 
 
     ################################################################
