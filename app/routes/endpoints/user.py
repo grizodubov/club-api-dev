@@ -6,7 +6,7 @@ from app.core.request import err
 from app.core.response import OrjsonResponse
 from app.core.event import dispatch
 from app.utils.validate import validate
-from app.models.user import User, get_residents
+from app.models.user import User, get_residents, get_residents_contacts
 from app.models.event import Event
 from app.models.item import Item
 
@@ -622,6 +622,14 @@ async def moderator_user_create(request):
 async def user_residents(request):
     if request.user.id:
         result = await get_residents()
-        return OrjsonResponse({ 'residents': [ item.show() for item in result ] })
+        contacts = await get_residents_contacts(
+            user_id = request.user.id,
+            user_status = request.user.status,
+            contacts_ids = [ item.id for item in result ]
+        )
+        return OrjsonResponse({
+            'residents': [ item.show() for item in result ],
+            'contacts': contacts,
+        })
     else:
         return err(403, 'Нет доступа')

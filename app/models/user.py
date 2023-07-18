@@ -1201,3 +1201,40 @@ async def get_residents():
         item.check_avatar()
         result.append(item)
     return result
+
+
+
+async def get_residents_contacts(user_id, user_status, contacts_ids):
+    api = get_api_context()
+    data = await api.pg.club.fetch(
+        """SELECT
+                t1.id AS user_id,
+                CASE WHEN t3.user_id IS NULL THEN FALSE ELSE TRUE END AS contact,
+                t2.status
+            FROM
+                users t1
+            INNER JOIN
+                users_info t2 ON t2.user_id = t1.id
+            LEFT JOIN
+                users_contacts t3 ON t3.contact_id = t1.id AND t3.user_id = $1
+            WHERE
+                t1.id = ANY($2)""",
+        user_id, contacts_ids
+    )
+    result = {}
+    for item in data:
+        allow_contact = False
+        if item['contact']:
+            allow_contact = True
+        else:
+            if user_status == 'золотой':
+                allow_contact = True
+            elif user_status == 'серебряный' and item['status'] != 'золотой':
+                allow_contact = True
+            elif user_status == 'бронзовый' and item['status'] == 'бронзовый':
+                allow_contact = True
+        result[str(item['user_id'])] = {
+            'contact': item['contact'],
+            'allow_contact': allow_contact,
+        }
+    return result
