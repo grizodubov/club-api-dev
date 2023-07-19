@@ -33,6 +33,9 @@ def routes():
         Route('/m/user/create', moderator_user_create, methods = [ 'POST' ]),
 
         Route('/new/user/residents', user_residents, methods = [ 'POST' ]),
+        Route('/new/user/{id:int}/info', new_user_info, methods = [ 'POST' ]),
+        Route('/new/user/update', new_user_update, methods = [ 'POST' ]),
+
     ]
 
 
@@ -291,6 +294,99 @@ MODELS = {
 		'interests': {
 			'required': True,
 			'type': 'str',
+		},
+	},
+    # new
+	'new_user_info': {
+		'id': {
+			'required': True,
+			'type': 'int',
+            'value_min': 1,
+		},
+	},
+	'new_user_update': {
+		'name': {
+			'required': True,
+			'type': 'str',
+            'length_min': 2,
+            'processing': lambda x: x.strip(),
+		},
+		'company': {
+			'required': True,
+			'type': 'str',
+            'processing': lambda x: x.strip(),
+		},
+		'position': {
+			'required': True,
+			'type': 'str',
+            'processing': lambda x: x.strip(),
+		},
+		'annual': {
+			'required': True,
+			'type': 'str',
+            'processing': lambda x: x.strip(),
+		},
+		'annual_privacy': {
+			'required': True,
+			'type': 'str',
+            'processing': lambda x: x.strip(),
+		},
+		'employees': {
+			'required': True,
+			'type': 'str',
+            'processing': lambda x: x.strip(),
+		},
+		'employees_privacy': {
+			'required': True,
+			'type': 'str',
+            'processing': lambda x: x.strip(),
+		},
+		'catalog': {
+			'required': True,
+			'type': 'str',
+            'processing': lambda x: x.strip(),
+		},
+		'tags': {
+			'required': True,
+			'type': 'str',
+            'processing': lambda x: x.strip(),
+		},
+		'interests': {
+			'required': True,
+			'type': 'str',
+            'processing': lambda x: x.strip(),
+		},
+		'city': {
+			'required': True,
+			'type': 'str',
+            'processing': lambda x: x.strip(),
+		},
+		'hobby': {
+			'required': True,
+			'type': 'str',
+            'processing': lambda x: x.strip(),
+		},
+		'birthdate': {
+			'required': True,
+			'type': 'str',
+            'processing': lambda x: datetime.strptime(x.strip(), "%d/%m/%Y"),
+            'null': True,
+		},
+		'birthdate_privacy': {
+			'required': True,
+			'type': 'str',
+            'processing': lambda x: x.strip(),
+		},
+		'experience': {
+			'required': True,
+			'type': 'str',
+            'processing': lambda x: x.strip(),
+            'null': True,
+		},
+		'detail': {
+			'required': True,
+			'type': 'str',
+            'processing': lambda x: x.strip(),
 		},
 	},
 }
@@ -631,5 +727,51 @@ async def user_residents(request):
             'residents': [ item.show() for item in result ],
             'contacts': contacts,
         })
+    else:
+        return err(403, 'Нет доступа')
+
+
+
+################################################################
+async def new_user_info(request):
+    if request.user.id:
+        if validate(request.path_params, MODELS['user_info']):
+            user = User()
+            await user.set(id = request.path_params['id'])
+            if user.id:
+                result = {}
+                if user.id == request.user.id:
+                    result = user.dshow()
+                    result.update({ 
+                        'contact': False,
+                        'allow_contact': False
+                    })
+                else:
+                    result = user.show()
+                    contact = await get_residents_contacts(
+                        user_id = request.user.id,
+                        user_status = request.user.status,
+                        contacts_ids = [ user.id ]
+                    )
+                    result.update(contact[str(user.id)])
+                return OrjsonResponse(result)
+            else:
+                return err(404, 'Пользователь не найден')
+        else:
+            return err(400, 'Неверный поиск')
+    else:
+        return err(403, 'Нет доступа')
+
+
+
+################################################################
+async def new_user_update(request):
+    if request.user.id:
+        #if validate(request.params, MODELS['new_user_update']):
+        await request.user.update(**request.params)
+        dispatch('user_update', request)
+        return OrjsonResponse({})
+        #else:
+        #    return err(400, 'Неверный запрос')
     else:
         return err(403, 'Нет доступа')

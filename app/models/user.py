@@ -241,6 +241,13 @@ class User:
 
 
     ################################################################
+    def dshow(self):
+        filter = { 'time_create', 'time_update', 'login', 'email', 'phone', 'roles' }
+        data = { k: v for k, v in self.__dict__.items() if not k.startswith('_') and k not in filter }
+        return data
+
+
+    ################################################################
     def dump(self):
         return { k: v for k, v in self.__dict__.items() }
 
