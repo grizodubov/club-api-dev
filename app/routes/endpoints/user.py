@@ -770,7 +770,14 @@ async def new_user_update(request):
         #if validate(request.params, MODELS['new_user_update']):
         await request.user.update(**request.params)
         dispatch('user_update', request)
-        return OrjsonResponse({})
+        user = User()
+        await user.set(id = request.user.id)
+        result = user.dshow()
+        result.update({ 
+            'contact': False,
+            'allow_contact': False
+        })
+        return OrjsonResponse(result)
         #else:
         #    return err(400, 'Неверный запрос')
     else:
