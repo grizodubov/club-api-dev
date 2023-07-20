@@ -143,6 +143,8 @@ async def message_add(request):
                 if item.model == 'group':
                     access = await request.user.group_access(group_id = item.id)
                 if item.model == 'user':
+                    if item.id == request.user.id:
+                        return err(400, 'Неверный запрос')
                     user = User()
                     await user.set(id = item.id)
                     access = await request.user.check_access(user)

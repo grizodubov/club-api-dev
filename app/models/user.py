@@ -1011,6 +1011,7 @@ class User:
             kwargs['password'],
             kwargs['active'] if 'active' in kwargs else True,
         )
+        print(kwargs['birthdate'])
         await api.pg.club.execute(
             """UPDATE
                     users_info

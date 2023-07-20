@@ -1,3 +1,4 @@
+from datetime import datetime
 import asyncio
 from random import randint
 from starlette.routing import Route
@@ -379,8 +380,7 @@ MODELS = {
 		},
 		'experience': {
 			'required': True,
-			'type': 'str',
-            'processing': lambda x: x.strip(),
+			'type': 'int',
             'null': True,
 		},
 		'detail': {
@@ -539,6 +539,8 @@ async def user_add_contact(request):
         if validate(request.params, MODELS['user_add_contact']):
             user = User()
             await user.set(id = request.params['contact_id'])
+            if request.user.id == user.id:
+                return err(400, 'Неверный запрос')
             if user.id:
                 access = await request.user.check_access(user)
                 if access:
@@ -767,18 +769,18 @@ async def new_user_info(request):
 ################################################################
 async def new_user_update(request):
     if request.user.id:
-        #if validate(request.params, MODELS['new_user_update']):
-        await request.user.update(**request.params)
-        dispatch('user_update', request)
-        user = User()
-        await user.set(id = request.user.id)
-        result = user.dshow()
-        result.update({ 
-            'contact': False,
-            'allow_contact': False
-        })
-        return OrjsonResponse(result)
-        #else:
-        #    return err(400, 'Неверный запрос')
+        if validate(request.params, MODELS['new_user_update']):
+            await request.user.update(**request.params)
+            dispatch('user_update', request)
+            user = User()
+            await user.set(id = request.user.id)
+            result = user.dshow()
+            result.update({ 
+                'contact': False,
+                'allow_contact': False
+            })
+            return OrjsonResponse(result)
+        else:
+            return err(400, 'Неверный запрос')
     else:
         return err(403, 'Нет доступа')

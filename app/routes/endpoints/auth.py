@@ -294,8 +294,7 @@ MODELS = {
 		},
 		'experience': {
 			'required': True,
-			'type': 'str',
-            'processing': lambda x: x.strip(),
+			'type': 'int',
             'null': True,
 		},
 	},

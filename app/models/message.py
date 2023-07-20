@@ -66,6 +66,7 @@ class Message:
 
 
 
+################################################################
 async def get_chats(user_id, chat_id = None):
     api = get_api_context()
     data = await api.pg.club.fetch(
@@ -173,6 +174,7 @@ async def get_chats(user_id, chat_id = None):
 
 
 
+################################################################
 async def get_messages(user_id, chat_id, chat_model, init = False, vector = None):
     api = get_api_context()
     fragments = []
@@ -207,6 +209,7 @@ async def get_messages(user_id, chat_id, chat_model, init = False, vector = None
 
 
 
+################################################################
 async def query_messages(user_id, chat_id, chat_model, fragments):
     # fragment { reverse: True | False, id: [bigint], include: True | False }
     api = get_api_context()
@@ -266,6 +269,7 @@ async def query_messages(user_id, chat_id, chat_model, fragments):
 
 
 
+################################################################
 async def add_message(user_id, chat_id, chat_model, text):
     api = get_api_context()
     data = await api.pg.club.fetchrow( 
@@ -295,6 +299,7 @@ async def add_message(user_id, chat_id, chat_model, text):
 
 
 
+################################################################
 async def view_message(user_id, message_id):
     api = get_api_context()
     time_view = await api.pg.club.fetchval( 
@@ -314,6 +319,7 @@ async def view_message(user_id, message_id):
 
 
 
+################################################################
 async def view_messages(user_id, messages_ids):
     api = get_api_context()
     query = []
