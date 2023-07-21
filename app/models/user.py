@@ -233,8 +233,8 @@ class User:
         # birthdate
         if self.birthdate_privacy == 'показывать':
             data['birthdate'] = self.birthdate if self.birthdate else 'не указано'
-        elif self.employees_privacy == 'показывать год':
-            data['birthdate'] = self.birthdate[-4] if self.birthdate else 'не указано'
+        elif self.birthdate_privacy == 'показывать год':
+            data['birthdate'] = self.birthdate[-4:] if self.birthdate else 'не указано'
         else:
             data['birthdate'] = 'скрыто'
         return data
