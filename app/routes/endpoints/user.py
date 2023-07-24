@@ -864,7 +864,7 @@ async def moderator_user_search(request):
                 offset = (request.params['page'] - 1) * 10,
                 limit = 10,
                 count = True,
-                applicant = request.params['applicant'],
+                applicant = request.params['applicant'] if request.params['applicant'] is not None else False,
             )
             return OrjsonResponse({
                 'users': [ item.dump() for item in result ],

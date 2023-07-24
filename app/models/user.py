@@ -47,7 +47,7 @@ class User:
 
     ################################################################
     @classmethod
-    async def search(cls, text, active_only = True, offset = None, limit = None, count = False, applicant = None, reverse = False):
+    async def search(cls, text, active_only = True, offset = None, limit = None, count = False, applicant = False, reverse = False):
         api = get_api_context()
         result = []
         amount = None
@@ -57,15 +57,17 @@ class User:
         args = []
         if active_only:
             conditions.append('t1.active IS TRUE')
+        if applicant is None:
+            applicant = False
         if applicant is True:
             conditions.append("""'applicant' = ANY(t4.roles)""")
         if applicant is False:
-            conditions.append("""'applicant' != ANY(t4.roles)""")
+            conditions.append("""'applicant' <> ANY(t4.roles)""")
         if text:
             if reverse:
-                conditions.append("""to_tsvector(concat_ws(' ', t1.name, t1.email, t1.phone, t3.company, t3.position, t2.interests)) @@ to_tsquery($1)""")
+                conditions.append("""(to_tsvector(concat_ws(' ', t1.name, t1.email, t1.phone, t3.company, t3.position, t2.interests)) @@ to_tsquery($1) OR t1.name LIKE concat_ws('%', $1, '%'))""")
             else:
-                conditions.append("""to_tsvector(concat_ws(' ', t1.name, t1.email, t1.phone, t3.company, t3.position, t3.detail, t2.tags)) @@ to_tsquery($1)""")
+                conditions.append("""(to_tsvector(concat_ws(' ', t1.name, t1.email, t1.phone, t3.company, t3.position, t3.detail, t2.tags)) @@ to_tsquery($1) OR t1.name LIKE concat_ws('%', $1, '%'))""")
             args.append(re.sub(r'\s+', ' | ', text))
         if offset is not None and limit is not None:
             slice_query = ' OFFSET $' + str(len(args) + 1) + ' LIMIT $' + str(len(args) + 2)
