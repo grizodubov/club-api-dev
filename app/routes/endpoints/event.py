@@ -21,6 +21,18 @@ def routes():
 
 
 MODELS = {
+    'events_feed': {
+        'from': {
+            'required': True,
+            'type': 'int',
+            'null': True,
+        },
+        'to': {
+            'required': True,
+            'type': 'int',
+            'null': True,
+        },
+    },
     # moderator
 	'moderator_event_list': {
         'page': {
@@ -102,16 +114,23 @@ MODELS = {
 ################################################################
 async def events_feed(request):
     if request.user.id:
-        result = await Event.list(active_only = True)
-        result = result[0:50]
-        events_ids = [ item.id for item in result ]
-        events_ids_selected = await request.user.filter_selected_events(events_ids)
-        events_ids_thumbsup = await request.user.filter_thumbsup(events_ids)
-        return OrjsonResponse({
-            'events': [ item.show() for item in result ],
-            'events_selected': { str(id): True for id in events_ids_selected },
-            'events_thumbsup': { str(id): True for id in events_ids_thumbsup },
-        })
+        if validate(request.params, MODELS['events_feed']):
+            result = await Event.list(
+                active_only = True,
+                start = request.params['from'],
+                finish = request.params['to'],
+            )
+            #result = result[0:50]
+            events_ids = [ item.id for item in result ]
+            events_ids_selected = await request.user.filter_selected_events(events_ids)
+            events_ids_thumbsup = await request.user.filter_thumbsup(events_ids)
+            return OrjsonResponse({
+                'events': [ item.show() for item in result ],
+                'events_selected': { str(id): True for id in events_ids_selected },
+                'events_thumbsup': { str(id): True for id in events_ids_thumbsup },
+            })
+        else:
+            return err(400, 'Неверный запрос')
     else:
         return err(403, 'Нет доступа')
 
@@ -127,9 +146,8 @@ async def moderator_event_list(request):
                 'events': [ item.show() for item in result[i:i + 10] ],
                 'amount': len(result),
             })
-
         else:
-            return err(400, 'Неверный поиск')
+            return err(400, 'Неверный запрос')
     else:
         return err(403, 'Нет доступа')
 

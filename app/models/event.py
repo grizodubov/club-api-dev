@@ -27,12 +27,26 @@ class Event:
     
     ################################################################
     @classmethod
-    async def list(cls, active_only = False):
+    async def list(cls, active_only = False, start = None, finish = None):
         api = get_api_context()
         result = []
-        where = ''
+        where = []
+        args = []
+        i = 0
         if active_only:
-            where = ' WHERE t1.active IS TRUE '
+            where.append('t1.active IS TRUE')
+        if start:
+            i += 1
+            where.append('t1.time_event >= $' + str(i))
+            args.append(start)
+        if finish:
+            i += 1
+            where.append('t1.time_event <= $' + str(i))
+            args.append(finish)
+        where_query = ''
+        if where:
+            where_query = ' WHERE ' + ' AND '.join(where) + ' '
+        print(where_query)
         data = await api.pg.club.fetch(
             """SELECT
                         t1.id, t1.time_create, t1.time_update,
@@ -43,7 +57,8 @@ class Event:
                         events t1
                     LEFT JOIN
                         (SELECT item_id, count(user_id) AS thumbs_up FROM items_thumbsup GROUP BY item_id) t2 ON t2.item_id = t1.id
-                    """ + where + """ORDER BY t1.time_event DESC"""
+                    """ + where_query + """ORDER BY t1.time_event DESC""",
+            *args
         )
         for row in data:
             item = Event()
