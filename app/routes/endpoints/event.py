@@ -5,7 +5,7 @@ from app.core.request import err
 from app.core.response import OrjsonResponse
 from app.core.event import dispatch
 from app.utils.validate import validate
-from app.models.event import Event
+from app.models.event import Event, find_closest_event
 
 
 
@@ -31,6 +31,11 @@ MODELS = {
             'required': True,
             'type': 'int',
             'null': True,
+        },
+        'find': {
+            'required': False,
+            'type': 'bool',
+            'default': False,
         },
     },
     # moderator
@@ -121,6 +126,9 @@ async def events_feed(request):
                 finish = request.params['to'],
             )
             #result = result[0:50]
+            time_event = None
+            if not result and request.params['find']:
+                time_event = await find_closest_event(request.params['to'])
             events_ids = [ item.id for item in result ]
             events_ids_selected = await request.user.filter_selected_events(events_ids)
             events_ids_thumbsup = await request.user.filter_thumbsup(events_ids)
@@ -128,6 +136,7 @@ async def events_feed(request):
                 'events': [ item.show() for item in result ],
                 'events_selected': { str(id): True for id in events_ids_selected },
                 'events_thumbsup': { str(id): True for id in events_ids_thumbsup },
+                'closest_time_event': time_event,
             })
         else:
             return err(400, 'Неверный запрос')

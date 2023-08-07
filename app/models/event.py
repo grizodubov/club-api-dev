@@ -46,7 +46,7 @@ class Event:
         where_query = ''
         if where:
             where_query = ' WHERE ' + ' AND '.join(where) + ' '
-        print(where_query)
+        # print(where_query)
         data = await api.pg.club.fetch(
             """SELECT
                         t1.id, t1.time_create, t1.time_update,
@@ -153,3 +153,35 @@ class Event:
     def check_files(self):
         self.files = os.path.isfile('/var/www/static.clubgermes.ru/html/events/' + str(self.id) + '/index.html') and \
                 os.path.isfile('/var/www/static.clubgermes.ru/html/events/' + str(self.id) + '/menu.json')
+
+
+
+################################################################
+async def find_closest_event(mark):
+    api = get_api_context()
+    data = await api.pg.club.fetchval(
+        """SELECT
+                time_event
+            FROM
+                events
+            WHERE
+                time_event > $1
+            ORDER BY
+                time_event
+            LIMIT 1""",
+        mark
+    )
+    if not data:
+        data = await api.pg.club.fetchval(
+            """SELECT
+                    time_event
+                FROM
+                    events
+                WHERE
+                    time_event < $1
+                ORDER BY
+                    time_event DESC
+                LIMIT 1""",
+            mark
+        )
+    return data
