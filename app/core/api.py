@@ -74,6 +74,8 @@ class API:
             'user_id': user_id,
             'session_id': session_id,
         })
+        if user_id:
+            self.websocket_mass_send({ 'auth': True, 'status': True, 'user_id': user_id })
 
 
     ################################################################
@@ -82,23 +84,35 @@ class API:
             if ws['handler'] == websocket:
                 ws['user_id'] = user_id
                 ws['session_id'] = session_id
+                if user_id:
+                    self.websocket_mass_send({ 'auth': True, 'status': True, 'user_id': user_id })
 
 
     ################################################################
     def websocket_update(self, session_id, user_id):
         for ws in self.store['websockets']:
             if ws['session_id'] == session_id:
+                if ws['user_id']:
+                    self.websocket_mass_send({ 'auth': True, 'status': False, 'user_id': ws['user_id'] })
                 ws['user_id'] = user_id
+                if user_id:
+                    self.websocket_mass_send({ 'auth': True, 'status': True, 'user_id': user_id })
 
 
     ################################################################
     def websocket_remove(self, websocket):
         temp = []
+        users = []
         for index, ws in enumerate(self.store['websockets']):
             if ws['handler'] == websocket:
                 temp.append(index)
+                if ws['user_id']:
+                    users.append(ws['user_id'])
         for index in reversed(temp):
             self.store['websockets'].pop(index)
+        if users:
+            for user_id in set(users):
+                self.websocket_mass_send({ 'auth': True, 'status': False, 'user_id': user_id })
 
 
     ################################################################
@@ -112,3 +126,29 @@ class API:
     def websocket_mass_send(self, message):
         for ws in self.store['websockets']:
             asyncio.create_task(ws['handler'].send_text(orjson.dumps(message).decode()))
+
+
+    ################################################################
+    def websocket_remove(self, websocket):
+        temp = []
+        users = []
+        for index, ws in enumerate(self.store['websockets']):
+            if ws['handler'] == websocket:
+                temp.append(index)
+                if ws['user_id']:
+                    users.append(ws['user_id'])
+        for index in reversed(temp):
+            self.store['websockets'].pop(index)
+        if users:
+            for user_id in set(users):
+                self.websocket_mass_send({ 'auth': True, 'status': False, 'user_id': user_id })
+
+
+    ################################################################
+    def users_online(self):
+        users = []
+        for index, ws in enumerate(self.store['websockets']):
+            if ws['user_id']:
+                users.append(ws['user_id'])
+        # print('ONLINE', users)
+        return set(users)

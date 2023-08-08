@@ -136,7 +136,7 @@ async def get_chats(user_id, chat_id = None):
                 t3.messages_unread_exist DESC, t4.time_create DESC, t3.chat_id""",
         user_id
     )
-    chats = [ dict(item) | { 'avatar': check_avatar_by_id(item['chat_id']) } for item in data ]
+    chats = [ dict(item) | { 'avatar': check_avatar_by_id(item['chat_id']), 'online': check_online_by_id(item['chat_id']) } for item in data ]
     chats_ids = [ item['chat_id'] for item in chats ]
     if chat_id and chat_id not in chats_ids:
         name = await api.pg.club.fetchval( 
@@ -153,6 +153,7 @@ async def get_chats(user_id, chat_id = None):
                 'max_message_text': None,
                 'max_message_time_create': None,
                 'avatar': check_avatar_by_id(chat_id),
+                'online': check_online_by_id(chat_id),
             })
         else:
             name = await api.pg.club.fetchval( 
@@ -169,6 +170,7 @@ async def get_chats(user_id, chat_id = None):
                     'max_message_text': None,
                     'max_message_time_create': None,
                     'avatar': check_avatar_by_id(chat_id),
+                    'online': check_online_by_id(chat_id),
                 })
     return chats
 
@@ -263,9 +265,12 @@ async def query_messages(user_id, chat_id, chat_model, fragments):
         )
     unique_authors_ids = set([ item['author_id'] for item in data ])
     authors_avatars = {}
+    authors_online = {}
     for author_id in unique_authors_ids:
         authors_avatars[str(author_id)] = check_avatar_by_id(author_id)
-    return [ dict(item) | { 'author_avatar': authors_avatars[str(item['author_id'])] } for item in data ]
+    for author_id in unique_authors_ids:
+        authors_online[str(author_id)] = check_online_by_id(author_id)
+    return [ dict(item) | { 'author_avatar': authors_avatars[str(item['author_id'])], 'online': authors_online[str(item['author_id'])] } for item in data ]
 
 
 
@@ -295,7 +300,7 @@ async def add_message(user_id, chat_id, chat_model, text):
         message['id'], user_id, message['time_create']
     )
     message['time_view'] = message['time_create']
-    return message | { 'author_avatar': check_avatar_by_id(user_id) }
+    return message | { 'author_avatar': check_avatar_by_id(user_id), 'author_online': check_online_by_id(user_id) }
 
 
 
@@ -346,6 +351,15 @@ async def view_messages(user_id, messages_ids):
 ################################################################
 def check_avatar_by_id(id):
     return os.path.isfile('/var/www/media.clubgermes.ru/html/avatars/' + str(id) + '.jpg')
+
+
+
+################################################################
+def check_online_by_id(id):
+    api = get_api_context()
+    if id in api.users_online():
+        return True
+    return False
 
 
 
