@@ -29,6 +29,8 @@ def routes():
         Route('/user/event/del', user_del_event, methods = [ 'POST' ]),
         Route('/user/thumbsup', user_thumbs_up, methods = [ 'POST' ]),
 
+        Route('/user/helpful', user_helpful, methods = [ 'POST' ]),
+
         Route('/m/user/search', moderator_user_search, methods = [ 'POST' ]),
         Route('/m/user/update', moderator_user_update, methods = [ 'POST' ]),
         Route('/m/user/create', moderator_user_create, methods = [ 'POST' ]),
@@ -45,6 +47,13 @@ def routes():
 
 MODELS = {
 	'user_info': {
+		'id': {
+			'required': True,
+			'type': 'int',
+            'value_min': 1,
+		},
+	},
+	'user_helpful': {
 		'id': {
 			'required': True,
 			'type': 'int',
@@ -1088,5 +1097,25 @@ async def new_moderator_user_create(request):
             return OrjsonResponse({})
         else:
             return err(400, 'Неверный запрос')
+    else:
+        return err(403, 'Нет доступа')
+
+
+
+################################################################
+async def user_helpful(request):
+    if request.user.id:
+        if validate(request.path_params, MODELS['user_helpful']):
+            user = User()
+            await user.set(id = request.path_params['id'])
+            if user.id:
+                answers = await user.get_helpful_answers()
+                return OrjsonResponse({
+                    'answer': answers
+                })
+            else:
+                return err(404, 'Пользователь не найден')
+        else:
+            return err(400, 'Неверный поиск')
     else:
         return err(403, 'Нет доступа')

@@ -604,6 +604,33 @@ class User:
         return dict(data)
 
 
+
+    ################################################################
+    async def get_helpful_answers(self):
+        api = get_api_context()
+        data = await api.pg.club.fetch(
+            """SELECT
+                    t1.id AS answer_id, t1.text AS answer_text,
+                    t2.id AS question_id,
+                    t2.text AS question_text,
+                    t3.name AS question_author_name,
+                    t4.name AS community_name
+                FROM
+                    posts t1
+                INNER JOIN
+                    posts t2 ON t2.id = t1.reply_to_post_id
+                INNER JOIN
+                    users t3 ON t3.id = t2.author_id
+                INNER JOIN
+                    communities t4 ON t4.id = t1.community_id
+                WHERE
+                    t1.author_id = $1 AND t1.helpful IS TRUE""",
+            self.id
+        )
+        return [ dict(item) for item in data ]
+
+
+
     ################################################################
     async def get_contacts(self):
         api = get_api_context()
