@@ -57,7 +57,12 @@ MODELS = {
             'required': True,
 			'type': 'str',
             'length_min': 1,
-        }
+        },
+        'reply_to_message_id': {
+			'required': True,
+			'type': 'int',
+            'null': True,
+        },
 	},
 	'message_view': {
 		'id': {
@@ -138,6 +143,7 @@ async def message_add(request):
         if validate(request.params, MODELS['message_add']):
             item = Item()
             await item.set(id = request.params['chat_id'])
+            print(item.__dict__)
             if item.id:
                 access = True
                 if item.model == 'group':
@@ -147,13 +153,17 @@ async def message_add(request):
                         return err(400, 'Неверный запрос')
                     user = User()
                     await user.set(id = item.id)
-                    access = await request.user.check_access(user)
+                    if user.id:
+                        access = await request.user.check_access(user)
+                    else:
+                        access = False
                 if access:
                     message = await add_message(
                         user_id = request.user.id,
                         chat_id = item.id,
                         chat_model = item.model,
-                        text = request.params['text']
+                        text = request.params['text'],
+                        reply_to_message_id = request.params['reply_to_message_id'] if request.params['reply_to_message_id'] else None
                     )
                     message['author_name'] = request.user.name
                     dispatch('message_add', request)

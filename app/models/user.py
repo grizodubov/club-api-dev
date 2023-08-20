@@ -312,9 +312,10 @@ class User:
                         id = $1""" + query,
                 id
             )
-            self.__dict__ = dict(data)
-            self.check_avatar()
-            self.check_online()
+            if data:
+                self.__dict__ = dict(data)
+                self.check_avatar()
+                self.check_online()
 
 
     ################################################################

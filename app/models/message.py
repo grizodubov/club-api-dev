@@ -238,13 +238,19 @@ async def query_messages(user_id, chat_id, chat_model, fragments):
             args.append(fragment['id'])
         query = """
             (SELECT
-                t1.id, t1.time_create, t1.author_id, t3.name AS author_name, t1.text, t4.time_view
+                t1.id, t1.time_create, t1.author_id, t3.name AS author_name, t1.text, t4.time_view,
+                t21.id AS reply_to_id, t22.id AS reply_to_author_id, t22.name AS reply_to_author_name,
+                t21.text AS reply_to_text
             FROM
                 messages t1 """ + query1 + """
             INNER JOIN
                 users t3 ON t3.id = t1.author_id
             LEFT JOIN
                 items_views t4 ON t4.item_id = t1.id AND t4.user_id = $1
+            LEFT JOIN
+                messages t21 ON t21.id = t1.reply_to_message_id
+            LEFT JOIN
+                users t22 ON t22.id = t21.author_id
             WHERE """ + query2 + """
             ORDER BY t1"""
         if fragment['reverse']:
@@ -275,17 +281,17 @@ async def query_messages(user_id, chat_id, chat_model, fragments):
 
 
 ################################################################
-async def add_message(user_id, chat_id, chat_model, text):
+async def add_message(user_id, chat_id, chat_model, text, reply_to_message_id = None):
     api = get_api_context()
     data = await api.pg.club.fetchrow( 
         """INSERT INTO
                 messages
-                (author_id, target_id, target_model, text)
+                (author_id, target_id, target_model, text, reply_to_message_id)
             VALUES
-                ($1, $2, $3, $4)
+                ($1, $2, $3, $4, $5)
             RETURNING
                 id, time_create, author_id, text""",
-        user_id, chat_id, chat_model, text
+        user_id, chat_id, chat_model, text, reply_to_message_id
     )
     message = dict(data)
     await api.pg.club.execute( 
@@ -300,6 +306,28 @@ async def add_message(user_id, chat_id, chat_model, text):
         message['id'], user_id, message['time_create']
     )
     message['time_view'] = message['time_create']
+    message.update({
+        'reply_to_id': None,
+        'reply_to_author_id': None,
+        'reply_to_author_name': None,
+        'reply_to_text': None,
+    })
+    if reply_to_message_id:
+        reply_to = await api.pg.club.fetchrow( 
+            """SELECT
+                    t1.author_id, t2.name, t1.text
+                FROM
+                    messages t1
+                INNER JOIN
+                    users t2 ON t2.id = t1.author_id
+                WHERE
+                    t1.id = $1""",
+            reply_to_message_id
+        )
+        message['reply_to_id'] = reply_to_message_id
+        message['reply_to_author_id'] = reply_to['author_id']
+        message['reply_to_author_name'] = reply_to['name']
+        message['reply_to_text'] = reply_to['text']
     return message | { 'author_avatar': check_avatar_by_id(user_id), 'author_online': check_online_by_id(user_id) }
 
 
