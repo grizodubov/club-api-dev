@@ -27,6 +27,7 @@ class OrjsonResponse(JSONResponse):
                 'id': request.community_manager.id,
                 'name': request.community_manager.name,
                 'phone': request.community_manager.phone,
+                'avatar': request.community_manager.avatar,
             }
         }
         # user

@@ -82,7 +82,7 @@ MODELS = {
 async def messages_list(request):
     if request.user.id:
         if validate(request.params, MODELS['messages_list']):
-            chats = await get_chats(request.user.id, request.params['future_chat_id'])
+            chats = await get_chats(request.user.id, request.params['future_chat_id'], request.user.community_manager_id if request.user.community_manager_id else 1050)
             vector_type = None
             min_unread_message_id = None
             messages = []
