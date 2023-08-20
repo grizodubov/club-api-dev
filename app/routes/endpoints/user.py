@@ -7,7 +7,7 @@ from app.core.request import err
 from app.core.response import OrjsonResponse
 from app.core.event import dispatch
 from app.utils.validate import validate
-from app.models.user import User, get_residents, get_residents_contacts
+from app.models.user import User, get_residents, get_residents_contacts, get_community_managers
 from app.models.event import Event
 from app.models.item import Item
 
@@ -477,7 +477,7 @@ MODELS = {
 			'required': True,
 			'type': 'str',
             'list': True,
-            'values': [ 'admin', 'client', 'manager', 'moderator', 'editor' ],
+            'values': [ 'admin', 'client', 'manager', 'moderator', 'editor', 'community manager' ],
 		},
 		'tags': {
 			'required': True,
@@ -499,6 +499,10 @@ MODELS = {
 		},
 		'experience': {
 			'required': True,
+			'type': 'int',
+            'null': True,
+		},
+		'community_manager_id': {
 			'type': 'int',
             'null': True,
 		},
@@ -583,7 +587,7 @@ MODELS = {
 			'required': True,
 			'type': 'str',
             'list': True,
-            'values': [ 'client', 'manager' ],
+            'values': [ 'client', 'manager', 'community manager' ],
 		},
 		'tags': {
 			'required': True,
@@ -605,6 +609,10 @@ MODELS = {
 		},
 		'experience': {
 			'required': True,
+			'type': 'int',
+            'null': True,
+		},
+		'community_manager_id': {
 			'type': 'int',
             'null': True,
 		},
@@ -866,9 +874,11 @@ async def moderator_user_search(request):
                 count = True,
                 applicant = request.params['applicant'] if request.params['applicant'] is not None else False,
             )
+            community_managers = await get_community_managers()
             return OrjsonResponse({
                 'users': [ item.dump() for item in result ],
                 'amount': amount,
+                'community_managers': community_managers,
             })
         else:
             return err(400, 'Неверный поиск')
@@ -1072,6 +1082,7 @@ async def new_moderator_user_create(request):
                 birthdate = request.params['birthdate'],
                 birthdate_privacy = request.params['birthdate_privacy'],
                 experience = request.params['experience'],
+                community_manager_id = request.params['community_manager_id'],
             )
             dispatch('user_create', request)
             return OrjsonResponse({})

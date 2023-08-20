@@ -16,6 +16,7 @@ def extend_request():
     Request.filters = property(lambda self: self.state.filters)
     Request.session = property(lambda self: self.state.session)
     Request.user = property(lambda self: self.state.user)
+    Request.community_manager = property(lambda self: self.state.community_manager)
 
 
 
@@ -69,6 +70,10 @@ async def before_request(request):
     request.state.user = User()
     if request.url.path != '/acquire':
         await request.state.user.set(id = request.state.session.user_id)
+    # request.community_manager
+    request.state.community_manager = User()
+    if request.state.user.community_manager_id:
+        await request.state.community_manager.set(id = request.state.user.community_manager_id)
     # request.filters
     request.state.filters = {}
     print('---- Before request: end')

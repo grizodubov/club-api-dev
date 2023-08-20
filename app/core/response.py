@@ -1,7 +1,9 @@
+import asyncio
 import orjson
 from starlette.responses import JSONResponse
 
 from app.core.context import get_request_context
+from app.models.user import User
 
 
 
@@ -20,6 +22,13 @@ class OrjsonResponse(JSONResponse):
             }
         else:
             token = {}
+        community_manager = {
+            '_community_manager': {
+                'id': request.community_manager.id,
+                'name': request.community_manager.name,
+                'phone': request.community_manager.phone,
+            }
+        }
         # user
         user = {
             '_user': {
@@ -30,4 +39,4 @@ class OrjsonResponse(JSONResponse):
                 'roles': request.user.roles,
             }
         }
-        return orjson.dumps(content | token | user)
+        return orjson.dumps(content | token | user | community_manager)

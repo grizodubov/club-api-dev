@@ -44,6 +44,7 @@ class User:
         self._password = ''
         self.avatar = False
         self.online = False
+        self.community_manager_id = 0
 
 
     ################################################################
@@ -66,9 +67,9 @@ class User:
             conditions.append("""'applicant' <> ANY(t4.roles)""")
         if text:
             if reverse:
-                conditions.append("""(to_tsvector(concat_ws(' ', t1.name, t1.email, t1.phone, t3.company, t3.position, t2.interests)) @@ to_tsquery($1) OR t1.name LIKE concat_ws('%', $1, '%'))""")
+                conditions.append("""(to_tsvector(concat_ws(' ', t1.name, t1.email, t1.phone, t3.company, t3.position, t2.interests)) @@ to_tsquery($1) OR t1.name ILIKE concat_ws('%', $1, '%'))""")
             else:
-                conditions.append("""(to_tsvector(concat_ws(' ', t1.name, t1.email, t1.phone, t3.company, t3.position, t3.detail, t2.tags)) @@ to_tsquery($1) OR t1.name LIKE concat_ws('%', $1, '%'))""")
+                conditions.append("""(to_tsvector(concat_ws(' ', t1.name, t1.email, t1.phone, t3.company, t3.position, t3.detail, t2.tags)) @@ to_tsquery($1) OR t1.name ILIKE concat_ws('%', $1, '%'))""")
             args.append(re.sub(r'\s+', ' | ', text))
         if offset is not None and limit is not None:
             slice_query = ' OFFSET $' + str(len(args) + 1) + ' LIMIT $' + str(len(args) + 2)
@@ -80,6 +81,7 @@ class User:
                     t1.id, t1.time_create, t1.time_update,
                     t1.name, t1.login, t1.email, t1.phone,
                     t1.active,
+                    t1.community_manager_id,
                     t3.company, t3.position, t3.detail,
                     t3.status,
                     t3.annual, t3.annual_privacy,
@@ -182,7 +184,7 @@ class User:
 
     ################################################################
     def show(self):
-        filter = { 'time_create', 'time_update', 'login', 'email', 'phone', 'roles', 'annual', 'annual_privacy', 'employees', 'employees_privacy', 'birthdate', 'birthdate_privacy' }
+        filter = { 'time_create', 'time_update', 'community_manager_id', 'login', 'email', 'phone', 'roles', 'annual', 'annual_privacy', 'employees', 'employees_privacy', 'birthdate', 'birthdate_privacy' }
         data = { k: v for k, v in self.__dict__.items() if not k.startswith('_') and k not in filter }
         # annual
         if self.annual_privacy == 'показывать':
@@ -270,6 +272,7 @@ class User:
                         t1.id, t1.time_create, t1.time_update,
                         t1.name, t1.login, t1.email, t1.phone,
                         t1.active,
+                        t1.community_manager_id,
                         t3.company, t3.position, t3.detail,
                         t3.status,
                         t3.annual, t3.annual_privacy,
@@ -320,7 +323,7 @@ class User:
         cursor = 2
         query = []
         args = []
-        for k in { 'active', 'name', 'email', 'phone', 'password' }:
+        for k in { 'active', 'name', 'email', 'phone', 'password', 'community_manager_id' }:
             if k in kwargs:
                 query.append(k + ' = $' + str(cursor))
                 if k == 'phone':
@@ -433,6 +436,7 @@ class User:
                             t1.id, t1.time_create, t1.time_update,
                             t1.name, t1.login, t1.email, t1.phone,
                             t1.active,
+                            t1.community_manager_id,
                             t3.company, t3.position, t3.detail,
                             t3.status,
                             t3.annual, t3.annual_privacy,
@@ -488,6 +492,7 @@ class User:
                         t1.id, t1.time_create, t1.time_update,
                         t1.name, t1.login, t1.email, t1.phone,
                         t1.active,
+                        t1.community_manager_id,
                         t3.company, t3.position, t3.detail,
                         t3.status,
                         t3.annual, t3.annual_privacy,
@@ -1270,3 +1275,26 @@ async def get_residents_contacts(user_id, user_status, contacts_ids):
             'allow_contact': allow_contact,
         }
     return result
+
+
+
+################################################################
+async def get_community_managers():
+    api = get_api_context()
+    data = await api.pg.club.fetch(
+        """SELECT
+                t1.id, t1.name
+            FROM
+                users t1
+            INNER JOIN
+                users_roles t2 ON t2.user_id = t1.id
+            INNER JOIN
+                roles t3 ON t3.id = t2.role_id
+            WHERE
+                t3.alias = 'community manager'
+            ORDER BY
+                t1.name""",
+    )
+    return [
+        { 'id': item['id'], 'name': item['name'] } for item in data
+    ]
