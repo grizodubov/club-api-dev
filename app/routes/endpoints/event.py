@@ -147,7 +147,7 @@ async def events_feed(request):
 
 ################################################################
 async def moderator_event_list(request):
-    if request.user.id and request.user.check_roles({ 'admin', 'editor' }):
+    if request.user.id and request.user.check_roles({ 'admin', 'editor', 'manager', 'community manager' }):
         if validate(request.params, MODELS['moderator_event_list']):
             result = await Event.list()
             i = (request.params['page'] - 1) * 10
@@ -164,7 +164,7 @@ async def moderator_event_list(request):
 
 ################################################################
 async def moderator_event_update(request):
-    if request.user.id and request.user.check_roles({ 'admin', 'editor' }):
+    if request.user.id and request.user.check_roles({ 'admin', 'editor', 'manager', 'community manager' }):
         if validate(request.params, MODELS['moderator_event_update']):
             event = Event()
             await event.set(id = request.params['id'])
@@ -183,7 +183,7 @@ async def moderator_event_update(request):
 
 ################################################################
 async def moderator_event_create(request):
-    if request.user.id and request.user.check_roles({ 'admin', 'editor' }):
+    if request.user.id and request.user.check_roles({ 'admin', 'editor', 'manager', 'community manager' }):
         if validate(request.params, MODELS['moderator_event_create']):
             event = Event()
             await event.create(**request.params)

@@ -23,7 +23,7 @@ MODELS = {
 
 ################################################################
 async def moderator_stats_tags(request):
-    if request.user.id and request.user.check_roles({ 'admin', 'moderator' }):
+    if request.user.id and request.user.check_roles({ 'admin', 'moderator', 'manager', 'community manager' }):
         return OrjsonResponse(await get_tags_stats())
     else:
         return err(403, 'Нет доступа')
@@ -32,7 +32,7 @@ async def moderator_stats_tags(request):
 
 ################################################################
 async def moderator_stats_users(request):
-    if request.user.id and request.user.check_roles({ 'admin', 'moderator' }):
+    if request.user.id and request.user.check_roles({ 'admin', 'moderator', 'manager', 'community manager' }):
         return OrjsonResponse(await get_users_stats())
     else:
         return err(403, 'Нет доступа')

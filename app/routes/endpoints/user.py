@@ -873,7 +873,7 @@ async def user_thumbs_up(request):
 
 ################################################################
 async def moderator_user_search(request):
-    if request.user.id and request.user.check_roles({ 'admin', 'moderator' }):
+    if request.user.id and request.user.check_roles({ 'admin', 'moderator', 'manager', 'community manager' }):
         if validate(request.params, MODELS['moderator_user_search']):
             (result, amount) = await User.search(
                 text = request.params['text'],
@@ -898,7 +898,7 @@ async def moderator_user_search(request):
 
 ################################################################
 async def moderator_user_update(request):
-    if request.user.id and request.user.check_roles({ 'admin', 'moderator' }):
+    if request.user.id and request.user.check_roles({ 'admin', 'moderator', 'manager', 'community manager' }):
         if validate(request.params, MODELS['moderator_user_update']):
             user = User()
             await user.set(id = request.params['id'], active = None)
@@ -925,7 +925,7 @@ async def moderator_user_update(request):
 
 ################################################################
 async def moderator_user_create(request):
-    if request.user.id and request.user.check_roles({ 'admin', 'moderator' }):
+    if request.user.id and request.user.check_roles({ 'admin', 'moderator', 'manager', 'community manager' }):
         if validate(request.params, MODELS['moderator_user_create']):
             user = User()
             if await user.find(email = request.params['email']):
@@ -1028,7 +1028,7 @@ async def new_user_update(request):
 
 ################################################################
 async def new_moderator_user_update(request):
-    if request.user.id and request.user.check_roles({ 'admin', 'moderator' }):
+    if request.user.id and request.user.check_roles({ 'admin', 'moderator', 'manager', 'community manager' }):
         if validate(request.params, MODELS['new_moderator_user_update']):
             user = User()
             await user.set(id = request.params['id'], active = None)
@@ -1058,7 +1058,7 @@ async def new_moderator_user_update(request):
 
 ################################################################
 async def new_moderator_user_create(request):
-    if request.user.id and request.user.check_roles({ 'admin', 'moderator' }):
+    if request.user.id and request.user.check_roles({ 'admin', 'moderator', 'manager', 'community manager' }):
         if validate(request.params, MODELS['new_moderator_user_create']):
             user = User()
             if await user.find(email = request.params['email']):

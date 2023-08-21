@@ -73,7 +73,7 @@ MODELS = {
 
 ################################################################
 async def moderator_group_search(request):
-    if request.user.id and request.user.check_roles({ 'admin', 'moderator' }):
+    if request.user.id and request.user.check_roles({ 'admin', 'moderator', 'manager', 'community manager' }):
         if validate(request.params, MODELS['moderator_group_search']):
             (result, amount) = await Group.search(
                 text = request.params['text'],
@@ -96,7 +96,7 @@ async def moderator_group_search(request):
 
 ################################################################
 async def moderator_group_update(request):
-    if request.user.id and request.user.check_roles({ 'admin', 'moderator' }):
+    if request.user.id and request.user.check_roles({ 'admin', 'moderator', 'manager', 'community manager' }):
         if validate(request.params, MODELS['moderator_group_update']):
             group = Group()
             await group.set(id = request.params['id'])
@@ -115,7 +115,7 @@ async def moderator_group_update(request):
 
 ################################################################
 async def moderator_group_create(request):
-    if request.user.id and request.user.check_roles({ 'admin', 'moderator' }):
+    if request.user.id and request.user.check_roles({ 'admin', 'moderator', 'manager', 'community manager' }):
         if validate(request.params, MODELS['moderator_group_create']):
             group = Group()
             await group.create(

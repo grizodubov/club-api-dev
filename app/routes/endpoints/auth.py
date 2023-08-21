@@ -505,7 +505,7 @@ async def moderator_login(request):
     if validate(request.params, MODELS['moderator_login']):
         user = User()        
         if await user.check(request.params['account'], request.params['password']):
-            if set(user.roles) & { 'admin', 'moderator', 'editor' }:
+            if set(user.roles) & { 'admin', 'moderator', 'editor', 'manager', 'community manager' }:
                 await request.session.assign(user.id)
                 request.user.copy(user = user)
                 request.api.websocket_update(request.session.id, request.user.id)

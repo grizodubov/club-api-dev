@@ -81,7 +81,7 @@ MODELS = {
 
 ################################################################
 async def moderator_news_list(request):
-    if request.user.id and request.user.check_roles({ 'admin', 'editor' }):
+    if request.user.id and request.user.check_roles({ 'admin', 'editor', 'manager', 'community manager' }):
         if validate(request.params, MODELS['moderator_news_list']):
             result = await News.list()
             i = (request.params['page'] - 1) * 10
@@ -99,7 +99,7 @@ async def moderator_news_list(request):
 
 ################################################################
 async def moderator_news_update(request):
-    if request.user.id and request.user.check_roles({ 'admin', 'editor' }):
+    if request.user.id and request.user.check_roles({ 'admin', 'editor', 'manager', 'community manager' }):
         if validate(request.params, MODELS['moderator_news_update']):
             news = News()
             await news.set(id = request.params['id'])
@@ -118,7 +118,7 @@ async def moderator_news_update(request):
 
 ################################################################
 async def moderator_news_create(request):
-    if request.user.id and request.user.check_roles({ 'admin', 'editor' }):
+    if request.user.id and request.user.check_roles({ 'admin', 'editor', 'manager', 'community manager' }):
         if validate(request.params, MODELS['moderator_news_create']):
             news = News()
             await news.create(**request.params)

@@ -216,7 +216,7 @@ async def community_update_post(request):
 
 ################################################################
 async def moderator_community_search(request):
-    if request.user.id and request.user.check_roles({ 'admin', 'moderator' }):
+    if request.user.id and request.user.check_roles({ 'admin', 'moderator', 'manager', 'community manager' }):
         if validate(request.params, MODELS['moderator_community_search']):
             (result, amount) = await Community.search(
                 text = request.params['text'],
@@ -239,7 +239,7 @@ async def moderator_community_search(request):
 
 ################################################################
 async def moderator_community_update(request):
-    if request.user.id and request.user.check_roles({ 'admin', 'moderator' }):
+    if request.user.id and request.user.check_roles({ 'admin', 'moderator', 'manager', 'community manager' }):
         if validate(request.params, MODELS['moderator_community_update']):
             community = Community()
             await community.set(id = request.params['id'])
@@ -258,7 +258,7 @@ async def moderator_community_update(request):
 
 ################################################################
 async def moderator_community_create(request):
-    if request.user.id and request.user.check_roles({ 'admin', 'moderator' }):
+    if request.user.id and request.user.check_roles({ 'admin', 'moderator', 'manager', 'community manager' }):
         if validate(request.params, MODELS['moderator_community_create']):
             community = Community()
             await community.create(
