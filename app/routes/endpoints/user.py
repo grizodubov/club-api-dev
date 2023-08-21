@@ -29,7 +29,7 @@ def routes():
         Route('/user/event/del', user_del_event, methods = [ 'POST' ]),
         Route('/user/thumbsup', user_thumbs_up, methods = [ 'POST' ]),
 
-        Route('/user/helpful', user_helpful, methods = [ 'POST' ]),
+        Route('/user/{id:int}/helpful', user_helpful, methods = [ 'POST' ]),
 
         Route('/m/user/search', moderator_user_search, methods = [ 'POST' ]),
         Route('/m/user/update', moderator_user_update, methods = [ 'POST' ]),
@@ -1111,7 +1111,7 @@ async def user_helpful(request):
             if user.id:
                 answers = await user.get_helpful_answers()
                 return OrjsonResponse({
-                    'answer': answers
+                    'answers': answers
                 })
             else:
                 return err(404, 'Пользователь не найден')

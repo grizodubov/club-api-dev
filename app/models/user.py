@@ -624,10 +624,35 @@ class User:
                 INNER JOIN
                     communities t4 ON t4.id = t1.community_id
                 WHERE
-                    t1.author_id = $1 AND t1.helpful IS TRUE""",
+                    t1.author_id = $1 AND t1.helpful IS TRUE
+                ORDER BY
+                    t1.id""",
             self.id
         )
-        return [ dict(item) for item in data ]
+        result = []
+        questions = {}
+        for item in data:
+            k = str(item['question_id'])
+            if k not in questions:
+                questions[k] = {
+                    'question_id': item['question_id'],
+                    'question_text': item['question_text'],
+                    'question_author_name': item['question_author_name'],
+                    'community_name': item['community_name'],
+                    'answers': [
+                        {
+                            'answer_id': item['answer_id'],
+                            'answer_text': item['answer_text'],
+                        },
+                    ],
+                }
+                result.append(questions[k])
+            else:
+                questions[k]['answers'].append({
+                        'answer_id': item['answer_id'],
+                        'answer_text': item['answer_text'],
+                })
+        return result
 
 
 
