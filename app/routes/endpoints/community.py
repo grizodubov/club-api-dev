@@ -1,10 +1,12 @@
+import pymorphy3
+
 from starlette.routing import Route
 
 from app.core.request import err
 from app.core.response import OrjsonResponse
 from app.core.event import dispatch
 from app.utils.validate import validate
-from app.models.community import Community, get_stats, get_posts, sort_communities, add_post, update_post, check_post, check_question, check_answer, check_avatar_by_id
+from app.models.community import Community, get_stats, get_posts, sort_communities, add_post, update_post, check_post, check_question, check_answer, check_avatar_by_id, find_questions
 from app.models.user import User
 from app.models.item_ import Items
 
@@ -15,6 +17,7 @@ def routes():
         Route('/community/list', community_list, methods = [ 'POST' ]),
         Route('/community/post/add', community_add_post, methods = [ 'POST' ]),
         Route('/community/post/update', community_update_post, methods = [ 'POST' ]),
+        Route('/community/suggestions', community_suggestions, methods = [ 'POST' ]),
 
         Route('/m/community/search', moderator_community_search, methods = [ 'POST' ]),
         Route('/m/community/update', moderator_community_update, methods = [ 'POST' ]),
@@ -67,7 +70,13 @@ MODELS = {
             'null': True,
         },
 	},
-
+    'community_suggestions': {
+        'text': {
+            'required': True,
+			'type': 'str',
+            'length_min': 5,
+        },
+    },
     # moderator
 	'moderator_community_search': {
 		'text': {
@@ -207,6 +216,28 @@ async def community_update_post(request):
                     return err(400, 'Сообщение недоступно')
             else:
                 return err(400, 'Неверный запрос')
+        else:
+            return err(400, 'Неверный запрос')
+    else:
+        return err(403, 'Нет доступа')
+
+
+
+################################################################
+async def community_suggestions(request):
+    if request.user.id:
+        if validate(request.params, MODELS['community_suggestions']):
+            words = request.params['text'].split()
+            result = []
+            if words:
+                morph = pymorphy3.MorphAnalyzer(lang = 'ru')
+                filter = { 'NOUN', 'ADJF', 'ADJS', 'VERB', 'INFN', 'PRTF', 'PRTS', 'GRND', 'NUMR', 'ADVB' }
+                words = [ word for word in words if morph.parse(word)[0].tag.POS in filter ]
+                result = await find_questions(words)
+            return OrjsonResponse({
+                'words': words,
+                'suggestions': result,
+            })
         else:
             return err(400, 'Неверный запрос')
     else:

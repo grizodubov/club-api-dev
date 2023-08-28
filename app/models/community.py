@@ -189,6 +189,26 @@ class Community:
 
 
 
+###############################################################
+async def find_questions(words):
+    api = get_api_context()
+    data = await api.pg.club.fetch(
+        """SELECT
+                id, community_id, text, ts_rank(text_ts, to_tsquery('russian', $1)) AS rank
+            FROM
+                posts
+            WHERE
+                reply_to_post_id  IS NULL
+            AND
+                text_ts @@ to_tsquery('russian', $1)
+            ORDER BY
+                ts_rank(text_ts, to_tsquery('russian', $1)) DESC""",
+        ' | '.join(words)
+    )
+    return [ dict(item) for item in data ]
+
+
+
 ################################################################
 def check_avatar_by_id(id):
     return os.path.isfile('/var/www/media.clubgermes.ru/html/avatars/' + str(id) + '.jpg')
