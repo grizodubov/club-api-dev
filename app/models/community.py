@@ -190,20 +190,25 @@ class Community:
 
 
 ###############################################################
-async def find_questions(words):
+async def find_questions(community_id, words):
     api = get_api_context()
     data = await api.pg.club.fetch(
         """SELECT
-                id, community_id, text, ts_rank(text_ts, to_tsquery('russian', $1)) AS rank
+                t1.id, t1.community_id, t1.text, ts_rank(t1.text_ts, to_tsquery('russian', $1)) AS rank,
+                t2.name AS community_name, t1.time_create
             FROM
-                posts
+                posts t1
+            INNER JOIN
+                communities t2 ON t2.id = t1.community_id
             WHERE
-                reply_to_post_id  IS NULL
-            AND
-                text_ts @@ to_tsquery('russian', $1)
+                    t1.reply_to_post_id IS NULL
+                AND
+                    t1.community_id = $2
+                AND
+                    t1.text_ts @@ to_tsquery('russian', $1)
             ORDER BY
-                ts_rank(text_ts, to_tsquery('russian', $1)) DESC""",
-        ' | '.join(words)
+                ts_rank(t1.text_ts, to_tsquery('russian', $1)) DESC""",
+        ' | '.join(words), community_id
     )
     return [ dict(item) for item in data ]
 

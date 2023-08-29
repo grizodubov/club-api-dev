@@ -76,6 +76,11 @@ MODELS = {
 			'type': 'str',
             'length_min': 5,
         },
+		'community_id': {
+			'required': True,
+			'type': 'int',
+            'value_min': 1,
+		},
     },
     # moderator
 	'moderator_community_search': {
@@ -233,7 +238,7 @@ async def community_suggestions(request):
                 morph = pymorphy3.MorphAnalyzer(lang = 'ru')
                 filter = { 'NOUN', 'ADJF', 'ADJS', 'VERB', 'INFN', 'PRTF', 'PRTS', 'GRND', 'NUMR', 'ADVB' }
                 words = [ word for word in words if morph.parse(word)[0].tag.POS in filter ]
-                result = await find_questions(words)
+                result = await find_questions(request.params['community_id'], words)
             return OrjsonResponse({
                 'words': words,
                 'suggestions': result,
