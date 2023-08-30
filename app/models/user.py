@@ -377,16 +377,41 @@ class User:
             kwargs['birthdate_privacy'] if 'birthdate_privacy' in kwargs else '',
             kwargs['experience'] if 'experience' in kwargs else None
         )
-        await api.pg.club.execute(
-            """UPDATE
-                    users_tags
-                SET
-                    tags = $1,
-                    interests = $2
-                WHERE
-                    user_id = $3""",
-            kwargs['tags'], kwargs['interests'], self.id
-        )
+                
+        tags_old = set(sorted(re.split(r'\s*,\s*', self.tags)))
+        interests_old = set(sorted(re.split(r'\s*,\s*', self.interests)))
+        # print('OLD', tags_old, interests_old)
+        tags_new = set(sorted(re.split(r'\s*,\s*', kwargs['tags'])))
+        interests_new = set(sorted(re.split(r'\s*,\s*', kwargs['interests'])))
+        # print('NEW', tags_new, interests_new)
+        update_i = 1
+        update_pams = []
+        update_args = []
+        if tags_old != tags_new:
+            update_pams.extend([
+                'tags = $' + str(update_i),
+                'time_update_tags = now() at time zone \'utc\'',
+            ])
+            update_args.append(kwargs['tags'])
+            update_i += 1
+        if interests_old != interests_new:
+            update_pams.extend([
+                'interests = $' + str(update_i),
+                'time_update_interests = now() at time zone \'utc\'',
+            ])
+            update_args.append(kwargs['interests'])
+            update_i += 1
+        if update_pams:
+            update_args.append(self.id)
+            await api.pg.club.execute(
+                """UPDATE
+                        users_tags
+                    SET
+                    """ + ', '.join(update_pams) + """
+                    WHERE
+                        user_id = $""" + str(update_i),
+                *update_args
+            )
         if 'roles' in kwargs:
             roles = await get_roles()
             await api.pg.club.execute(
@@ -813,10 +838,10 @@ class User:
 
 
     ################################################################
-    async def get_suggestions(self, id = None, filter = None, today = False, from_id = None):
+    async def get_suggestions(self, id = None, filter = None, today_offset = None, from_id = None):
         api = get_api_context()
         query_tags = """SELECT
-                                t1.id, t1.name, t1.time_create,
+                                t1.id, t1.name, t2.time_update_tags AS time_create,
                                 t3.company, t3.position, t3.status,
                                 ts_headline(t2.tags, to_tsquery(${i}), 'HighlightAll=true, StartSel=~, StopSel=~') AS tags,
                                 ${i} AS search,
@@ -849,7 +874,7 @@ class User:
                                 t1.active IS TRUE AND
                                 to_tsvector(t2.tags) @@ to_tsquery(${i})"""
         query_interests = """SELECT
-                                    t1.id, t1.name, t1.time_create,
+                                    t1.id, t1.name, t2.time_update_interests AS time_create,
                                     t3.company, t3.position, t3.status,
                                     ts_headline(t2.interests, to_tsquery(${i}), 'HighlightAll=true, StartSel=~, StopSel=~') AS tags,
                                     ${i} AS search,
@@ -918,13 +943,16 @@ class User:
             args.append(from_id)
             i += 1
         query_where = ''
-        if today:
-            query_offset.append('time_create >= (now() at time zone \'utc\')::date')
+        if today_offset:
+            #query_offset.append('time_create >= (now() at time zone \'utc\')::date')
+            query_condition += ' AND u.time_create >= (now() at time zone \'utc\')::date + (${i} * interval \'1 minute\')'.format(i = i)
+            args.append(today_offset)
+            i += 1
         if query_offset:
             query_where = ' WHERE '
         data = await api.pg.club.fetch(
             """SELECT
-                    id, name, time_create, company, position, status, tags, search, offer, count(*) OVER() AS amount
+                    id, name, time_create, company, position, status, tags, search, offer, t5.amount AS helpful, count(*) OVER() AS amount
                 FROM
                     (
                         SELECT * FROM
@@ -933,7 +961,11 @@ class User:
                         ORDER BY
                             time_create DESC
                     ) u
-                WHERE """ + query_condition + """ LIMIT 50""",
+                LEFT JOIN
+                (
+                    SELECT author_id, count(id) AS amount FROM posts WHERE helpful IS TRUE GROUP BY author_id
+                ) t5 ON t5.author_id = u.id
+                WHERE """ + query_condition + """ LIMIT 100""",
             *args
         )
         return [ dict(item) | { 'avatar': check_avatar_by_id(item['id']), 'online': check_online_by_id(item['id']) } for item in data ]

@@ -626,6 +626,12 @@ MODELS = {
             'null': True,
 		},
 	},
+    'user_suggestions_stats': {
+		'date_offset': {
+			'required': True,
+			'type': 'int',
+		},
+    }
 }
 
 
@@ -710,7 +716,7 @@ async def user_suggestions(request):
             result = await request.user.get_suggestions(
                 id = request.params['id'],
                 filter = request.params['filter'],
-                today = request.params['today'],
+                today_offset = None,
                 from_id = request.params['from_id'],
             )
             return OrjsonResponse({ 'suggestions': result })
@@ -724,21 +730,24 @@ async def user_suggestions(request):
 ################################################################
 async def user_suggestions_stats(request):
     if request.user.id:
-        result = await request.user.get_suggestions(
-            id = None,
-            filter = None,
-            today = True,
-        )
-        stats = {
-            'bid': 0,
-            'ask': 0,
-        }
-        for item in result:
-            if item['offer'] == 'bid':
-                stats['bid'] += 1
-            else:
-                stats['ask'] += 1
-        return OrjsonResponse(stats)
+        if validate(request.params, MODELS['user_suggestions_stats']):
+            result = await request.user.get_suggestions(
+                id = None,
+                filter = None,
+                today_offset = request.params['date_offset'],
+            )
+            stats = {
+                'bid': 0,
+                'ask': 0,
+            }
+            for item in result:
+                if item['offer'] == 'bid':
+                    stats['bid'] += 1
+                else:
+                    stats['ask'] += 1
+            return OrjsonResponse(stats)
+        else:
+            return err(400, 'Неверный запрос')
     else:
         return err(403, 'Нет доступа')
 
