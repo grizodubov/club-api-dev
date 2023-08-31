@@ -621,7 +621,10 @@ class User:
                 LEFT JOIN
                     groups_users t3 ON t3.user_id = t1.id
                 LEFT JOIN
-                    events_users t4 ON t4.user_id = t1.id
+                    events_users t4 ON t4.user_id = t1.id AND t4.event_id IN
+                        (
+                            SELECT id FROM events WHERE time_event >= (now() at time zone 'utc')::date
+                        )
                 WHERE
                     t1.id = $1""",
             self.id
@@ -639,6 +642,7 @@ class User:
                     t2.id AS question_id,
                     t2.text AS question_text,
                     t3.name AS question_author_name,
+                    t1.community_id AS community_id,
                     t4.name AS community_name
                 FROM
                     posts t1
@@ -664,6 +668,7 @@ class User:
                     'question_text': item['question_text'],
                     'question_author_name': item['question_author_name'],
                     'community_name': item['community_name'],
+                    'community_id': item['community_id'],
                     'answers': [
                         {
                             'answer_id': item['answer_id'],
