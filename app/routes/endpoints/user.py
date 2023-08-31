@@ -28,6 +28,7 @@ def routes():
         Route('/user/event/add', user_add_event, methods = [ 'POST' ]),
         Route('/user/event/del', user_del_event, methods = [ 'POST' ]),
         Route('/user/thumbsup', user_thumbs_up, methods = [ 'POST' ]),
+        Route('/user/thumbsoff', user_thumbs_off, methods = [ 'POST' ]),
 
         Route('/user/{id:int}/helpful', user_helpful, methods = [ 'POST' ]),
 
@@ -152,6 +153,13 @@ MODELS = {
 		},
 	},
 	'user_thumbs_up': {
+		'item_id': {
+			'required': True,
+			'type': 'int',
+            'value_min': 1,
+		},
+	},
+	'user_thumbs_off': {
 		'item_id': {
 			'required': True,
 			'type': 'int',
@@ -870,6 +878,25 @@ async def user_thumbs_up(request):
             if item.id:
                 await request.user.thumbsup(item.id)
                 dispatch('user_thumbs_up', request)
+                return OrjsonResponse({})
+            else:
+                return err(404, 'Объект не найдено')
+        else:
+            return err(400, 'Неверный запрос')
+    else:
+        return err(403, 'Нет доступа')
+
+
+
+################################################################
+async def user_thumbs_off(request):
+    if request.user.id:
+        if validate(request.params, MODELS['user_thumbs_off']):
+            item = Item()
+            await item.set(id = request.params['item_id'])
+            if item.id:
+                await request.user.thumbsoff(item.id)
+                dispatch('user_thumbs_off', request)
                 return OrjsonResponse({})
             else:
                 return err(404, 'Объект не найдено')

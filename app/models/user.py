@@ -1032,6 +1032,17 @@ class User:
         )
 
 
+
+    ################################################################
+    async def thumbsoff(self, item_id):
+        api = get_api_context()
+        data = await api.pg.club.execute(
+            """DELETE FROM items_thumbsup WHERE item_id = $1 AND user_id = $2""",
+            item_id, self.id
+        )
+
+
+
     ################################################################
     async def filter_thumbsup(self, items_ids):
         api = get_api_context()
