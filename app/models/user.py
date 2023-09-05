@@ -567,7 +567,7 @@ class User:
                         ) t4 ON t4.user_id = t1.id
                     WHERE
                         (login = $1 OR email = $1 OR phone = $2) AND
-                        active IS TRUE""",
+                        t1.active IS TRUE""",
                 account, phone
             )
             if data and data['_password'] == password:
@@ -1322,7 +1322,7 @@ async def get_residents():
                 t1.active,
                 t3.company, t3.position, t3.detail,
                 t3.status,
-                t8.hash AS avatar_hash.
+                t8.hash AS avatar_hash,
                 t3.annual, t3.annual_privacy,
                 t3.employees, t3.employees_privacy,
                 t3.catalog, t3.city, t3.hobby,

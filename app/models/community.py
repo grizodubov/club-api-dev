@@ -18,6 +18,7 @@ class Community:
         self.name = ''
         self.description = ''
         self.avatar = False
+        self.avatar_hash = None
         self.members = []
 
 
@@ -41,9 +42,12 @@ class Community:
         data = await api.pg.club.fetch(
             """SELECT
                     t1.id, t1.time_create, t1.time_update,
-                    t1.name, t1.description, coalesce(t2.members, '{}'::bigint[]) AS members
+                    t1.name, t1.description, coalesce(t2.members, '{}'::bigint[]) AS members,
+                    t8.hash AS avatar_hash
                 FROM
                     communities t1
+                LEFT JOIN
+                    avatars t8 ON t8.owner_id = t1.id AND t8.active IS TRUE
                 LEFT JOIN
                     (
                         SELECT
@@ -97,9 +101,12 @@ class Community:
             data = await api.pg.club.fetchrow(
                 """SELECT
                         t1.id, t1.time_create, t1.time_update,
-                        t1.name, t1.description, coalesce(t2.members, '{}'::bigint[]) AS members
+                        t1.name, t1.description, coalesce(t2.members, '{}'::bigint[]) AS members,
+                        t8.hash AS avatar_hash
                     FROM
                         communities t1
+                    LEFT JOIN
+                        avatars t8 ON t8.owner_id = t1.id AND t8.active IS TRUE
                     LEFT JOIN
                         (
                             SELECT
@@ -277,7 +284,8 @@ async def get_posts(community_id, user_id):
                     t1.helpful,
                     t2.name AS author_name,
                     t3.time_view,
-                    coalesce(t1.reply_to_post_id, t1.id) AS question_id
+                    coalesce(t1.reply_to_post_id, t1.id) AS question_id,
+                    t8.hash AS author_avatar_hash
                 FROM
                     posts t1
                 INNER JOIN
@@ -288,6 +296,10 @@ async def get_posts(community_id, user_id):
                     items_views t3
                 ON
                     t3.item_id = t1.id AND t3.user_id = $2
+                LEFT JOIN
+                    avatars t8
+                ON
+                    t8.owner_id = t2.id AND t8.active IS TRUE
                 WHERE
                     t1.community_id = $1
             ) t4

@@ -149,8 +149,15 @@ async def community_list(request):
             if communities_sorted:
                 community_id = communities_sorted[0]['id']
         posts = await get_posts(community_id, request.user.id)
+        communities_full = []
+        for community in communities_sorted:
+            cm = Community()
+            await cm.set(id = community['id'])
+            communities_full.append(
+                cm.show() | { 'avatar': check_avatar_by_id(community['id']) }
+            )
         return OrjsonResponse({
-            'communities': [ community | { 'avatar': check_avatar_by_id(community['id']) } for community in communities_sorted ],
+            'communities': communities_full,
             'stats': stats,
             'community_id': community_id,
             'posts': posts,
