@@ -216,7 +216,7 @@ async def community_update_post(request):
                 else:
                     return err(400, 'Сообщение недоступно')
             elif request.params['helpful'] is not None:
-                community_id = await check_answer(request.params['post_id'], request.user.id)
+                community_id = await check_answer(request.params['post_id'], request.user.id, request.params['helpful'])
                 if community_id:
                     await update_post(request.params['post_id'], { 'helpful': request.params['helpful'] })
                     posts = await get_posts(community_id, request.user.id)

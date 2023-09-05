@@ -414,11 +414,11 @@ async def check_question(post_id, user_id):
 
 
 ###############################################################
-async def check_answer(post_id, user_id):
+async def check_answer(post_id, user_id, helpful = False):
     api = get_api_context()
-    community_id = await api.pg.club.fetchval( 
+    row = await api.pg.club.fetchrow( 
         """SELECT
-                t1.community_id
+                t1.community_id, t1.reply_to_post_id, t1.author_id
             FROM
                 posts t1
             INNER JOIN
@@ -427,8 +427,24 @@ async def check_answer(post_id, user_id):
                 t1.id = $1 AND t2.author_id = $2""",
         post_id, user_id
     )
-    if community_id:
-        return community_id
+    if row:
+        if helpful:
+            count = await api.pg.club.fetchval(
+                """SELECT
+                        count(id)
+                    FROM
+                        posts
+                    WHERE
+                        author_id = $1 AND
+                        reply_to_post_id = $2 AND
+                        helpful IS TRUE""",
+                row['author_id'], row['reply_to_post_id']
+            )
+            if count == 0:
+                return row['community_id']
+            else:
+                return None
+        return row['community_id']
     return None
 
 
