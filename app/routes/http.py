@@ -9,6 +9,7 @@ from app.routes.endpoints.message import routes as routes_message
 from app.routes.endpoints.group import routes as routes_group
 from app.routes.endpoints.community import routes as routes_community
 from app.routes.endpoints.stats import routes as routes_stats
+from app.routes.endpoints.avatar import routes as routes_avatar
 
 
 routes = [
@@ -23,4 +24,5 @@ routes = [
     *routes_group(),
     *routes_community(),
     *routes_stats(),
+    *routes_avatar(),
 ]

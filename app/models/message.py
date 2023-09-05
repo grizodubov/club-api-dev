@@ -16,6 +16,7 @@ class Message:
         self.author_id = None
         self.author_id_deleted = None
         self.author_name = ''
+        self.author_avatar_hash = None
         self.target_id = None
         self.target_id_deleted = None
         self.target_model = None
@@ -46,13 +47,15 @@ class Message:
                         t1.author_id, t1.author_id_deleted, t2.name AS author_name,
                         t1.target_id, t1.target_id_deleted, t1.target_model,
                         t1.reply_to_message_id, t1.reply_to_message_id_deleted,
-                        t1.text, t3.time_view
+                        t1.text, t3.time_view, t4.hash AS author_avatar_hash
                     FROM
                         messages t1
                     INNER JOIN
                         users t2 ON t2.id = t1.author_id OR t2.id = t1.author_id_deleted
                     LEFT JOIN
                         items_views t3 ON t3.item_id = t1.id
+                    LEFT JOIN
+                        avatars t4 ON t4.owner_id = t1.author_id AND t4.active IS TRUE
                     WHERE
                         t1.id = $1""",
                 id
@@ -79,7 +82,8 @@ async def get_chats(user_id, chat_id = None, default_id = 1050):
                 t3.min_message_id,
                 t3.max_message_id,
                 t4.text AS max_message_text,
-                t4.time_create AS max_message_time_create
+                t4.time_create AS max_message_time_create,
+                coalesce(t8.hash, t9.hash) AS avatar_hash
             FROM
             (
             --
@@ -131,7 +135,11 @@ async def get_chats(user_id, chat_id = None, default_id = 1050):
             LEFT JOIN
                 users_info t5_1 ON t5_1.user_id = t5.id
             LEFT JOIN
+                avatars t8 ON t8.owner_id = t5.id AND t8.active IS TRUE
+            LEFT JOIN
                 groups t6 ON t6.id = t3.chat_id
+            LEFT JOIN
+                avatars t9 ON t9.owner_id = t6.id AND t9.active IS TRUE
             ORDER BY
                 t3.messages_unread_exist DESC, t4.time_create DESC, t3.chat_id""",
         user_id, default_id
@@ -240,7 +248,9 @@ async def query_messages(user_id, chat_id, chat_model, fragments):
             (SELECT
                 t1.id, t1.time_create, t1.author_id, t3.name AS author_name, t1.text, t4.time_view,
                 t21.id AS reply_to_id, t22.id AS reply_to_author_id, t22.name AS reply_to_author_name,
-                t21.text AS reply_to_text
+                t21.text AS reply_to_text,
+                t8.hash AS author_avatar_hash,
+                t9.hash AS reply_to_author_avatar_hash
             FROM
                 messages t1 """ + query1 + """
             INNER JOIN
@@ -251,6 +261,10 @@ async def query_messages(user_id, chat_id, chat_model, fragments):
                 messages t21 ON t21.id = t1.reply_to_message_id
             LEFT JOIN
                 users t22 ON t22.id = t21.author_id
+            LEFT JOIN
+                avatars t8 ON t8.owner_id = t3.id AND t8.active IS TRUE
+            LEFT JOIN
+                avatars t9 ON t9.owner_id = t22.id AND t9.active IS TRUE
             WHERE """ + query2 + """
             ORDER BY t1"""
         if fragment['reverse']:

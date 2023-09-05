@@ -42,6 +42,7 @@ class User:
         self.rating = 0
         self.roles = []
         self._password = ''
+        self.avatar_hash = None
         self.avatar = False
         self.online = False
         self.community_manager_id = 0
@@ -91,6 +92,7 @@ class User:
                     t3.experience,
                     coalesce(t2.tags, '') AS tags,
                     coalesce(t2.interests, '') AS interests,
+                    t5.hash AS avatar_hash,
                     coalesce(t4.roles, '{}'::text[]) AS roles,
                     t1.password AS _password
                 FROM
@@ -99,6 +101,8 @@ class User:
                     users_tags t2 ON t2.user_id = t1.id
                 INNER JOIN
                     users_info t3 ON t3.user_id = t1.id
+                LEFT JOIN
+                    avatars t5 ON t5.owner_id = t1.id AND t5.active IS TRUE
                 LEFT JOIN
                     (
                         SELECT
@@ -264,9 +268,9 @@ class User:
         if id:
             query = ''
             if active is True:
-                query = ' AND active IS TRUE'
+                query = ' AND t1.active IS TRUE'
             if active is False:
-                query = ' AND active IS FALSE'
+                query = ' AND t1.active IS FALSE'
             data = await api.pg.club.fetchrow(
                 """SELECT
                         t1.id, t1.time_create, t1.time_update,
@@ -282,6 +286,7 @@ class User:
                         t3.experience,
                         coalesce(t2.tags, '') AS tags,
                         coalesce(t2.interests, '') AS interests,
+                        t5.hash AS avatar_hash,
                         coalesce(t4.roles, '{}'::text[]) AS roles,
                         t1.password AS _password
                     FROM
@@ -290,6 +295,8 @@ class User:
                         users_tags t2 ON t2.user_id = t1.id
                     INNER JOIN
                         users_info t3 ON t3.user_id = t1.id
+                    LEFT JOIN
+                        avatars t5 ON t5.owner_id = t1.id AND t5.active IS TRUE
                     LEFT JOIN
                         (
                             SELECT
@@ -309,7 +316,7 @@ class User:
                                 r3.user_id
                         ) t4 ON t4.user_id = t1.id
                     WHERE
-                        id = $1""" + query,
+                        t1.id = $1""" + query,
                 id
             )
             if data:
@@ -472,6 +479,7 @@ class User:
                             t3.experience,
                             coalesce(t2.tags, '') AS tags,
                             coalesce(t2.interests, '') AS interests,
+                            t5.hash AS avatar_hash,
                             coalesce(t4.roles, '{}'::text[]) AS roles,
                             t1.password AS _password
                         FROM
@@ -480,6 +488,8 @@ class User:
                             users_tags t2 ON t2.user_id = t1.id
                         INNER JOIN
                             users_info t3 ON t3.user_id = t1.id
+                        LEFT JOIN
+                            avatars t5 ON t5.owner_id = t1.id AND t5.active IS TRUE
                         LEFT JOIN
                             (
                                 SELECT
@@ -528,6 +538,7 @@ class User:
                         t3.experience,
                         coalesce(t2.tags, '') AS tags,
                         coalesce(t2.interests, '') AS interests,
+                        t5.hash AS avatar_hash,
                         coalesce(t4.roles, '{}'::text[]) AS roles,
                         t1.password AS _password
                     FROM
@@ -536,6 +547,8 @@ class User:
                         users_tags t2 ON t2.user_id = t1.id
                     INNER JOIN
                         users_info t3 ON t3.user_id = t1.id
+                    LEFT JOIN
+                        avatars t5 ON t5.owner_id = t1.id AND t5.active IS TRUE
                     LEFT JOIN
                         (
                             SELECT
@@ -695,6 +708,7 @@ class User:
                     t4.company, t4.position, t4.status,
                     coalesce(t3.tags, '') AS tags,
                     coalesce(t3.interests, '') AS interests,
+                    t8.hash AS avatar_hash,
                     NULL AS description,
                     NULL AS members,
                     'person' AS type
@@ -706,6 +720,8 @@ class User:
                     users_tags t3 ON t3.user_id = t2.id
                 INNER JOIN
                     users_info t4 ON t4.user_id = t2.id
+                LEFT JOIN
+                    avatars t8 ON t8.owner_id = t2.id AND t8.active IS TRUE
                 WHERE
                     t1.user_id = $1 AND t2.active IS TRUE
                 UNION ALL
@@ -714,6 +730,7 @@ class User:
                     NULL AS company, NULL AS position, NULL AS status,
                     NULL AS tags,
                     NULL AS interests,
+                    t9.hash AS avatar_hash,
                     t6.description,
                     t7.members,
                     'group' AS type
@@ -723,6 +740,8 @@ class User:
                     groups t6 ON t6.id = t5.group_id
                 INNER JOIN
                     (SELECT group_id, count(user_id) AS members FROM groups_users GROUP BY group_id) t7 ON t7.group_id = t6.id
+                LEFT JOIN
+                    avatars t9 ON t9.owner_id = t6.id AND t9.active IS TRUE
                 WHERE
                     t5.user_id = $1""",
             self.id
@@ -737,7 +756,7 @@ class User:
         query2 = ' | '.join([ re.sub(r'\s+', ' & ', t.strip()) for t in self.tags.split(',') ])
         data1 = await api.pg.club.fetch(
             """SELECT
-                    id, name, company, position, status, tags, search, offer
+                    id, name, company, position, status, tags, search, offer, avatar_hash
                 FROM
                     (
                         SELECT
@@ -746,6 +765,7 @@ class User:
                             ts_headline(t2.tags, to_tsquery($1), 'HighlightAll=true, StartSel=~, StopSel=~') AS tags,
                             $1 AS search,
                             'bid' AS offer,
+                            t8.hash AS avatar_hash,
                             ts_rank_cd(to_tsvector(t2.tags), to_tsquery($1), 32) AS __rank
                         FROM
                             users t1
@@ -769,6 +789,8 @@ class User:
                                 GROUP BY
                                     r3.user_id
                             ) t4 ON t4.user_id = t1.id
+                        LEFT JOIN
+                            avatars t8 ON t8.owner_id = t1.id AND t8.active IS TRUE
                         WHERE
                             t1.id >= 10000 AND
                             t1.id <> $2 AND
@@ -787,7 +809,7 @@ class User:
         )
         data2 = await api.pg.club.fetch(
             """SELECT
-                    id, name, company, position, status, tags, search, offer
+                    id, name, company, position, status, tags, search, offer, avatar_hash
                 FROM
                     (
                         SELECT
@@ -796,6 +818,7 @@ class User:
                             ts_headline(t2.interests, to_tsquery($1), 'HighlightAll=true, StartSel=~, StopSel=~') AS tags,
                             $1 AS search,
                             'ask' AS offer,
+                            t8.hash AS avatar_hash,
                             ts_rank_cd(to_tsvector(t2.interests), to_tsquery($1), 32) AS __rank
                         FROM
                             users t1
@@ -819,6 +842,8 @@ class User:
                                 GROUP BY
                                     r3.user_id
                             ) t4 ON t4.user_id = t1.id
+                        LEFT JOIN
+                            avatars t8 ON t8.owner_id = t1.id AND t8.active IS TRUE
                         WHERE
                             t1.id >= 10000 AND
                             t1.id <> $2 AND
@@ -851,6 +876,7 @@ class User:
                                 ts_headline(t2.tags, to_tsquery(${i}), 'HighlightAll=true, StartSel=~, StopSel=~') AS tags,
                                 ${i} AS search,
                                 'bid' AS offer,
+                                t8.hash AS avatar_hash,
                                 ts_rank_cd(to_tsvector(t2.tags), to_tsquery(${i}), 32) AS __rank
                             FROM
                                 users t1
@@ -874,6 +900,8 @@ class User:
                                     GROUP BY
                                         r3.user_id
                                 ) t4 ON t4.user_id = t1.id
+                            LEFT JOIN
+                                avatars t8 ON t8.owner_id = t1.id AND t8.active IS TRUE
                             WHERE
                                 t1.id >= 10000 AND
                                 t1.active IS TRUE AND
@@ -884,6 +912,7 @@ class User:
                                     ts_headline(t2.interests, to_tsquery(${i}), 'HighlightAll=true, StartSel=~, StopSel=~') AS tags,
                                     ${i} AS search,
                                     'ask' AS offer,
+                                    t8.hash AS avatar_hash,
                                     ts_rank_cd(to_tsvector(t2.interests), to_tsquery(${i}), 32) AS __rank
                                 FROM
                                     users t1
@@ -907,6 +936,8 @@ class User:
                                         GROUP BY
                                             r3.user_id
                                     ) t4 ON t4.user_id = t1.id
+                                LEFT JOIN
+                                    avatars t8 ON t8.owner_id = t1.id AND t8.active IS TRUE
                                 WHERE
                                     t1.id >= 10000 AND
                                     t1.active IS TRUE AND
@@ -957,7 +988,7 @@ class User:
             query_where = ' WHERE '
         data = await api.pg.club.fetch(
             """SELECT
-                    id, name, time_create, company, position, status, tags, search, offer, t5.amount AS helpful, count(*) OVER() AS amount
+                    id, name, time_create, company, position, status, tags, search, offer, avatar_hash, t5.amount AS helpful, count(*) OVER() AS amount
                 FROM
                     (
                         SELECT * FROM
@@ -1291,6 +1322,7 @@ async def get_residents():
                 t1.active,
                 t3.company, t3.position, t3.detail,
                 t3.status,
+                t8.hash AS avatar_hash.
                 t3.annual, t3.annual_privacy,
                 t3.employees, t3.employees_privacy,
                 t3.catalog, t3.city, t3.hobby,
@@ -1327,6 +1359,8 @@ async def get_residents():
                 (
                     SELECT author_id, count(id) AS amount FROM posts WHERE helpful IS TRUE GROUP BY author_id
                 ) t5 ON t5.author_id = t1.id
+            LEFT JOIN
+                avatars t8 ON t8.owner_id = t1.id AND t8.active IS TRUE
             WHERE
                 'client' = ANY(t4.roles) OR t1.id = 10004
             ORDER BY t1.name"""

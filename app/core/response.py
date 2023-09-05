@@ -28,6 +28,7 @@ class OrjsonResponse(JSONResponse):
                 'name': request.community_manager.name,
                 'phone': request.community_manager.phone,
                 'avatar': request.community_manager.avatar,
+                'avatar_hash': request.community_manager.avatar_hash,
             }
         }
         # user
@@ -37,6 +38,7 @@ class OrjsonResponse(JSONResponse):
                 'name': request.user.name,
                 'status': request.user.status,
                 'avatar': request.user.avatar,
+                'avatar_hash': request.user.avatar_hash,
                 'roles': request.user.roles,
             }
         }
