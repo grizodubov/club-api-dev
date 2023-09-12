@@ -6,7 +6,7 @@ from app.core.request import err
 from app.core.response import OrjsonResponse
 from app.core.event import dispatch
 from app.utils.validate import validate
-from app.models.community import Community, get_stats, get_posts, sort_communities, add_post, update_post, check_post, check_question, check_answer, check_avatar_by_id, find_questions
+from app.models.community import Community, get_stats, get_posts, sort_communities, add_post, update_post, check_post, check_question, check_answer, check_avatar_by_id, find_questions, extra_update_post, extra_delete_post
 from app.models.user import User
 from app.models.item_ import Items
 
@@ -20,8 +20,11 @@ def routes():
         Route('/community/suggestions', community_suggestions, methods = [ 'POST' ]),
 
         Route('/m/community/search', moderator_community_search, methods = [ 'POST' ]),
+        Route('/m/community/questions', moderator_community_questions, methods = [ 'POST' ]),
         Route('/m/community/update', moderator_community_update, methods = [ 'POST' ]),
         Route('/m/community/create', moderator_community_create, methods = [ 'POST' ]),
+        Route('/m/community/post/update', moderator_community_post_update, methods = [ 'POST' ]),
+        Route('/m/community/post/delete', moderator_community_post_delete, methods = [ 'POST' ]),
     ]
 
 
@@ -95,6 +98,13 @@ MODELS = {
             'default': 1,
         },
 	},
+	'moderator_community_questions': {
+		'id': {
+			'required': True,
+			'type': 'int',
+            'value_min': 1,
+		},
+	},
 	'moderator_community_update': {
 		'id': {
 			'required': True,
@@ -128,6 +138,34 @@ MODELS = {
 		'description': {
 			'required': True,
 			'type': 'str',
+		},
+	},
+	'moderator_community_post_update': {
+		'id': {
+			'required': True,
+			'type': 'int',
+            'value_min': 1,
+		},
+		'text': {
+			'required': True,
+			'type': 'str',
+            'length_min': 1,
+            'processing': lambda x: x.strip(),
+		},
+		'helpful': {
+			'required': True,
+			'type': 'bool',
+		},
+		'closed': {
+			'required': True,
+			'type': 'bool',
+		},
+	},
+	'moderator_community_post_delete': {
+		'id': {
+			'required': True,
+			'type': 'int',
+            'value_min': 1,
 		},
 	},
 }
@@ -258,6 +296,27 @@ async def community_suggestions(request):
 
 
 ################################################################
+async def moderator_community_questions(request):
+    if request.user.id and request.user.check_roles({ 'admin', 'moderator', 'manager', 'community manager' }):
+        if validate(request.params, MODELS['moderator_community_questions']):
+            community = Community()
+            await community.set(id = request.params['id'])
+            if community.id:
+                posts = await get_posts(request.params['id'], request.user.id)
+                return OrjsonResponse({
+                    'community': community.show(),
+                    'posts': posts,
+                })
+            else:
+                return err(404, 'Сообщество не найдено')
+        else:
+            return err(400, 'Неверный запрос')
+    else:
+        return err(403, 'Нет доступа')
+
+
+
+################################################################
 async def moderator_community_search(request):
     if request.user.id and request.user.check_roles({ 'admin', 'moderator', 'manager', 'community manager' }):
         if validate(request.params, MODELS['moderator_community_search']):
@@ -309,6 +368,37 @@ async def moderator_community_create(request):
                 description = request.params['description'],
             )
             dispatch('community_create', request)
+            return OrjsonResponse({})
+        else:
+            return err(400, 'Неверный запрос')
+    else:
+        return err(403, 'Нет доступа')
+
+
+
+################################################################
+async def moderator_community_post_update(request):
+    if request.user.id and request.user.check_roles({ 'admin', 'moderator', 'manager', 'community manager' }):
+        if validate(request.params, MODELS['moderator_community_post_update']):
+            result = await extra_update_post(request.params['id'], request.params)
+            if result:
+                dispatch('post_update', request)
+                return OrjsonResponse({})
+            else:
+                return err(400, 'Неверный запрос')
+        else:
+            return err(400, 'Неверный запрос')
+    else:
+        return err(403, 'Нет доступа')
+
+
+
+################################################################
+async def moderator_community_post_delete(request):
+    if request.user.id and request.user.check_roles({ 'admin', 'moderator', 'manager', 'community manager' }):
+        if validate(request.params, MODELS['moderator_community_post_delete']):
+            await extra_delete_post(request.params['id'])
+            dispatch('post_update', request)
             return OrjsonResponse({})
         else:
             return err(400, 'Неверный запрос')

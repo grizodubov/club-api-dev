@@ -475,3 +475,57 @@ def sort_communities(communities, stats):
                 return -1
         return 0
     return sorted(communities, key = cmp_to_key(communities_compare))
+
+
+
+###############################################################
+async def extra_update_post(post_id, data):
+    api = get_api_context()
+    temp = await api.pg.club.fetchrow(
+        """SELECT
+                t1.id AS post_id, t1.author_id AS post_author_id, t1.closed AS post_closed, t1.helpful AS post_helpful,
+                t2.id AS parent_id, t2.author_id AS parent_author_id, t2.closed AS parent_closed, t2.helpful AS parent_helpful
+            FROM
+                posts t1
+            LEFT JOIN
+                posts t2 ON t2.id = t1.reply_to_post_id
+            WHERE
+                t1.id = $1""",
+        post_id
+    )
+    if not temp:
+        return False
+    if data['closed'] and temp['parent_id'] is not None:
+        return False
+    if data['helpful'] and (temp['parent_id'] is None or temp['post_author_id'] == temp['parent_author_id']):
+        return False
+    id = await api.pg.club.fetchval( 
+        """UPDATE
+                posts
+            SET
+                text = $2,
+                helpful = $3,
+                closed = $4
+            WHERE
+                id = $1
+            RETURNING
+                id""",
+        post_id, data['text'], data['helpful'], data['closed']
+    )
+    if not id:
+        return False
+    return True
+
+
+
+###############################################################
+async def extra_delete_post(post_id):
+    api = get_api_context()
+    await api.pg.club.execute( 
+        """DELETE FROM
+                posts
+            WHERE
+                id = $1""",
+        post_id
+    )
+    return True
