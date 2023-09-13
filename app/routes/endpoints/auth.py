@@ -29,6 +29,8 @@ def routes():
         Route('/terminate', terminate, methods = [ 'POST' ]),
 
         Route('/m/login', moderator_login, methods = [ 'POST' ]),
+        Route('/m/login/mobile/validate', moderator_login_mobile_validate, methods = [ 'POST' ]),
+        Route('/m/login/email/validate', moderator_login_email_validate, methods = [ 'POST' ]),
 
         Route('/new/validate', new_validate, methods = [ 'POST' ]),
         Route('/new/register', new_register, methods = [ 'POST' ]),
@@ -172,6 +174,34 @@ MODELS = {
 			'type': 'str',
             'length_min': 4,
             'processing': lambda x: x.strip(),
+		},
+	},
+	'moderator_login_mobile_validate': {
+		'account': {
+			'required': True,
+			'type': 'str',
+            'length_min': 4,
+            'processing': lambda x: x.strip().lower(),
+		},
+		'code': {
+			'required': True,
+			'type': 'str',
+            'length': 4,
+            'pattern': r'^\d{4}$',
+		},
+	},
+	'moderator_login_email_validate': {
+		'account': {
+			'required': True,
+			'type': 'str',
+            'length_min': 4,
+            'processing': lambda x: x.strip().lower(),
+		},
+		'code': {
+			'required': True,
+			'type': 'str',
+            'length': 4,
+            'pattern': r'^\d{4}$',
 		},
 	},
     # new
@@ -517,6 +547,52 @@ async def moderator_login(request):
             return err(403, 'Пользователь и / или пароль не верны')
     else:
         return err(400, 'Не указаны логин и / или пароль')
+
+
+
+################################################################
+async def moderator_login_email_validate(request):
+    await asyncio.sleep(.5)
+    if validate(request.params, MODELS['moderator_login_email_validate']):
+        user = User()
+        if await user.find(email = request.params['account']):
+            if await user.check_validation_code(code = request.params['code']):
+                if set(user.roles) & { 'admin', 'moderator', 'editor', 'manager', 'community manager' }:
+                    await request.session.assign(user.id)
+                    request.user.copy(user = user)
+                    request.api.websocket_update(request.session.id, request.user.id)
+                    return OrjsonResponse({})
+                else:
+                    return err(403, 'Нет доступа')
+            else:
+                return err(403, 'Код не верен')
+        else:
+            return err(404, 'Пользователь не найден')
+    else:
+        return err(400, 'Не указан email')
+
+
+
+################################################################
+async def moderator_login_mobile_validate(request):
+    await asyncio.sleep(.5)
+    if validate(request.params, MODELS['moderator_login_mobile_validate']):
+        user = User()
+        if await user.find(phone = request.params['account']):
+            if await user.check_validation_code(code = request.params['code']):
+                if set(user.roles) & { 'admin', 'moderator', 'editor', 'manager', 'community manager' }:
+                    await request.session.assign(user.id)
+                    request.user.copy(user = user)
+                    request.api.websocket_update(request.session.id, request.user.id)
+                    return OrjsonResponse({})
+                else:
+                    return err(403, 'Нет доступа')
+            else:
+                return err(403, 'Код не верен')
+        else:
+            return err(404, 'Пользователь не найден')
+    else:
+        return err(400, 'Не указан email')
 
 
 
