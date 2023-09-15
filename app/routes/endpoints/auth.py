@@ -24,6 +24,7 @@ def routes():
         Route('/login', login, methods = [ 'POST' ]),
         Route('/logout', logout, methods = [ 'POST' ]),
         Route('/check/token', check_token, methods = [ 'POST' ]),
+        Route('/check/avatar/upload', check_avatar_upload, methods = [ 'POST' ]),
         Route('/register', register, methods = [ 'POST' ]),
         Route('/register/validate', register_validate, methods = [ 'POST' ]),
         Route('/terminate', terminate, methods = [ 'POST' ]),
@@ -104,6 +105,20 @@ MODELS = {
             'length': 64,
             'pattern': r'^[0-9A-Fa-f]{64}$',
 		},
+	},
+	'check_avatar_upload': {
+		'token': {
+			'required': True,
+			'type': 'str',
+            'length': 64,
+            'pattern': r'^[0-9A-Fa-f]{64}$',
+		},
+        'owner_id': {
+            'required': True,
+			'type': 'int',
+            'value_min': 1,
+            'null': True,
+        },
 	},
 	'register': {
 		'name': {
@@ -454,6 +469,40 @@ async def check_token(request):
                 })
             else:
                 return err(404, 'Пользователь не найден')
+        else:
+            return err(403, 'Нет доступа')
+    else:
+        return err(400, 'Неверный токен')
+
+
+
+################################################################
+async def check_avatar_upload(request):
+    if validate(request.params, MODELS['check_avatar_upload']):
+        if request.user.id == 1010:
+            result = await check_by_token(request.params['token'])
+            if result and result['user_id']:
+                user = User()
+                await user.set(id = result['user_id'])
+                owner_id = request.params['owner_id']
+                if owner_id is None:
+                    owner_id = result['user_id']
+                owner = User()
+                await owner.set(id = owner_id)
+                if owner.id:
+                    if user.id == owner.id or \
+                            (set(user.roles) & { 'community manager' } and owner.community_manager_id == user.id) or \
+                            set(user.roles) & { 'admin', 'manager' }:
+                        return OrjsonResponse({
+                            'owner_id': owner.id,
+                            'access': True,
+                        })
+                    else:
+                        return err(403, 'Нет доступа')
+                else:
+                    return err(404, 'Пользователь не найден [owner]')
+            else:
+                return err(404, 'Пользователь не найден [initiator]')
         else:
             return err(403, 'Нет доступа')
     else:
