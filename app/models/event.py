@@ -57,7 +57,7 @@ class Event:
                         events t1
                     LEFT JOIN
                         (SELECT item_id, count(user_id) AS thumbs_up FROM items_thumbsup GROUP BY item_id) t2 ON t2.item_id = t1.id
-                    """ + where_query + """ORDER BY t1.time_event DESC""",
+                    """ + where_query + """ORDER BY t1.time_event""",
             *args
         )
         for row in data:

@@ -42,8 +42,10 @@ async def get_feed():
                 WHERE
                     t3.active IS TRUE
             ) t5
+            WHERE
+                t5.time_sort >= now() at time zone 'utc' - interval \'24 hours\'
             ORDER BY
-                t5.time_sort DESC
+                t5.time_sort
             LIMIT 50"""
     )
     for row in data:
