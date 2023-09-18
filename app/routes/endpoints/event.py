@@ -46,6 +46,11 @@ MODELS = {
             'value_min': 1,
             'default': 1,
         },
+        'reverse': {
+            'required': True,
+            'type': 'bool',
+            'default': False,
+        },
 	},
 	'moderator_event_update': {
 		'id': {
@@ -149,7 +154,7 @@ async def events_feed(request):
 async def moderator_event_list(request):
     if request.user.id and request.user.check_roles({ 'admin', 'editor', 'manager', 'community manager' }):
         if validate(request.params, MODELS['moderator_event_list']):
-            result = await Event.list()
+            result = await Event.list(reverse = request.params['reverse'])
             i = (request.params['page'] - 1) * 10
             return OrjsonResponse({
                 'events': [ item.show() for item in result[i:i + 10] ],

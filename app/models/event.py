@@ -27,7 +27,7 @@ class Event:
     
     ################################################################
     @classmethod
-    async def list(cls, active_only = False, start = None, finish = None):
+    async def list(cls, active_only = False, start = None, finish = None, reverse = False):
         api = get_api_context()
         result = []
         where = []
@@ -47,6 +47,9 @@ class Event:
         if where:
             where_query = ' WHERE ' + ' AND '.join(where) + ' '
         # print(where_query)
+        reverse_query = ''
+        if reverse:
+            reverse_query = ' DESC'
         data = await api.pg.club.fetch(
             """SELECT
                         t1.id, t1.time_create, t1.time_update,
@@ -57,7 +60,7 @@ class Event:
                         events t1
                     LEFT JOIN
                         (SELECT item_id, count(user_id) AS thumbs_up FROM items_thumbsup GROUP BY item_id) t2 ON t2.item_id = t1.id
-                    """ + where_query + """ORDER BY t1.time_event""",
+                    """ + where_query + """ORDER BY t1.time_event""" + reverse_query,
             *args
         )
         for row in data:
