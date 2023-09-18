@@ -18,7 +18,7 @@ class Group:
         self.time_update = None
         self.name = ''
         self.description = ''
-        self.avatar = False
+        self.avatar_hash = None
         self.users = []
 
 
@@ -42,9 +42,12 @@ class Group:
         data = await api.pg.club.fetch(
             """SELECT
                     t1.id, t1.time_create, t1.time_update,
-                    t1.name, t1.description, coalesce(t2.users, '{}'::bigint[]) AS users
+                    t1.name, t1.description, coalesce(t2.users, '{}'::bigint[]) AS users,
+                    t8.hash AS avatar_hash
                 FROM
                     groups t1
+                LEFT JOIN
+                    avatars t8 ON t8.owner_id = t1.id AND t8.active IS TRUE
                 LEFT JOIN
                     (
                         SELECT
@@ -59,7 +62,6 @@ class Group:
         for row in data:
             item = Group()
             item.__dict__ = dict(row)
-            item.check_avatar()
             result.append(item)
         if count:
             amount = len(result)
@@ -98,9 +100,12 @@ class Group:
             data = await api.pg.club.fetchrow(
                 """SELECT
                         t1.id, t1.time_create, t1.time_update,
-                        t1.name, t1.description, coalesce(t2.users, '{}'::bigint[]) AS users
+                        t1.name, t1.description, coalesce(t2.users, '{}'::bigint[]) AS users,
+                        t8.hash AS avatar_hash
                     FROM
                         groups t1
+                    LEFT JOIN
+                        avatars t8 ON t8.owner_id = t1.id AND t8.active IS TRUE
                     LEFT JOIN
                         (
                             SELECT
@@ -115,7 +120,6 @@ class Group:
                 id
             )
             self.__dict__ = dict(data)
-            self.check_avatar()
 
 
     ################################################################
@@ -168,10 +172,6 @@ class Group:
         self.__dict__ = user.__dict__.copy()
 
 
-    ################################################################
-    def check_avatar(self):
-        self.avatar = os.path.isfile('/var/www/media.clubgermes.ru/html/avatars/' + str(self.id) + '.jpg')
-
 
     ################################################################
     async def create(self, **kwargs):
@@ -187,9 +187,3 @@ class Group:
             kwargs['description']
         )
         await self.set(id = id)
-
-
-
-################################################################
-def check_avatar_by_id(id):
-    return os.path.isfile('/var/www/media.clubgermes.ru/html/avatars/' + str(id) + '.jpg')

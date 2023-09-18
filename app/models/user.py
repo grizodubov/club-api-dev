@@ -43,7 +43,6 @@ class User:
         self.roles = []
         self._password = ''
         self.avatar_hash = None
-        self.avatar = False
         self.online = False
         self.community_manager_id = 0
 
@@ -124,7 +123,6 @@ class User:
         for row in data:
             item = User()
             item.__dict__ = dict(row)
-            item.check_avatar()
             item.check_online()
             result.append(item)
         if count:
@@ -321,7 +319,6 @@ class User:
             )
             if data:
                 self.__dict__ = dict(data)
-                self.check_avatar()
                 self.check_online()
 
 
@@ -511,7 +508,6 @@ class User:
                 )
                 if data:
                     self.__dict__ = dict(data)
-                    self.check_avatar()
                     self.check_online()
                     return True
         return False
@@ -572,7 +568,6 @@ class User:
             )
             if data and data['_password'] == password:
                 self.__dict__ = dict(data)
-                self.check_avatar()
                 self.check_online()
                 return True
         return False
@@ -746,7 +741,7 @@ class User:
                     t5.user_id = $1""",
             self.id
         )
-        return [ dict(item) | { 'avatar': check_avatar_by_id(item['id']), 'online': check_online_by_id(item['id']) } for item in data ]
+        return [ dict(item) | { 'online': check_online_by_id(item['id']) } for item in data ]
 
 
     ################################################################
@@ -861,8 +856,8 @@ class User:
             query2, self.id, amount
         )
         return {
-            'tags': [ dict(item) | { 'avatar': check_avatar_by_id(item['id']), 'online': check_online_by_id(item['id']) } for item in data1 ],
-            'interests': [ dict(item) | { 'avatar': check_avatar_by_id(item['id']), 'online': check_online_by_id(item['id']) } for item in data2 ],
+            'tags': [ dict(item) | { 'online': check_online_by_id(item['id']) } for item in data1 ],
+            'interests': [ dict(item) | { 'online': check_online_by_id(item['id']) } for item in data2 ],
         }
 
 
@@ -1004,7 +999,7 @@ class User:
                 WHERE """ + query_condition + """ LIMIT 100""",
             *args
         )
-        return [ dict(item) | { 'avatar': check_avatar_by_id(item['id']), 'online': check_online_by_id(item['id']) } for item in data ]
+        return [ dict(item) | { 'online': check_online_by_id(item['id']) } for item in data ]
 
 
 
@@ -1109,11 +1104,6 @@ class User:
         if data == group_id:
             return True
         return False
-
-
-    ################################################################
-    def check_avatar(self):
-        self.avatar = os.path.isfile('/var/www/media.clubgermes.ru/html/avatars/' + str(self.id) + '.jpg')
     
 
     ################################################################
@@ -1271,12 +1261,6 @@ class User:
 
 
 ################################################################
-def check_avatar_by_id(id):
-    return os.path.isfile('/var/www/media.clubgermes.ru/html/avatars/' + str(id) + '.jpg')
-
-
-
-################################################################
 def check_online_by_id(id):
     api = get_api_context()
     if id in api.users_online():
@@ -1368,7 +1352,6 @@ async def get_residents():
     for row in data:
         item = User()
         item.__dict__ = dict(row)
-        item.check_avatar()
         item.check_online()
         result.append(item)
     return result

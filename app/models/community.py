@@ -17,7 +17,6 @@ class Community:
         self.time_update = None
         self.name = ''
         self.description = ''
-        self.avatar = False
         self.avatar_hash = None
         self.members = []
 
@@ -62,7 +61,6 @@ class Community:
         for row in data:
             item = Community()
             item.__dict__ = dict(row)
-            item.check_avatar()
             result.append(item)
         if count:
             amount = len(result)
@@ -121,7 +119,6 @@ class Community:
                 id
             )
             self.__dict__ = dict(data)
-            self.check_avatar()
 
 
     ################################################################
@@ -175,11 +172,6 @@ class Community:
 
 
     ################################################################
-    def check_avatar(self):
-        self.avatar = os.path.isfile('/var/www/media.clubgermes.ru/html/avatars/' + str(self.id) + '.jpg')
-
-
-    ################################################################
     async def create(self, **kwargs):
         api = get_api_context()
         id = await api.pg.club.fetchval(
@@ -218,12 +210,6 @@ async def find_questions(community_id, words):
         ' | '.join(words), community_id
     )
     return [ dict(item) for item in data ]
-
-
-
-################################################################
-def check_avatar_by_id(id):
-    return os.path.isfile('/var/www/media.clubgermes.ru/html/avatars/' + str(id) + '.jpg')
 
 
 
@@ -308,16 +294,13 @@ async def get_posts(community_id, user_id):
         community_id, user_id
     )
     unique_authors_ids = set([ item['author_id'] for item in data ])
-    authors_avatars = {}
-    for author_id in unique_authors_ids:
-        authors_avatars[str(author_id)] = check_avatar_by_id(author_id)
     temp = {}
     for item in data:
         if item['reply_to_post_id'] is None:
             q = str(item['question_id'])
             if q not in temp:
                 temp[q] = {
-                    'question': dict(item) | { 'author_avatar': authors_avatars[str(item['author_id'])] },
+                    'question': dict(item),
                     'answers': [],
                     'time_last_post': item['time_create'],
                     'time_last_post_new': item['time_create'] if item['time_view'] is None else None
@@ -326,7 +309,7 @@ async def get_posts(community_id, user_id):
         if item['reply_to_post_id'] is not None:
             q = str(item['question_id'])
             if q in temp:
-                temp[q]['answers'].append(dict(item) | { 'author_avatar': authors_avatars[str(item['author_id'])] })
+                temp[q]['answers'].append(dict(item))
                 if temp[q]['time_last_post'] < item['time_create']:
                     temp[q]['time_last_post'] = item['time_create']
                 if item['time_view'] is None:

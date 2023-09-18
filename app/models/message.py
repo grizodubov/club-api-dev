@@ -144,7 +144,7 @@ async def get_chats(user_id, chat_id = None, default_id = 1050):
                 t3.messages_unread_exist DESC, t4.time_create DESC, t3.chat_id""",
         user_id, default_id
     )
-    chats = [ dict(item) | { 'avatar': check_avatar_by_id(item['chat_id']), 'online': check_online_by_id(item['chat_id']) } for item in data ]
+    chats = [ dict(item) | { 'online': check_online_by_id(item['chat_id']) } for item in data ]
     chats_ids = [ item['chat_id'] for item in chats ]
     if chat_id and chat_id not in chats_ids:
         name = await api.pg.club.fetchval( 
@@ -160,7 +160,6 @@ async def get_chats(user_id, chat_id = None, default_id = 1050):
                 'max_message_id': None,
                 'max_message_text': None,
                 'max_message_time_create': None,
-                'avatar': check_avatar_by_id(chat_id),
                 'online': check_online_by_id(chat_id),
             })
         else:
@@ -177,7 +176,6 @@ async def get_chats(user_id, chat_id = None, default_id = 1050):
                     'max_message_id': None,
                     'max_message_text': None,
                     'max_message_time_create': None,
-                    'avatar': check_avatar_by_id(chat_id),
                     'online': check_online_by_id(chat_id),
                 })
     return chats
@@ -284,13 +282,10 @@ async def query_messages(user_id, chat_id, chat_model, fragments):
             *args
         )
     unique_authors_ids = set([ item['author_id'] for item in data ])
-    authors_avatars = {}
     authors_online = {}
     for author_id in unique_authors_ids:
-        authors_avatars[str(author_id)] = check_avatar_by_id(author_id)
-    for author_id in unique_authors_ids:
         authors_online[str(author_id)] = check_online_by_id(author_id)
-    return [ dict(item) | { 'author_avatar': authors_avatars[str(item['author_id'])], 'online': authors_online[str(item['author_id'])] } for item in data ]
+    return [ dict(item) | { 'online': authors_online[str(item['author_id'])] } for item in data ]
 
 
 
@@ -342,7 +337,7 @@ async def add_message(user_id, chat_id, chat_model, text, reply_to_message_id = 
         message['reply_to_author_id'] = reply_to['author_id']
         message['reply_to_author_name'] = reply_to['name']
         message['reply_to_text'] = reply_to['text']
-    return message | { 'author_avatar': check_avatar_by_id(user_id), 'author_online': check_online_by_id(user_id) }
+    return message | { 'author_online': check_online_by_id(user_id) }
 
 
 
@@ -387,12 +382,6 @@ async def view_messages(user_id, messages_ids):
         user_id, *args
     )
     return [ { 'message_id': row['item_id'], 'time_view': row['time_view'] } for row in data ]
-
-
-
-################################################################
-def check_avatar_by_id(id):
-    return os.path.isfile('/var/www/media.clubgermes.ru/html/avatars/' + str(id) + '.jpg')
 
 
 

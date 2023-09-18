@@ -12,6 +12,7 @@ from app.models.session import check_by_token
 from app.helpers.email import send_email
 from app.helpers.mobile import send_mobile_message
 from app.helpers.templates import VERIFICATION_CODE
+from app.models.item import Item
 
 
 
@@ -487,20 +488,34 @@ async def check_avatar_upload(request):
                 owner_id = request.params['owner_id']
                 if owner_id is None:
                     owner_id = result['user_id']
-                owner = User()
-                await owner.set(id = owner_id)
-                if owner.id:
-                    if user.id == owner.id or \
-                            (set(user.roles) & { 'community manager' } and owner.community_manager_id == user.id) or \
-                            set(user.roles) & { 'admin', 'manager' }:
-                        return OrjsonResponse({
-                            'owner_id': owner.id,
-                            'access': True,
-                        })
+                item = Item()
+                await item.set(id = owner_id)
+                if item.id and item.model in { 'user', 'group', 'community' }:
+                    if item.model == 'user':
+                        owner = User()
+                        await owner.set(id = owner_id)
+                        if owner.id:
+                            if user.id == owner.id or \
+                                    (set(user.roles) & { 'community manager' } and owner.community_manager_id == user.id) or \
+                                    set(user.roles) & { 'admin', 'manager' }:
+                                return OrjsonResponse({
+                                    'owner_id': owner_id,
+                                    'access': True,
+                                })
+                            else:
+                                return err(403, 'Нет доступа')
+                        else:
+                            return err(404, 'Пользователь не найден [owner]')
                     else:
-                        return err(403, 'Нет доступа')
+                        if set(user.roles) & { 'admin', 'manager' }:
+                            return OrjsonResponse({
+                                'owner_id': owner_id,
+                                'access': True,
+                            })
+                        else:
+                            return err(403, 'Нет доступа')
                 else:
-                    return err(404, 'Пользователь не найден [owner]')
+                    return err(404, 'Объект не найден [owner]')
             else:
                 return err(404, 'Пользователь не найден [initiator]')
         else:

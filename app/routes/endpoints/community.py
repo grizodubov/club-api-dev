@@ -6,7 +6,7 @@ from app.core.request import err
 from app.core.response import OrjsonResponse
 from app.core.event import dispatch
 from app.utils.validate import validate
-from app.models.community import Community, get_stats, get_posts, sort_communities, add_post, update_post, check_post, check_question, check_answer, check_avatar_by_id, find_questions, extra_update_post, extra_delete_post
+from app.models.community import Community, get_stats, get_posts, sort_communities, add_post, update_post, check_post, check_question, check_answer, find_questions, extra_update_post, extra_delete_post
 from app.models.user import User
 from app.models.item_ import Items
 
@@ -192,7 +192,7 @@ async def community_list(request):
             cm = Community()
             await cm.set(id = community['id'])
             communities_full.append(
-                cm.show() | { 'avatar': check_avatar_by_id(community['id']) }
+                cm.show()
             )
         return OrjsonResponse({
             'communities': communities_full,
