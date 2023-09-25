@@ -26,6 +26,7 @@ def routes():
         Route('/logout', logout, methods = [ 'POST' ]),
         Route('/check/token', check_token, methods = [ 'POST' ]),
         Route('/check/avatar/upload', check_avatar_upload, methods = [ 'POST' ]),
+        Route('/check/event/upload', check_event_upload, methods = [ 'POST' ]),
         Route('/register', register, methods = [ 'POST' ]),
         Route('/register/validate', register_validate, methods = [ 'POST' ]),
         Route('/terminate', terminate, methods = [ 'POST' ]),
@@ -120,6 +121,14 @@ MODELS = {
             'value_min': 1,
             'null': True,
         },
+	},
+	'check_event_upload': {
+		'token': {
+			'required': True,
+			'type': 'str',
+            'length': 64,
+            'pattern': r'^[0-9A-Fa-f]{64}$',
+		},
 	},
 	'register': {
 		'name': {
@@ -521,6 +530,29 @@ async def check_avatar_upload(request):
         else:
             return err(403, 'Нет доступа')
     else:
+        return err(400, 'Неверный токен')
+
+
+
+################################################################
+async def check_event_upload(request):
+    if validate(request.params, MODELS['check_event_upload']):
+        if request.user.id == 1010:
+            result = await check_by_token(request.params['token'])
+            if result and result['user_id']:
+                user = User()
+                await user.set(id = result['user_id'])
+                if user.id and set(user.roles) & { 'admin', 'manager', 'moderator', 'editor' }:
+                    return OrjsonResponse({
+                        'access': True,
+                    })
+                else:
+                    return err(403, 'Нет доступа')
+            else:
+                return err(404, 'Пользователь не найден [initiator]')
+        else:
+            return err(403, 'Нет доступа')
+     else:
         return err(400, 'Неверный токен')
 
 
