@@ -73,7 +73,7 @@ MODELS = {
 		'format': {
 			'required': True,
 			'type': 'str',
-            'values': [ 'forum', 'breakfast', 'webinar', 'club', 'meeting', 'education' ],
+            'values': [ 'forum', 'breakfast', 'webinar', 'club', 'meeting', 'education', 'tender', 'place', 'network', 'expert', 'mission', 'guest' ],
 		},
 		'place': {
 			'required': True,
@@ -103,7 +103,7 @@ MODELS = {
 		'format': {
 			'required': True,
 			'type': 'str',
-            'values': [ 'forum', 'breakfast', 'webinar', 'club', 'meeting', 'education' ],
+            'values': [ 'forum', 'breakfast', 'webinar', 'club', 'meeting', 'education', 'tender', 'place', 'network', 'expert', 'mission', 'guest' ],
 		},
 		'place': {
 			'required': True,
