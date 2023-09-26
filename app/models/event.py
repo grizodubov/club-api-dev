@@ -97,25 +97,37 @@ class Event:
 
     ################################################################
     def set_patch(self, patch):
+        menu = [
+            {
+                "name": 'О мероприятии',
+                "icon": "Information20",
+            }
+        ]
+        html = [
+            '<h1 id="О мероприятии" class="text-lg font-semibold">' + self.name + '</h1>'
+        ]
+        images = []
         if patch['blocks']:
-            menu = [
-                {
-                    "name": 'О мероприятии',
-                    "icon": "Information20",
-                }
-            ]
-            html = [
-                '<h1 id="О мероприятии" class="text-lg font-semibold">' + self.name + '</h1>'
-            ]
             for block in patch['blocks']:
                 if block['anchor']:
-                    menu.append({
-                        "name": re.sub(r'[^\dA-Za-zАБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯабвгдеёжзийклмнопрстуфхцчшщъыьэюя\.\,\(\)\-\_\! ]+', '', block['anchor']),
-                        "icon": "Information20",
-                    })
-                    html.append('<h3 id="' + block['anchor'] + '" class="mt-6 font-semibold">' + block['anchor'] + '</h3>')
+                    anchor = re.sub(r'[^\dA-Za-zАБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯабвгдеёжзийклмнопрстуфхцчшщъыьэюя\.\,\(\)\-\_\!\&\*\%\$\# ]+', '', block['anchor'])
+                    if anchor.strip():
+                        menu.append({
+                            "name": anchor.strip(),
+                            "icon": block['icon'],
+                        })
+                        html.append('<h3 id="' + block['anchor'] + '" class="mt-6 font-semibold">' + block['anchor'] + '</h3>')
                 if block['type'] == 'image':
                     html.append('<img class="rounded-xl w-full mt-6" src="https://static.clubgermes.ru/events/' + str(self.id) + '/patch/' + block['data'] + '.jpg" alt="" />')
+                    images.append(block['data'] + '.jpg')
+                else:
+                    html.append('<div class="mt-5 text-sm">' + block['data'] + '</div>')
+        # clear images
+        dir = '/var/www/static.clubgermes.ru/html/events/' + str(self.id) + '/patch'
+        for root, dirs, files in os.walk(dir):
+            for name in files:
+                if name not in images:
+                    os.remove(os.path.join(root, name))
         html_file = '/var/www/static.clubgermes.ru/html/events/' + str(self.id) + '/index.html'
         with open(html_file, 'w', encoding='utf-8') as file:
             file.write('\n'.join(html))
