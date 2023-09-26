@@ -13,6 +13,7 @@ from app.helpers.email import send_email
 from app.helpers.mobile import send_mobile_message
 from app.helpers.templates import VERIFICATION_CODE
 from app.models.item import Item
+from app.models.event import Event
 
 
 
@@ -129,6 +130,11 @@ MODELS = {
             'length': 64,
             'pattern': r'^[0-9A-Fa-f]{64}$',
 		},
+        'event_id': {
+            'required': True,
+			'type': 'int',
+            'value_min': 1,
+        },
 	},
 	'register': {
 		'name': {
@@ -543,16 +549,22 @@ async def check_event_upload(request):
                 user = User()
                 await user.set(id = result['user_id'])
                 if user.id and set(user.roles) & { 'admin', 'manager', 'moderator', 'editor' }:
-                    return OrjsonResponse({
-                        'access': True,
-                    })
+                    event = Event()
+                    await event.set(id = request.params['event_id'])
+                    if event.id:
+                        return OrjsonResponse({
+                            'access': True,
+                            'event_id': event.id,
+                        })
+                    else:
+                        return err(404, 'Событие не найдено')
                 else:
                     return err(403, 'Нет доступа')
             else:
                 return err(404, 'Пользователь не найден [initiator]')
         else:
             return err(403, 'Нет доступа')
-     else:
+    else:
         return err(400, 'Неверный токен')
 
 

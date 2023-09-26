@@ -1,4 +1,5 @@
 import asyncio
+import orjson
 from starlette.routing import Route
 
 from app.core.request import err
@@ -16,6 +17,7 @@ def routes():
         Route('/m/event/list', moderator_event_list, methods = [ 'POST' ]),
         Route('/m/event/update', moderator_event_update, methods = [ 'POST' ]),
         Route('/m/event/create', moderator_event_create, methods = [ 'POST' ]),
+        Route('/m/event/patch', moderator_event_patch, methods = [ 'POST' ]),
     ]
 
 
@@ -117,6 +119,18 @@ MODELS = {
 			'type': 'str',
 		},
 	},
+	'moderator_event_patch': {
+		'id': {
+			'required': True,
+			'type': 'int',
+            'value_min': 1,
+		},
+        'patch': {
+			'required': True,
+			'type': 'str',
+            'length_min': 3,
+		},
+	},
 }
 
 
@@ -156,8 +170,13 @@ async def moderator_event_list(request):
         if validate(request.params, MODELS['moderator_event_list']):
             result = await Event.list(reverse = request.params['reverse'])
             i = (request.params['page'] - 1) * 10
+            events = []
+            for event in result[i:i + 10]:
+                events.append(
+                    event.show() | event.get_patch()
+                )
             return OrjsonResponse({
-                'events': [ item.show() for item in result[i:i + 10] ],
+                'events': events,
                 'amount': len(result),
             })
         else:
@@ -194,6 +213,33 @@ async def moderator_event_create(request):
             await event.create(**request.params)
             dispatch('event_create', request)
             return OrjsonResponse({})
+        else:
+            return err(400, 'Неверный запрос')
+    else:
+        return err(403, 'Нет доступа')
+
+
+
+################################################################
+async def moderator_event_patch(request):
+    if request.user.id and request.user.check_roles({ 'admin', 'editor', 'manager' }):
+        if validate(request.params, MODELS['moderator_event_patch']):
+            event = Event()
+            await event.set(id = request.params['id'])
+            if event.id:
+                data = None
+                try:
+                    data = orjson.loads(request.params['patch'])
+                except:
+                    data = None
+                if data:
+                    event.set_patch(data)
+                    dispatch('event_update', request)
+                    return OrjsonResponse({})
+                else:
+                    return err(400, 'Неверный запрос')
+            else:
+                return err(404, 'Группа не найдена')
         else:
             return err(400, 'Неверный запрос')
     else:

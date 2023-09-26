@@ -1,4 +1,6 @@
-import os.path
+import os
+import re
+import orjson
 
 from app.core.context import get_api_context
 
@@ -76,6 +78,54 @@ class Event:
     ################################################################
     def show(self):
         return { k: v for k, v in self.__dict__.items() if not k.startswith('_') }
+
+
+
+    ################################################################
+    def get_patch(self):
+        data = None
+        patch = '/var/www/static.clubgermes.ru/html/events/' + str(self.id) + '/patch.json'
+        if os.path.isfile(patch):
+            with open(patch, 'rb') as openfile:
+                try:
+                    data = orjson.loads(openfile.read())
+                except:
+                    data = None
+        return { '_patch': data }
+
+
+
+    ################################################################
+    def set_patch(self, patch):
+        if patch['blocks']:
+            menu = [
+                {
+                    "name": 'О мероприятии',
+                    "icon": "Information20",
+                }
+            ]
+            html = [
+                '<h1 id="О мероприятии" class="text-lg font-semibold">' + self.name + '</h1>'
+            ]
+            for block in patch['blocks']:
+                if block['anchor']:
+                    menu.append({
+                        "name": re.sub(r'[^\dA-Za-zАБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯабвгдеёжзийклмнопрстуфхцчшщъыьэюя\.\,\(\)\-\_\! ]+', '', block['anchor']),
+                        "icon": "Information20",
+                    })
+                    html.append('<h3 id="' + block['anchor'] + '" class="mt-6 font-semibold">' + block['anchor'] + '</h3>')
+                if block['type'] == 'image':
+                    html.append('<img class="rounded-xl w-full mt-6" src="https://static.clubgermes.ru/events/' + str(self.id) + '/patch/' + block['data'] + '.jpg" alt="" />')
+        html_file = '/var/www/static.clubgermes.ru/html/events/' + str(self.id) + '/index.html'
+        with open(html_file, 'w', encoding='utf-8') as file:
+            file.write('\n'.join(html))
+        menu_file = '/var/www/static.clubgermes.ru/html/events/' + str(self.id) + '/menu.json'
+        with open(menu_file, 'w', encoding='utf-8') as file:
+            file.write(str(orjson.dumps(menu, option=orjson.OPT_INDENT_2), 'UTF-8'))
+        patch_file = '/var/www/static.clubgermes.ru/html/events/' + str(self.id) + '/patch.json'
+        with open(patch_file, 'w', encoding='utf-8') as file:
+            file.write(str(orjson.dumps(patch, option=orjson.OPT_INDENT_2), 'UTF-8'))
+
 
 
     ################################################################
