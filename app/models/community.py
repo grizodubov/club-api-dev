@@ -16,9 +16,12 @@ class Community:
         self.time_create = None
         self.time_update = None
         self.name = ''
+        self.name_meta = ''
         self.description = ''
         self.avatar_hash = None
         self.members = []
+        self.parent_id = None
+        self.tags = ''
 
 
     ################################################################
@@ -40,22 +43,32 @@ class Community:
             conditions_query = ' WHERE ' + ' AND '.join(conditions)
         data = await api.pg.club.fetch(
             """SELECT
-                    t1.id, t1.time_create, t1.time_update,
-                    t1.name, t1.description, coalesce(t2.members, '{}'::bigint[]) AS members,
-                    t8.hash AS avatar_hash
-                FROM
-                    communities t1
-                LEFT JOIN
-                    avatars t8 ON t8.owner_id = t1.id AND t8.active IS TRUE
-                LEFT JOIN
-                    (
-                        SELECT
-                            community_id, array_agg(user_id) AS members
-                        FROM
-                            communities_members
-                        GROUP BY
-                            community_id
-                    ) t2 ON t2.community_id = t1.id""" + conditions_query + ' ORDER BY t1.name' + slice_query,
+                    *
+                FROM (
+                    SELECT
+                        t1.id, t1.time_create, t1.time_update,
+                        t1.name, t1.description, coalesce(t2.members, '{}'::bigint[]) AS members,
+                        t1.tags, t1.parent_id,
+                        t8.hash AS avatar_hash,
+                        concat(t7.name || ' : ', t1.name) AS name_meta
+                    FROM
+                        communities t1
+                    LEFT JOIN
+                        communities t7 ON t7.id = t1.parent_id
+                    LEFT JOIN
+                        avatars t8 ON t8.owner_id = t1.id AND t8.active IS TRUE
+                    LEFT JOIN
+                        (
+                            SELECT
+                                community_id, array_agg(user_id) AS members
+                            FROM
+                                communities_members
+                            GROUP BY
+                                community_id
+                        ) t2 ON t2.community_id = t1.id""" + conditions_query + """
+                ) m
+                ORDER BY
+                    m.name_meta""" + slice_query,
             *args
         )
         for row in data:
@@ -100,9 +113,13 @@ class Community:
                 """SELECT
                         t1.id, t1.time_create, t1.time_update,
                         t1.name, t1.description, coalesce(t2.members, '{}'::bigint[]) AS members,
-                        t8.hash AS avatar_hash
+                        t1.tags, t1.parent_id,
+                        t8.hash AS avatar_hash,
+                        concat(t7.name || ' : ', t1.name) AS name_meta
                     FROM
                         communities t1
+                    LEFT JOIN
+                        communities t7 ON t7.id = t1.parent_id
                     LEFT JOIN
                         avatars t8 ON t8.owner_id = t1.id AND t8.active IS TRUE
                     LEFT JOIN
@@ -127,10 +144,14 @@ class Community:
         cursor = 2
         query = []
         args = []
-        for k in { 'name', 'description' }:
+        for k in { 'name', 'description', 'parent_id', 'tags' }:
             if k in kwargs:
                 query.append(k + ' = $' + str(cursor))
-                args.append(kwargs[k])
+                if k == 'tags':
+                    temp = ', '.join(set(sorted(re.split(r'\s*,\s*', kwargs[k]))))
+                else:
+                    temp = kwargs[k]
+                args.append(temp)
                 cursor += 1
         if query:
             await api.pg.club.execute(
@@ -512,3 +533,39 @@ async def extra_delete_post(post_id):
         post_id
     )
     return True
+
+
+
+###############################################################
+async def get_data_for_select():
+    api = get_api_context()
+    temp = await api.pg.club.fetch(
+        """SELECT
+                *
+            FROM (
+                SELECT
+                    t1.id, concat(t7.name || ' : ', t1.name) AS name, t1.parent_id
+                FROM
+                    communities t1
+                LEFT JOIN
+                    communities t7 ON t7.id = t1.parent_id
+            ) m
+            ORDER BY
+                m.name"""
+    )
+    return {
+        'all': [
+            {
+                'id': item['id'],
+                'name': item['name'],
+            }
+            for item in temp
+        ],
+        'root': [
+            {
+                'id': item['id'],
+                'name': item['name'],
+            }
+            for item in temp if item['parent_id'] is None
+        ],
+    }

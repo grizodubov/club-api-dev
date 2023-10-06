@@ -6,7 +6,7 @@ from app.core.request import err
 from app.core.response import OrjsonResponse
 from app.core.event import dispatch
 from app.utils.validate import validate
-from app.models.community import Community, get_stats, get_posts, sort_communities, add_post, update_post, check_post, check_question, check_answer, find_questions, extra_update_post, extra_delete_post
+from app.models.community import Community, get_stats, get_posts, sort_communities, add_post, update_post, check_post, check_question, check_answer, find_questions, extra_update_post, extra_delete_post, get_data_for_select
 from app.models.user import User
 from app.models.item_ import Items
 
@@ -121,11 +121,22 @@ MODELS = {
 			'required': True,
 			'type': 'str',
 		},
+		'parent_id': {
+			'required': True,
+			'type': 'int',
+            'value_min': 1,
+            'null': True,
+		},
 		'members': {
 			'required': True,
 			'type': 'int',
             'list': True,
             'null': True,
+		},
+		'tags': {
+			'required': True,
+			'type': 'str',
+            'processing': lambda x: x.strip(),
 		},
 	},
 	'moderator_community_create': {
@@ -138,6 +149,12 @@ MODELS = {
 		'description': {
 			'required': True,
 			'type': 'str',
+		},
+		'parent_id': {
+			'required': True,
+			'type': 'int',
+            'value_min': 1,
+            'null': True,
 		},
 	},
 	'moderator_community_post_update': {
@@ -327,10 +344,12 @@ async def moderator_community_search(request):
                 count = True,
             )
             users = await User.hash()
+            select = await get_data_for_select()
             return OrjsonResponse({
                 'communities': [ item.dump() for item in result ],
                 'users': users,
                 'amount': amount,
+                'select': select,
             })
         else:
             return err(400, 'Неверный поиск')
