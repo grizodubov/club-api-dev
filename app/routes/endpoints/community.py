@@ -6,7 +6,7 @@ from app.core.request import err
 from app.core.response import OrjsonResponse
 from app.core.event import dispatch
 from app.utils.validate import validate
-from app.models.community import Community, get_stats, get_posts, sort_communities, add_post, update_post, check_post, check_question, check_answer, find_questions, extra_update_post, extra_delete_post, get_data_for_select
+from app.models.community import Community, get_stats, get_posts, sort_communities, add_post, update_post, move_post, check_post, check_question, check_answer, find_questions, extra_update_post, extra_delete_post, get_data_for_select
 from app.models.user import User
 from app.models.item_ import Items
 
@@ -23,6 +23,7 @@ def routes():
         Route('/m/community/questions', moderator_community_questions, methods = [ 'POST' ]),
         Route('/m/community/update', moderator_community_update, methods = [ 'POST' ]),
         Route('/m/community/create', moderator_community_create, methods = [ 'POST' ]),
+        Route('/m/community/question/move', moderator_community_question_move, methods = [ 'POST' ]),
         Route('/m/community/post/update', moderator_community_post_update, methods = [ 'POST' ]),
         Route('/m/community/post/delete', moderator_community_post_delete, methods = [ 'POST' ]),
     ]
@@ -157,7 +158,19 @@ MODELS = {
             'null': True,
 		},
 	},
-	'moderator_community_post_update': {
+	'moderator_community_question_move': {
+		'id': {
+			'required': True,
+			'type': 'int',
+            'value_min': 1,
+		},
+		'community_id': {
+			'required': True,
+			'type': 'int',
+            'value_min': 1,
+		},
+	},
+    'moderator_community_post_update': {
 		'id': {
 			'required': True,
 			'type': 'int',
@@ -320,9 +333,11 @@ async def moderator_community_questions(request):
             await community.set(id = request.params['id'])
             if community.id:
                 posts = await get_posts(request.params['id'], request.user.id)
+                select = await get_data_for_select()
                 return OrjsonResponse({
                     'community': community.show(),
                     'posts': posts,
+                    'select': select,
                 })
             else:
                 return err(404, 'Сообщество не найдено')
@@ -388,6 +403,25 @@ async def moderator_community_create(request):
             )
             dispatch('community_create', request)
             return OrjsonResponse({})
+        else:
+            return err(400, 'Неверный запрос')
+    else:
+        return err(403, 'Нет доступа')
+
+
+
+################################################################
+async def moderator_community_question_move(request):
+    if request.user.id and request.user.check_roles({ 'admin', 'moderator', 'manager', 'community manager' }):
+        if validate(request.params, MODELS['moderator_community_question_move']):
+            community = Community()
+            await community.set(id = request.params['community_id'])
+            if community.id:
+                await move_post(request.params['id'], request.params['community_id'])
+                dispatch('post_update', request)
+                return OrjsonResponse({})
+            else:
+                return err(400, 'Сообщество не найдено')
         else:
             return err(400, 'Неверный запрос')
     else:

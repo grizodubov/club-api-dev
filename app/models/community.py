@@ -392,6 +392,21 @@ async def update_post(post_id, params):
 
 
 ###############################################################
+async def move_post(post_id, community_id):
+    api = get_api_context()
+    await api.pg.club.fetchrow( 
+        """UPDATE
+                posts
+            SET
+                community_id = $2
+            WHERE
+                id = $1 OR reply_to_post_id = $1""",
+        post_id, community_id
+    )
+        
+
+
+###############################################################
 async def check_post(community_id, reply_to_post_id):
     api = get_api_context()
     data = await api.pg.club.fetchval( 
