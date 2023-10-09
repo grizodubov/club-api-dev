@@ -211,22 +211,43 @@ async def community_list(request):
         stats = await get_stats(communities_ids, request.user.id)
         communities_sorted = sort_communities(communities.items, stats)
         community_id = None
+        community_root_id = None
         if request.params['community_id'] and request.params['community_id'] in communities_ids:
             community_id = request.params['community_id']
-        else:
-            if communities_sorted:
-                community_id = communities_sorted[0]['id']
-        posts = await get_posts(community_id, request.user.id)
+        # else:
+        #     if communities_sorted:
+        #         community_id = communities_sorted[0]['id']
+        posts = []
+        if community_id:
+            posts = await get_posts(community_id, request.user.id)
         communities_full = []
+        communities_children = {}
+        # TODO: blocking cycle
         for community in communities_sorted:
             cm = Community()
             await cm.set(id = community['id'])
-            communities_full.append(
-                cm.show()
-            )
+            if cm.id == community_id and cm.parent_id:
+                community_root_id = cm.parent_id
+            if cm.parent_id:
+                if str(cm.parent_id) in communities_children:
+                    communities_children[str(cm.parent_id)].append(cm.show())
+                else:
+                    communities_children[str(cm.parent_id)] = [ cm.show() ]
+            else:
+                communities_full.append(
+                    cm.show() | {
+                        'children': [],
+                    }
+                )
+        for k, v in communities_children.items():
+            for community in communities_full:
+                if k == str(community['id']):
+                    community['children'] = v
+                    break
         return OrjsonResponse({
             'communities': communities_full,
             'stats': stats,
+            'community_root_id': community_root_id,
             'community_id': community_id,
             'posts': posts,
         })
@@ -400,6 +421,7 @@ async def moderator_community_create(request):
             await community.create(
                 name = request.params['name'],
                 description = request.params['description'],
+                parent_id = request.params['parent_id'],
             )
             dispatch('community_create', request)
             return OrjsonResponse({})

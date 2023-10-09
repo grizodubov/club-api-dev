@@ -197,13 +197,14 @@ class Community:
         api = get_api_context()
         id = await api.pg.club.fetchval(
             """INSERT INTO
-                    communities (name, description)
+                    communities (name, description, parent_id)
                 VALUES
-                    ($1, $2)
+                    ($1, $2, $3)
                 RETURNING
                     id""",
             kwargs['name'],
-            kwargs['description']
+            kwargs['description'],
+            kwargs['parent_id']
         )
         await self.set(id = id)
 
