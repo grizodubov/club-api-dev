@@ -523,6 +523,10 @@ MODELS = {
 			'type': 'int',
             'null': True,
 		},
+		'link_telegram': {
+			'required': True,
+			'type': 'str',
+		},
 	},
 	'new_moderator_user_create': {
 		'active': {
@@ -632,6 +636,10 @@ MODELS = {
 		'community_manager_id': {
 			'type': 'int',
             'null': True,
+		},
+		'link_telegram': {
+			'required': True,
+			'type': 'str',
 		},
 	},
     'user_suggestions_stats': {

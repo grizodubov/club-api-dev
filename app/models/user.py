@@ -45,6 +45,7 @@ class User:
         self.avatar_hash = None
         self.online = False
         self.community_manager_id = 0
+        self.link_telegram = ''
 
 
     ################################################################
@@ -87,6 +88,7 @@ class User:
                     t3.annual, t3.annual_privacy,
                     t3.employees, t3.employees_privacy,
                     t3.catalog, t3.city, t3.hobby,
+                    t3.link_telegram,
                     to_char(t3.birthdate, 'DD/MM/YYYY') AS birthdate, t3.birthdate_privacy,
                     t3.experience,
                     coalesce(t2.tags, '') AS tags,
@@ -280,6 +282,7 @@ class User:
                         t3.annual, t3.annual_privacy,
                         t3.employees, t3.employees_privacy,
                         t3.catalog, t3.city, t3.hobby,
+                        t3.link_telegram,
                         to_char(t3.birthdate, 'DD/MM/YYYY') AS birthdate, t3.birthdate_privacy,
                         t3.experience,
                         coalesce(t2.tags, '') AS tags,
@@ -364,12 +367,11 @@ class User:
                     hobby = $12,
                     birthdate = $13,
                     birthdate_privacy = $14,
-                    experience = $15
-
+                    experience = $15,
+                    link_telegram = $16
                 WHERE
                     user_id = $1""",
             self.id, kwargs['company'], kwargs['position'], kwargs['detail'], kwargs['status'] if 'status' in kwargs else self.status,
-
             kwargs['annual'] if 'annual' in kwargs else '',
             kwargs['annual_privacy'] if 'annual_privacy' in kwargs else '',
             kwargs['employees'] if 'employees' in kwargs else '',
@@ -379,7 +381,8 @@ class User:
             kwargs['hobby'] if 'hobby' in kwargs else '',
             kwargs['birthdate'] if 'birthdate' in kwargs else None,
             kwargs['birthdate_privacy'] if 'birthdate_privacy' in kwargs else '',
-            kwargs['experience'] if 'experience' in kwargs else None
+            kwargs['experience'] if 'experience' in kwargs else None,
+            kwargs['link_telegram'] if 'link_telegram' in kwargs else ''
         )
                 
         tags_old = set(sorted(re.split(r'\s*,\s*', self.tags)))
@@ -472,6 +475,7 @@ class User:
                             t3.annual, t3.annual_privacy,
                             t3.employees, t3.employees_privacy,
                             t3.catalog, t3.city, t3.hobby,
+                            t3.link_telegram,
                             to_char(t3.birthdate, 'DD/MM/YYYY') AS birthdate, t3.birthdate_privacy,
                             t3.experience,
                             coalesce(t2.tags, '') AS tags,
@@ -530,6 +534,7 @@ class User:
                         t3.annual, t3.annual_privacy,
                         t3.employees, t3.employees_privacy,
                         t3.catalog, t3.city, t3.hobby,
+                        t3.link_telegram,
                         to_char(t3.birthdate, 'DD/MM/YYYY') AS birthdate, t3.birthdate_privacy,
                         t3.experience,
                         coalesce(t2.tags, '') AS tags,
@@ -701,6 +706,7 @@ class User:
             """SELECT
                     t2.id, t2.name,
                     t4.company, t4.position, t4.status,
+                    t4.link_telegram,
                     coalesce(t3.tags, '') AS tags,
                     coalesce(t3.interests, '') AS interests,
                     t8.hash AS avatar_hash,
@@ -751,12 +757,13 @@ class User:
         query2 = ' | '.join([ re.sub(r'\s+', ' & ', t.strip()) for t in self.tags.split(',') ])
         data1 = await api.pg.club.fetch(
             """SELECT
-                    id, name, company, position, status, tags, search, offer, avatar_hash
+                    id, name, company, position, status, link_telegram, tags, search, offer, avatar_hash
                 FROM
                     (
                         SELECT
                             t1.id, t1.name,
                             t3.company, t3.position, t3.status,
+                            t3.link_telegram,
                             ts_headline(t2.tags, to_tsquery($1), 'HighlightAll=true, StartSel=~, StopSel=~') AS tags,
                             $1 AS search,
                             'bid' AS offer,
@@ -804,12 +811,13 @@ class User:
         )
         data2 = await api.pg.club.fetch(
             """SELECT
-                    id, name, company, position, status, tags, search, offer, avatar_hash
+                    id, name, company, position, status, link_telegram, tags, search, offer, avatar_hash
                 FROM
                     (
                         SELECT
                             t1.id, t1.name,
                             t3.company, t3.position, t3.status,
+                            t3.link_telegram,
                             ts_headline(t2.interests, to_tsquery($1), 'HighlightAll=true, StartSel=~, StopSel=~') AS tags,
                             $1 AS search,
                             'ask' AS offer,
@@ -868,6 +876,7 @@ class User:
         query_tags = """SELECT
                                 t1.id, t1.name, t2.time_update_tags AS time_create,
                                 t3.company, t3.position, t3.status,
+                                t3.link_telegram,
                                 ts_headline(t2.tags, to_tsquery(${i}), 'HighlightAll=true, StartSel=~, StopSel=~') AS tags,
                                 ${i} AS search,
                                 'bid' AS offer,
@@ -904,6 +913,7 @@ class User:
         query_interests = """SELECT
                                     t1.id, t1.name, t2.time_update_interests AS time_create,
                                     t3.company, t3.position, t3.status,
+                                    t3.link_telegram,
                                     ts_headline(t2.interests, to_tsquery(${i}), 'HighlightAll=true, StartSel=~, StopSel=~') AS tags,
                                     ${i} AS search,
                                     'ask' AS offer,
@@ -983,7 +993,7 @@ class User:
             query_where = ' WHERE '
         data = await api.pg.club.fetch(
             """SELECT
-                    id, name, time_create, company, position, status, tags, search, offer, avatar_hash, t5.amount AS helpful, count(*) OVER() AS amount
+                    id, name, time_create, company, position, status, link_telegram, tags, search, offer, avatar_hash, t5.amount AS helpful, count(*) OVER() AS amount
                 FROM
                     (
                         SELECT * FROM
@@ -1170,7 +1180,8 @@ class User:
                     hobby = $12,
                     birthdate = $13,
                     birthdate_privacy = $14,
-                    experience = $15
+                    experience = $15,
+                    link_telegram = $16
                 WHERE
                     user_id = $1""",
             id,
@@ -1178,7 +1189,6 @@ class User:
             kwargs['position'], 
             kwargs['detail'] if 'detail' in kwargs else '',
             kwargs['status'] if 'status' in kwargs else 'бронзовый',
-
             kwargs['annual'] if 'annual' in kwargs else '',
             kwargs['annual_privacy'] if 'annual_privacy' in kwargs else '',
             kwargs['employees'] if 'employees' in kwargs else '',
@@ -1188,7 +1198,8 @@ class User:
             kwargs['hobby'] if 'hobby' in kwargs else '',
             kwargs['birthdate'] if 'birthdate' in kwargs else None,
             kwargs['birthdate_privacy'] if 'birthdate_privacy' in kwargs else '',
-            kwargs['experience'] if 'experience' in kwargs else None
+            kwargs['experience'] if 'experience' in kwargs else None,
+            kwargs['link_telegram'] if 'link_telegram' in kwargs else ''
         )
         roles = await get_roles()
         if kwargs['roles']:
@@ -1306,6 +1317,7 @@ async def get_residents():
                 t1.active,
                 t3.company, t3.position, t3.detail,
                 t3.status,
+                t3.link_telegram,
                 t8.hash AS avatar_hash,
                 t3.annual, t3.annual_privacy,
                 t3.employees, t3.employees_privacy,
