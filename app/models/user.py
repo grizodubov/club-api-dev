@@ -729,6 +729,7 @@ class User:
                 SELECT
                     t6.id, t6.name,
                     NULL AS company, NULL AS position, NULL AS status,
+                    NULL AS link_telegram,
                     NULL AS tags,
                     NULL AS interests,
                     t9.hash AS avatar_hash,
