@@ -9,6 +9,7 @@ from app.utils.validate import validate
 from app.models.community import Community, get_stats, get_posts, sort_communities, add_post, update_post, move_post, check_post, check_question, check_answer, find_questions, extra_update_post, extra_delete_post, get_data_for_select
 from app.models.user import User
 from app.models.item_ import Items
+from app.models.notification import create_notifications
 
 
 
@@ -273,6 +274,7 @@ async def community_add_post(request):
                     result = await add_post(request.params['community_id'], request.user.id, request.params['text'])
                 posts = await get_posts(request.params['community_id'], request.user.id)
                 dispatch('post_add', request)
+                create_notifications('post_add', request.user.id, result['id'], request.params)
                 return OrjsonResponse({
                     'posts': posts,
                     'community_id': request.params['community_id'],
