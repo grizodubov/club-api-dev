@@ -115,11 +115,13 @@ class API:
                 self.websocket_mass_send({ 'auth': True, 'status': False, 'user_id': user_id })
 
 
+
     ################################################################
     async def websocket_send(self, user_id, message):
         for ws in self.store['websockets']:
             if ws['user_id'] == user_id:
                 await ws['handler'].send_text(message)
+
 
 
     ################################################################
@@ -128,6 +130,15 @@ class API:
             asyncio.create_task(ws['handler'].send_text(orjson.dumps(message).decode()))
 
 
+
+     ################################################################
+    def websocket_limited_send(self, users_ids, message):
+        for ws in self.store['websockets']:
+            if ws['user_id'] in users_ids:
+                asyncio.create_task(ws['handler'].send_text(orjson.dumps(message).decode()))
+
+
+ 
     ################################################################
     def websocket_remove(self, websocket):
         temp = []

@@ -2,7 +2,7 @@ from starlette.routing import Route
 
 from app.core.request import err
 from app.core.response import OrjsonResponse
-from app.models.notification import get_notifications
+from app.models.notification import get_notifications, get_highlights
 
 
 
@@ -26,9 +26,11 @@ async def notifications_list(request):
         before = None
         if 'ts' in request.path_params:
             before = request.path_params['ts']
-        result = await get_notifications(request.user.id, before)
+        notifications = await get_notifications(request.user.id, before)
+        highlights = await get_highlights(request.user.id)
         return OrjsonResponse({
-            'notifications': result,
+            'notifications': notifications,
+            'highlights': highlights,
         })
     else:
         return err(403, 'Нет доступа')

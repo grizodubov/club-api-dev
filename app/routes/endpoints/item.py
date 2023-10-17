@@ -5,6 +5,7 @@ from app.core.response import OrjsonResponse
 from app.core.event import dispatch
 from app.utils.validate import validate
 from app.models.item import Item, Items
+from app.models.notification import send_notification
 
 
 
@@ -45,6 +46,7 @@ async def item_view(request):
             if item.id:
                 time_view = await item.view(request.user.id)
                 dispatch('item_view', request)
+                send_notification(request.user.id)
                 return OrjsonResponse({
                     'item_id': item.id,
                     'time_view': time_view,
@@ -67,6 +69,7 @@ async def items_view(request):
             if items.list:
                 time_view = await items.view(request.user.id)
                 dispatch('item_view', request)
+                send_notification(request.user.id)
                 return OrjsonResponse({
                     'items_ids': items.ids(),
                     'time_view': time_view,
