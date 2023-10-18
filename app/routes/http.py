@@ -11,6 +11,7 @@ from app.routes.endpoints.community import routes as routes_community
 from app.routes.endpoints.stats import routes as routes_stats
 from app.routes.endpoints.avatar import routes as routes_avatar
 from app.routes.endpoints.notification import routes as routes_notification
+from app.routes.endpoints.tag import routes as routes_tag
 
 
 routes = [
@@ -27,4 +28,5 @@ routes = [
     *routes_stats(),
     *routes_avatar(),
     *routes_notification(),
+    *routes_tag(),
 ]
