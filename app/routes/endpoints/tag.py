@@ -27,7 +27,7 @@ async def moderator_list_tags(request):
         return OrjsonResponse({
             'tags': [
                 {
-                    'tags': k,
+                    'tag': k,
                     'options': list(v['options']),
                     'competency': v['competency'],
                     'interests': v['interests'],
