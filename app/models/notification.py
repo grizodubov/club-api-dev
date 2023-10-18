@@ -66,7 +66,7 @@ async def get_notifications(user_id, before = None):
                     $1 = ANY(t1.recepients)
                 ORDER BY
                     t1.time_notify DESC
-                LiMIT 20""",
+                LiMIT 50""",
             user_id
         )
     return [ dict(item) for item in result ]
