@@ -25,7 +25,15 @@ async def moderator_list_tags(request):
     if request.user.id and request.user.check_roles({ 'admin', 'moderator', 'manager' }):
         tags = await get_tags()
         return OrjsonResponse({
-            'tags': [ v.update({ 'tag': k }) for k, v in tags.items() ]
+            'tags': [
+                {
+                    'tags': k,
+                    'options': list(v['options']),
+                    'competency': v['competency'],
+                    'interests': v['interests'],
+                    'communities': v['communities'],
+                } for k, v in tags.items()
+            ]
         })
     else:
         return err(403, 'Нет доступа')
