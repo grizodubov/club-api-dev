@@ -61,7 +61,7 @@ async def update_tag(tag_from, tag_to):
                 users_tags
             SET
                 tags = tag_replace(tags, $1, $2),
-                interests = tag_replace(interests, $1, $2')""",
+                interests = tag_replace(interests, $1, $2)""",
         tag_from, tag_to
     )
     await api.pg.club.execute(
@@ -78,6 +78,7 @@ async def update_tag(tag_from, tag_to):
 # LANGUAGE plpgsql
 # AS $$
 #     DECLARE
+#         data text[];
 #         t_lower text := lower(t);
 #         r_lower text := lower(r);
 #         result text := '';
@@ -86,30 +87,38 @@ async def update_tag(tag_from, tag_to):
 #         item text;
 #         item_lower text;
 #     BEGIN
-#         FOREACH
-#             item IN ARRAY regexp_split_to_array(s, '\s*,\s*')
-#         LOOP
-#             item_lower = lower(item);
-#             IF t_lower = item_lower OR r_lower = item_lower THEN
-#                 IF r_lower = item_lower AND fr IS FALSE THEN
-#                     fr := TRUE;
-#                     IF ft IS NOT TRUE THEN
-#                         IF result <> '' THEN result := result || ', '; END IF;
-#                         result := result || item;
+#         data = regexp_split_to_array(s, '\s*,\s*');
+#         IF data IS NOT NULL AND array_length(data, 1) > 0 THEN
+#             FOREACH
+#                 item IN ARRAY regexp_split_to_array(s, '\s*,\s*')
+#             LOOP
+#                 item_lower = lower(item);
+#                 IF t_lower = item_lower OR r_lower = item_lower THEN
+#                     IF r_lower = item_lower AND fr IS FALSE THEN
+#                         fr := TRUE;
+#                         IF ft IS NOT TRUE THEN
+#                             IF result <> '' THEN result := result || ', '; END IF;
+#                             result := result || r;
+#                         END IF;
 #                     END IF;
-#                 END IF;
-#                 IF t_lower = item_lower AND ft IS FALSE THEN
-#                     ft := TRUE;
-#                     IF fr IS NOT TRUE AND r <> '' THEN
-#                         IF result <> '' THEN result := result || ', '; END IF;
-#                         result := result || r;
+#                     IF t_lower = item_lower AND ft IS FALSE THEN
+#                         ft := TRUE;
+#                         IF fr IS NOT TRUE AND r <> '' THEN
+#                             IF result <> '' THEN result := result || ', '; END IF;
+#                             result := result || r;
+#                         END IF;
 #                     END IF;
+#                 ELSE
+#                     IF result <> '' THEN result := result || ', '; END IF;
+#                     result := result || item;
 #                 END IF;
+#             END LOOP;
+#             IF result = '' THEN
+#                 RETURN NULL;
 #             ELSE
-#                 IF result <> '' THEN result := result || ', '; END IF;
-#                 result := result || item;
+#                 RETURN result;
 #             END IF;
-#         END LOOP;
-#         RETURN result;
+#         END IF;
+#         RETURN NULL;
 #     END;
 # $$;
