@@ -40,7 +40,7 @@ MODELS = {
 
 ################################################################
 async def moderator_list_tags(request):
-    if request.user.id and request.user.check_roles({ 'admin', 'moderator', 'manager' }):
+    if request.user.id and request.user.check_roles({ 'admin', 'moderator', 'manager', 'community manager' }):
         tags = await get_tags()
         return OrjsonResponse({
             'tags': [
@@ -60,7 +60,7 @@ async def moderator_list_tags(request):
 
 ################################################################
 async def moderator_replace_tag(request):
-    if request.user.id and request.user.check_roles({ 'admin', 'moderator', 'manager' }):
+    if request.user.id and request.user.check_roles({ 'admin', 'moderator', 'manager', 'community manager' }):
         if validate(request.params, MODELS['moderator_replace_tag']):
             await update_tag(request.params['tag'], request.params['tag_new'])
             dispatch('tag_update', request)
@@ -74,7 +74,7 @@ async def moderator_replace_tag(request):
 
 ################################################################
 async def moderator_delete_tag(request):
-    if request.user.id and request.user.check_roles({ 'admin', 'moderator', 'manager' }):
+    if request.user.id and request.user.check_roles({ 'admin', 'moderator', 'manager', 'community manager' }):
         if validate(request.params, MODELS['moderator_delete_tag']):
             await update_tag(request.params['tag'], '')
             dispatch('tag_update', request)
