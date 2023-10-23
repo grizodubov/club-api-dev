@@ -226,6 +226,8 @@ async def find_questions(community_id, words):
                 AND
                     t1.community_id = $2
                 AND
+                    t1.verified IS TRUE
+                AND
                     t1.text_ts @@ to_tsquery('russian', $1)
             ORDER BY
                 ts_rank(t1.text_ts, to_tsquery('russian', $1)) DESC""",
@@ -253,7 +255,7 @@ async def get_stats(communities_ids, user_id):
             LEFT JOIN
                 items_views t2 ON t2.item_id = t1.id AND t2.user_id = $2
             WHERE
-                t1.community_id = ANY($1)
+                t1.community_id = ANY($1) AND t1.verified IS TRUE
             GROUP BY
                 t1.community_id""",
         communities_ids, user_id
@@ -293,7 +295,8 @@ async def get_posts(community_id, user_id):
                     t2.name AS author_name,
                     t3.time_view,
                     coalesce(t1.reply_to_post_id, t1.id) AS question_id,
-                    t8.hash AS author_avatar_hash
+                    t8.hash AS author_avatar_hash,
+                    t1.verified
                 FROM
                     posts t1
                 INNER JOIN
@@ -309,7 +312,8 @@ async def get_posts(community_id, user_id):
                 ON
                     t8.owner_id = t2.id AND t8.active IS TRUE
                 WHERE
-                    t1.community_id = $1
+                    t1.community_id = $1 AND
+                    (t1.verified IS TRUE OR (t1.reply_to_post_id IS NULL AND t1.author_id = $2))
             ) t4
             ORDER BY
                 t4.question_id, t4.id""",
@@ -347,12 +351,12 @@ async def add_post(community_id, user_id, text, reply_to_post_id = None):
     data = await api.pg.club.fetchrow( 
         """INSERT INTO
                 posts
-                (author_id, community_id, reply_to_post_id, text)
+                (author_id, community_id, reply_to_post_id, text, verified)
             VALUES
-                ($1, $2, $3, $4)
+                ($1, $2, $3, $4, $5)
             RETURNING
                 id, time_create""",
-        user_id, community_id, reply_to_post_id, text
+        user_id, community_id, reply_to_post_id, text, False if reply_to_post_id is None else True
     )
     await api.pg.club.execute( 
         """INSERT INTO
@@ -411,7 +415,7 @@ async def move_post(post_id, community_id):
 async def check_post(community_id, reply_to_post_id):
     api = get_api_context()
     data = await api.pg.club.fetchval( 
-        """SELECT id FROM posts WHERE community_id = $1 AND id = $2 AND reply_to_post_id IS NULL AND closed IS FALSE""",
+        """SELECT id FROM posts WHERE community_id = $1 AND id = $2 AND reply_to_post_id IS NULL AND closed IS FALSE AND verified IS TRUE""",
         community_id, reply_to_post_id
     )
     if data:
