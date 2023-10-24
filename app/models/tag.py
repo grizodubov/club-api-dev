@@ -22,7 +22,16 @@ async def get_tags():
                 '' AS interests,
                 tags AS communities
             FROM
-                communities"""
+                communities
+            WHERE tags IS NOT NULL
+            UNION ALL
+            SELECT
+                '' AS competency,
+                '' AS interests,
+                tags AS communities
+            FROM
+                posts
+            WHERE reply_to_post_id IS NULL AND tags IS NOT NULL"""
     )
     ts = { 'competency', 'interests', 'communities' }
     for row in data:
@@ -68,7 +77,18 @@ async def update_tag(tag_from, tag_to):
         """UPDATE
                 communities
             SET
-                tags = tag_replace(tags, $1, $2)""",
+                tags = tag_replace(tags, $1, $2)
+            WHERE
+                tags IS NOT NULL""",
+        tag_from, tag_to
+    )
+    await api.pg.club.execute(
+        """UPDATE
+                posts
+            SET
+                tags = tag_replace(tags, $1, $2)
+            WHERE
+                reply_to_post_id IS NULL AND tags IS NOT NULL""",
         tag_from, tag_to
     )
 

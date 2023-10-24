@@ -148,7 +148,9 @@ class Community:
             if k in kwargs:
                 query.append(k + ' = $' + str(cursor))
                 if k == 'tags':
-                    temp = ', '.join(set(sorted(re.split(r'\s*,\s*', kwargs[k]))))
+                    temp = None
+                    if kwargs[k] and kwargs[k].strip():
+                        temp = ','.join([ t for t in re.split(r'\s*,\s*', kwargs[k].strip()) if t ])
                 else:
                     temp = kwargs[k]
                 args.append(temp)
@@ -216,7 +218,7 @@ async def find_questions(community_id, words):
     data = await api.pg.club.fetch(
         """SELECT
                 t1.id, t1.community_id, t1.text, ts_rank(t1.text_ts, to_tsquery('russian', $1)) AS rank,
-                t2.name AS community_name, t1.time_create
+                t2.name AS community_name, t1.time_create, t1.tags
             FROM
                 posts t1
             INNER JOIN
@@ -296,7 +298,8 @@ async def get_posts(community_id, user_id):
                     t3.time_view,
                     coalesce(t1.reply_to_post_id, t1.id) AS question_id,
                     t8.hash AS author_avatar_hash,
-                    t1.verified
+                    t1.verified,
+                    t1.tags
                 FROM
                     posts t1
                 INNER JOIN
@@ -346,16 +349,46 @@ async def get_posts(community_id, user_id):
 
 
 ###############################################################
+async def get_unverified_questions():
+    api = get_api_context()
+    data = await api.pg.club.fetch(
+        """SELECT
+                t1.id,
+                t1.time_create,
+                t1.time_update,
+                t1.community_id,
+                t1.text,
+                t1.reply_to_post_id,
+                t1.author_id,
+                t1.closed,
+                t1.helpful,
+                t2.name AS author_name,
+                t1.verified,
+                t1.tags
+            FROM
+                posts t1
+            INNER JOIN
+                users t2 ON t2.id = t1.author_id
+            WHERE
+                t1.verified IS FALSE AND t1.reply_to_post_id IS NULL
+            ORDER BY
+                t1.time_create"""
+    )
+    return [ dict(row) for row in data ]
+
+
+
+###############################################################
 async def add_post(community_id, user_id, text, reply_to_post_id = None):
     api = get_api_context()
     data = await api.pg.club.fetchrow( 
         """INSERT INTO
                 posts
-                (author_id, community_id, reply_to_post_id, text, verified)
+                (author_id, community_id, reply_to_post_id, text, verified, tags)
             VALUES
-                ($1, $2, $3, $4, $5)
+                ($1, $2, $3, $4, $5, NULL)
             RETURNING
-                id, time_create""",
+                id, time_create, verified""",
         user_id, community_id, reply_to_post_id, text, False if reply_to_post_id is None else True
     )
     await api.pg.club.execute( 
@@ -380,9 +413,15 @@ async def update_post(post_id, params):
     args = []
     i = 2
     for k, v in params.items():
-        if k in { 'closed', 'helpful' }:
+        if k in { 'closed', 'helpful', 'verified', 'tags' }:
             query.append(k + ' = $' + str(i))
-            args.append(v)
+            if k == 'tags':
+                temp = None
+                if v and v.strip():
+                    temp = ','.join([ t for t in re.split(r'\s*,\s*', v.strip()) if t ])
+                args.append(temp)
+            else:
+                args.append(v)
             i += 1
     if query:
         await api.pg.club.fetchrow( 
@@ -523,18 +562,24 @@ async def extra_update_post(post_id, data):
         return False
     if data['helpful'] and (temp['parent_id'] is None or temp['post_author_id'] == temp['parent_author_id']):
         return False
+    tags = None
+    if data['tags'] and data['tags'].strip():
+        tags = ','.join([ t for t in re.split(r'\s*,\s*', data['tags'].strip()) if t ])
     id = await api.pg.club.fetchval( 
         """UPDATE
                 posts
             SET
                 text = $2,
                 helpful = $3,
-                closed = $4
+                closed = $4,
+                verified = $5,
+                tags = $6,
+                community_id = $7
             WHERE
                 id = $1
             RETURNING
                 id""",
-        post_id, data['text'], data['helpful'], data['closed']
+        post_id, data['text'], data['helpful'], data['closed'], data['verified'], tags, data['community_id']
     )
     if not id:
         return False
@@ -589,3 +634,21 @@ async def get_data_for_select():
             for item in temp if item['parent_id'] is None
         ],
     }
+
+
+
+###############################################################
+async def get_verified_flag(post_id):
+    api = get_api_context()
+    result = await api.pg.club.fetchval( 
+        """SELECT
+                verified
+            FROM
+                posts
+            WHERE
+                id = $1""",
+        post_id
+    )
+    if result:
+        return True
+    return False

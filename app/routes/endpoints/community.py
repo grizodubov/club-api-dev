@@ -6,7 +6,7 @@ from app.core.request import err
 from app.core.response import OrjsonResponse
 from app.core.event import dispatch
 from app.utils.validate import validate
-from app.models.community import Community, get_stats, get_posts, sort_communities, add_post, update_post, move_post, check_post, check_question, check_answer, find_questions, extra_update_post, extra_delete_post, get_data_for_select
+from app.models.community import Community, get_stats, get_posts, sort_communities, add_post, update_post, move_post, check_post, check_question, check_answer, find_questions, extra_update_post, extra_delete_post, get_data_for_select, get_unverified_questions, get_verified_flag
 from app.models.user import User
 from app.models.item_ import Items
 from app.models.notification import create_notifications
@@ -22,6 +22,7 @@ def routes():
 
         Route('/m/community/search', moderator_community_search, methods = [ 'POST' ]),
         Route('/m/community/questions', moderator_community_questions, methods = [ 'POST' ]),
+        Route('/m/community/questions/unverified', moderator_questions_unverified, methods = [ 'POST' ]),
         Route('/m/community/update', moderator_community_update, methods = [ 'POST' ]),
         Route('/m/community/create', moderator_community_create, methods = [ 'POST' ]),
         Route('/m/community/question/move', moderator_community_question_move, methods = [ 'POST' ]),
@@ -191,6 +192,20 @@ MODELS = {
 			'required': True,
 			'type': 'bool',
 		},
+		'verified': {
+			'required': True,
+			'type': 'bool',
+		},
+		'tags': {
+			'required': True,
+			'type': 'str',
+            'null': True,
+		},
+		'community_id': {
+			'required': True,
+			'type': 'int',
+            'value_min': 1,
+		},
 	},
 	'moderator_community_post_delete': {
 		'id': {
@@ -274,7 +289,8 @@ async def community_add_post(request):
                     result = await add_post(request.params['community_id'], request.user.id, request.params['text'])
                 posts = await get_posts(request.params['community_id'], request.user.id)
                 dispatch('post_add', request)
-                create_notifications('post_add', request.user.id, result['id'], request.params)
+                if result['verified']:
+                    create_notifications('post_add', request.user.id, result['id'], request.params)
                 return OrjsonResponse({
                     'posts': posts,
                     'community_id': request.params['community_id'],
@@ -359,13 +375,27 @@ async def moderator_community_questions(request):
                 select = await get_data_for_select()
                 return OrjsonResponse({
                     'community': community.show(),
-                    'posts': posts,
+                    'posts': [ post for post in posts if post['question']['verified'] ],
                     'select': select,
                 })
             else:
                 return err(404, 'Сообщество не найдено')
         else:
             return err(400, 'Неверный запрос')
+    else:
+        return err(403, 'Нет доступа')
+
+
+
+################################################################
+async def moderator_questions_unverified(request):
+    if request.user.id and request.user.check_roles({ 'admin', 'moderator', 'manager', 'community manager' }):
+        questions = await get_unverified_questions()
+        select = await get_data_for_select()
+        return OrjsonResponse({
+            'questions': questions,
+            'select': select,
+        })
     else:
         return err(403, 'Нет доступа')
 
@@ -457,9 +487,18 @@ async def moderator_community_question_move(request):
 async def moderator_community_post_update(request):
     if request.user.id and request.user.check_roles({ 'admin', 'moderator', 'manager', 'community manager' }):
         if validate(request.params, MODELS['moderator_community_post_update']):
+            notification = False
+            flag = await get_verified_flag(request.params['id'])
+            if 'verified' in request.params and request.params['verified'] is True and flag is False:
+                notification = True
             result = await extra_update_post(request.params['id'], request.params)
             if result:
                 dispatch('post_update', request)
+                if notification:
+                    create_notifications('post_add', request.user.id, request.params['id'], {
+                        'reply_to_post_id': None,
+                        'community_id': request.params['community_id'],
+                    })
                 return OrjsonResponse({})
             else:
                 return err(400, 'Неверный запрос')

@@ -388,8 +388,8 @@ class User:
         tags_old = set(sorted(re.split(r'\s*,\s*', self.tags)))
         interests_old = set(sorted(re.split(r'\s*,\s*', self.interests)))
         # print('OLD', tags_old, interests_old)
-        tags_new = set(sorted(re.split(r'\s*,\s*', kwargs['tags'])))
-        interests_new = set(sorted(re.split(r'\s*,\s*', kwargs['interests'])))
+        tags_new = set(sorted(re.split(r'\s*,\s*', kwargs['tags'] if 'tags' in kwargs and kwargs['tags'] else '')))
+        interests_new = set(sorted(re.split(r'\s*,\s*', kwargs['interests'] if 'interests' in kwargs and kwargs['interests'] else '')))
         # print('NEW', tags_new, interests_new)
         update_i = 1
         update_pams = []
@@ -399,14 +399,20 @@ class User:
                 'tags = $' + str(update_i),
                 'time_update_tags = now() at time zone \'utc\'',
             ])
-            update_args.append(kwargs['tags'])
+            temp = None
+            if kwargs['tags'].strip():
+                temp = ','.join([ t for t in re.split(r'\s*,\s*', kwargs['tags'].strip()) if t ])
+            update_args.append(temp)
             update_i += 1
         if interests_old != interests_new:
             update_pams.extend([
                 'interests = $' + str(update_i),
                 'time_update_interests = now() at time zone \'utc\'',
             ])
-            update_args.append(kwargs['interests'])
+            temp = None
+            if kwargs['interests'].strip():
+                temp = ','.join([ t for t in re.split(r'\s*,\s*', kwargs['interests'].strip()) if t ])
+            update_args.append(temp)
             update_i += 1
         if update_pams:
             update_args.append(self.id)
@@ -1211,6 +1217,12 @@ class User:
                         ($1, $2)""",
                 id, kwargs['roles'][0] if type(kwargs['roles'][0]) == int else roles[kwargs['roles'][0]]
             )
+        temp_tags = None
+        if 'tags' in kwargs and kwargs['tags'] and kwargs['tags'].strip():
+            temp_tags = ','.join([ t for t in re.split(r'\s*,\s*', kwargs['tags'].strip()) if t ])
+        temp_interests = None
+        if 'interests' in kwargs and kwargs['interests'] and kwargs['interests'].strip():
+            temp_interests = ','.join([ t for t in re.split(r'\s*,\s*', kwargs['interests'].strip()) if t ])
         await api.pg.club.execute(
             """UPDATE
                     users_tags
@@ -1219,8 +1231,8 @@ class User:
                     interests = $2
                 WHERE
                     user_id = $3""",
-            kwargs['tags'] if 'tags' in kwargs and kwargs['tags'] else None,
-            kwargs['interests'] if 'interests' in kwargs and kwargs['interests'] else None,
+            temp_tags,
+            temp_interests,
             id
         )
         await self.set(id = id)

@@ -10,6 +10,7 @@ from app.models.tag import get_tags, update_tag
 
 def routes():
     return [
+        Route('/tag/list', list_tags, methods = [ 'POST' ]),
         Route('/m/tag/list', moderator_list_tags, methods = [ 'POST' ]),
         Route('/m/tag/replace', moderator_replace_tag, methods = [ 'POST' ]),
         Route('/m/tag/delete', moderator_delete_tag, methods = [ 'POST' ]),
@@ -35,6 +36,24 @@ MODELS = {
 		},
 	},
 }
+
+
+
+################################################################
+async def list_tags(request):
+    if request.user.id:
+        tags = await get_tags()
+        return OrjsonResponse({
+            'tags': [
+                {
+                    'tag': list(v['options'])[0],
+                    'competency': v['competency'],
+                    'interests': v['interests'],
+                } for v in tags.values()
+            ]
+        })
+    else:
+        return err(403, 'Нет доступа')
 
 
 

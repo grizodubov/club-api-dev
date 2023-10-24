@@ -111,50 +111,48 @@ async def process_post_add(api, user_id, item_id, params):
     }
     community = Community()
     await community.set(id = params['community_id'])
-    query = ' | '.join([ re.sub(r'\s+', ' & ', t.strip()) for t in community.tags.split(',') ])
-    result = await api.pg.club.fetch(
-        """SELECT
-                t1.id
-            FROM
-                users t1
-            INNER JOIN
-                users_tags t2 ON t2.user_id = t1.id
-            WHERE
-                to_tsvector(t2.tags) @@ to_tsquery($1) OR
-                to_tsvector(t2.interests) @@ to_tsquery($1)""",
-        query
-    )
-    recepients_ids = [ item['id'] for item in result if item['id'] != user_id ]
-    template_name = 'answer' if params['reply_to_post_id'] else 'question'
-    question_text = None
+    question_tags = None
     if params['reply_to_post_id']:
-        question_text = await api.pg.club.fetchval(
-            """SELECT text FROM posts WHERE id = $1""",
+        question_tags = await api.pg.club.fetchval(
+            """SELECT tags FROM posts WHERE id = $1""",
             params['reply_to_post_id']
         )
-        if len(question_text) > 24:
-            question_text = question_text[:24] + ' …'
-    link = '/' + str(community.id) + '/' + str(item_id)
-    if community.parent_id:
-        link = '/' + str(community.parent_id) + link
-    link = '/communities' + link
-    body = Template(TEMPLATES[template_name + '_self'])
-    message  = body.render(
-        community = {
-            'name': community.name,
-        },
-        question = {
-            'text': question_text,
-        },
-    )
-    await api.pg.club.execute(
-        """INSERT INTO notifications (message, link, item_id, recepients) VALUES ($1, $2, $3, $4)""",
-        message, link, item_id, [ user_id ]
-    )
-    send_notification(user_id)
-    if recepients_ids:
-        body = Template(TEMPLATES[template_name])
-        message = body.render(
+    else:
+        question_tags = await api.pg.club.fetchval(
+            """SELECT tags FROM posts WHERE id = $1""",
+            item_id
+        )
+    if community.tags or question_tags:
+        tags = question_tags if question_tags else community.tags
+        query = ' | '.join([ re.sub(r'\s+', ' & ', t.strip()) for t in tags.split(',') ])
+        result = await api.pg.club.fetch(
+            """SELECT
+                    t1.id
+                FROM
+                    users t1
+                INNER JOIN
+                    users_tags t2 ON t2.user_id = t1.id
+                WHERE
+                    to_tsvector(t2.tags) @@ to_tsquery($1) OR
+                    to_tsvector(t2.interests) @@ to_tsquery($1)""",
+            query
+        )
+        recepients_ids = [ item['id'] for item in result if item['id'] != user_id ]
+        template_name = 'answer' if params['reply_to_post_id'] else 'question'
+        question_text = None
+        if params['reply_to_post_id']:
+            question_text = await api.pg.club.fetchval(
+                """SELECT text FROM posts WHERE id = $1""",
+                params['reply_to_post_id']
+            )
+            if len(question_text) > 24:
+                question_text = question_text[:24] + ' …'
+        link = '/' + str(community.id) + '/' + str(item_id)
+        if community.parent_id:
+            link = '/' + str(community.parent_id) + link
+        link = '/communities' + link
+        body = Template(TEMPLATES[template_name + '_self'])
+        message  = body.render(
             community = {
                 'name': community.name,
             },
@@ -164,6 +162,22 @@ async def process_post_add(api, user_id, item_id, params):
         )
         await api.pg.club.execute(
             """INSERT INTO notifications (message, link, item_id, recepients) VALUES ($1, $2, $3, $4)""",
-            message, link, item_id, recepients_ids
+            message, link, item_id, [ user_id ]
         )
-        send_notifications(recepients_ids)
+        #print('SENDING NOTIFICATIONS!!!!!!!!')
+        send_notification(user_id)
+        if recepients_ids:
+            body = Template(TEMPLATES[template_name])
+            message = body.render(
+                community = {
+                    'name': community.name,
+                },
+                question = {
+                    'text': question_text,
+                },
+            )
+            await api.pg.club.execute(
+                """INSERT INTO notifications (message, link, item_id, recepients) VALUES ($1, $2, $3, $4)""",
+                message, link, item_id, recepients_ids
+            )
+            send_notifications(recepients_ids)
