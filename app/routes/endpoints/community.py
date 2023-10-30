@@ -6,7 +6,7 @@ from app.core.request import err
 from app.core.response import OrjsonResponse
 from app.core.event import dispatch
 from app.utils.validate import validate
-from app.models.community import Community, get_stats, get_posts, sort_communities, add_post, update_post, move_post, check_post, check_question, check_answer, find_questions, extra_update_post, extra_delete_post, get_data_for_select, get_unverified_questions, get_verified_flag
+from app.models.community import Community, get_stats, get_posts, sort_communities, add_post, update_post, move_post, check_post, check_question, check_answer, find_questions, extra_update_post, extra_delete_post, get_data_for_select, get_unverified_questions, get_verified_flag, get_user_questions, get_user_recommendations
 from app.models.user import User
 from app.models.item_ import Items
 from app.models.notification import create_notifications
@@ -19,6 +19,7 @@ def routes():
         Route('/community/post/add', community_add_post, methods = [ 'POST' ]),
         Route('/community/post/update', community_update_post, methods = [ 'POST' ]),
         Route('/community/suggestions', community_suggestions, methods = [ 'POST' ]),
+        Route('/community/questions/user', community_questions_top, methods = [ 'POST' ]),
 
         Route('/m/community/search', moderator_community_search, methods = [ 'POST' ]),
         Route('/m/community/questions', moderator_community_questions, methods = [ 'POST' ]),
@@ -359,6 +360,20 @@ async def community_suggestions(request):
             })
         else:
             return err(400, 'Неверный запрос')
+    else:
+        return err(403, 'Нет доступа')
+
+
+
+################################################################
+async def community_questions_top(request):
+    if request.user.id:
+            questions = await get_user_questions(request.user.id)
+            recommendations = await get_user_recommendations(request.user)
+            return OrjsonResponse({
+                'questions': questions,
+                'recommendations': recommendations,
+            })
     else:
         return err(403, 'Нет доступа')
 

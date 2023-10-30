@@ -652,3 +652,136 @@ async def get_verified_flag(post_id):
     if result:
         return True
     return False
+
+
+
+###############################################################
+async def get_user_questions(user_id):
+    api = get_api_context()
+    data = await api.pg.club.fetch(
+        """SELECT
+                t1.id,
+                t1.time_create,
+                t1.time_update,
+                t1.community_id,
+                t1.text,
+                t1.reply_to_post_id,
+                t1.author_id,
+                t1.closed,
+                t1.helpful,
+                t2.name AS author_name,
+                t1.verified,
+                t1.tags,
+                coalesce(t3.amount_answers, 0) AS amount_answers,
+                coalesce(t3.amount_answers_new, 0) AS amount_answers_new,
+                t3.time_answer_max,
+                t3.time_answer_new_max,
+                t1.time_create AS time_question_view,
+                1 AS question_view_sort,
+                t5.name AS community_name
+            FROM
+                posts t1
+            INNER JOIN
+                users t2 ON t2.id = t1.author_id
+            INNER JOIN
+                communities t5 ON t5.id = t1.community_id
+            LEFT JOIN
+                (
+                    SELECT
+                        a1.reply_to_post_id,
+                        count(a1.id) AS amount_answers,
+                        count(a1.id) FILTER (WHERE a2.time_view IS NULL) AS amount_answers_new,
+                        max(a1.time_create) AS time_answer_max,
+                        max(a1.time_create) FILTER (WHERE a2.time_view IS NULL) AS time_answer_new_max
+                    FROM
+                        posts a1
+                    LEFT JOIN
+                        items_views a2 ON a2.item_id = a1.id AND a2.user_id = $1
+                    GROUP BY
+                        a1.reply_to_post_id
+                ) t3 ON t3.reply_to_post_id = t1.id
+            WHERE
+                t1.author_id = $1 AND
+                t1.reply_to_post_id IS NULL AND
+                t1.closed IS FALSE
+            ORDER BY
+                t3.time_answer_new_max DESC NULLS LAST,
+                t3.time_answer_max DESC NULLS LAST,
+                t1.time_create DESC""",
+        user_id
+    )
+    return [ dict(item) for item in data ]
+
+
+
+###############################################################
+async def get_user_recommendations(user):
+    tags = ''
+    if user.tags:
+        tags += user.tags
+    if user.interests:
+        if tags:
+            tags += ','
+        tags += user.interests
+    query = ' | '.join([ re.sub(r'\s+', ' & ', t.strip()) for t in tags.split(',') ])
+    # print(query)
+    api = get_api_context()
+    data = await api.pg.club.fetch(
+        """SELECT
+                t1.id,
+                t1.time_create,
+                t1.time_update,
+                t1.community_id,
+                t1.text,
+                t1.reply_to_post_id,
+                t1.author_id,
+                t1.closed,
+                t1.helpful,
+                t2.name AS author_name,
+                t1.verified,
+                t1.tags,
+                coalesce(t3.amount_answers, 0) AS amount_answers,
+                coalesce(t3.amount_answers_new, 0) AS amount_answers_new,
+                t3.time_answer_max,
+                t3.time_answer_new_max,
+                t4.time_view AS time_question_view,
+                CASE WHEN t4.time_view IS NULL THEN 0 ELSE 1 END AS question_view_sort,
+                t5.name AS community_name
+            FROM
+                posts t1
+            INNER JOIN
+                users t2 ON t2.id = t1.author_id
+            INNER JOIN
+                communities t5 ON t5.id = t1.community_id
+            LEFT JOIN
+                items_views t4 ON t4.item_id = t1.id AND t4.user_id = $1
+            LEFT JOIN
+                (
+                    SELECT
+                        a1.reply_to_post_id,
+                        count(a1.id) AS amount_answers,
+                        count(a1.id) FILTER (WHERE a2.time_view IS NULL) AS amount_answers_new,
+                        max(a1.time_create) AS time_answer_max,
+                        max(a1.time_create) FILTER (WHERE a2.time_view IS NULL) AS time_answer_new_max
+                    FROM
+                        posts a1
+                    LEFT JOIN
+                        items_views a2 ON a2.item_id = a1.id AND a2.user_id = $1
+                    GROUP BY
+                        a1.reply_to_post_id
+                ) t3 ON t3.reply_to_post_id = t1.id
+            WHERE
+                to_tsvector(t1.tags) @@ to_tsquery($2) AND
+                t1.reply_to_post_id IS NULL AND
+                t1.closed IS FALSE AND
+                t1.verified IS TRUE AND
+                t1.author_id <> $1
+            ORDER BY
+                question_view_sort,
+                t3.time_answer_new_max DESC NULLS LAST,
+                t3.time_answer_max DESC NULLS LAST,
+                t1.time_create DESC
+            LIMIT 5""",
+        user.id, query
+    )
+    return [ dict(item) for item in data ]
