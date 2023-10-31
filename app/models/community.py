@@ -215,6 +215,11 @@ class Community:
 ###############################################################
 async def find_questions(community_id, words):
     api = get_api_context()
+    query = ''
+    args = [ ' | '.join(words) ]
+    if community_id:
+        query = 'AND t1.community_id = $2'
+        args.append(community_id)
     data = await api.pg.club.fetch(
         """SELECT
                 t1.id, t1.community_id, t1.text, ts_rank(t1.text_ts, to_tsquery('russian', $1)) AS rank,
@@ -225,15 +230,14 @@ async def find_questions(community_id, words):
                 communities t2 ON t2.id = t1.community_id
             WHERE
                     t1.reply_to_post_id IS NULL
-                AND
-                    t1.community_id = $2
+                """ + query + """
                 AND
                     t1.verified IS TRUE
                 AND
                     t1.text_ts @@ to_tsquery('russian', $1)
             ORDER BY
                 ts_rank(t1.text_ts, to_tsquery('russian', $1)) DESC""",
-        ' | '.join(words), community_id
+        *args
     )
     return [ dict(item) for item in data ]
 
@@ -683,7 +687,7 @@ async def get_user_questions(user_id):
                 posts t1
             INNER JOIN
                 users t2 ON t2.id = t1.author_id
-            INNER JOIN
+            LEFT JOIN
                 communities t5 ON t5.id = t1.community_id
             LEFT JOIN
                 (
@@ -706,8 +710,7 @@ async def get_user_questions(user_id):
                 t1.closed IS FALSE
             ORDER BY
                 t3.time_answer_new_max DESC NULLS LAST,
-                t3.time_answer_max DESC NULLS LAST,
-                t1.time_create DESC""",
+                greatest(t3.time_answer_max, t1.time_create) DESC""",
         user_id
     )
     return [ dict(item) for item in data ]
@@ -751,7 +754,7 @@ async def get_user_recommendations(user):
                 posts t1
             INNER JOIN
                 users t2 ON t2.id = t1.author_id
-            INNER JOIN
+            LEFT JOIN
                 communities t5 ON t5.id = t1.community_id
             LEFT JOIN
                 items_views t4 ON t4.item_id = t1.id AND t4.user_id = $1

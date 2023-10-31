@@ -47,6 +47,7 @@ MODELS = {
 			'required': True,
 			'type': 'int',
             'value_min': 1,
+            'null': True,
 		},
         'text': {
             'required': True,
@@ -86,7 +87,7 @@ MODELS = {
 		'community_id': {
 			'required': True,
 			'type': 'int',
-            'value_min': 1,
+            'value_min': 0,
 		},
     },
     # moderator
@@ -278,8 +279,9 @@ async def community_add_post(request):
     if request.user.id:
         if validate(request.params, MODELS['community_add_post']):
             community = Community()
-            await community.set(id = request.params['community_id'])
-            if community.id:
+            if request.params['community_id'] is not None:
+                await community.set(id = request.params['community_id'])
+            if community.id or request.params['community_id'] is None:
                 result = { 'post_id': None, 'time_create': None }
                 if request.params['reply_to_post_id']:
                     if await check_post(request.params['community_id'], request.params['reply_to_post_id']):
