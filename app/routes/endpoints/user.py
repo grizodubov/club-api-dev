@@ -242,7 +242,7 @@ MODELS = {
 			'required': True,
 			'type': 'str',
             'list': True,
-            'values': [ 'client', 'manager', 'moderator', 'editor' ],
+            'values': [ 'client', 'guest', 'manager', 'moderator', 'editor' ],
 		},
 		'tags': {
 			'required': True,
@@ -305,7 +305,7 @@ MODELS = {
 			'required': True,
 			'type': 'str',
             'list': True,
-            'values': [ 'client', 'manager' ],
+            'values': [ 'client', 'guest', 'manager' ],
 		},
 		'tags': {
 			'required': True,
@@ -494,7 +494,7 @@ MODELS = {
 			'required': True,
 			'type': 'str',
             'list': True,
-            'values': [ 'admin', 'client', 'manager', 'moderator', 'editor', 'community manager' ],
+            'values': [ 'admin', 'client', 'guest', 'manager', 'moderator', 'editor', 'community manager' ],
 		},
 		'tags': {
 			'required': True,
@@ -608,7 +608,7 @@ MODELS = {
 			'required': True,
 			'type': 'str',
             'list': True,
-            'values': [ 'client', 'manager', 'community manager' ],
+            'values': [ 'client', 'guest', 'manager', 'community manager' ],
 		},
 		'tags': {
 			'required': True,
@@ -670,6 +670,14 @@ async def user_info(request):
                         result['contacts_cache'] = True
                         break
                 result['allow_contact'] = await request.user.check_access(user)
+                ### remove data for roles
+                roles = set(request.user.roles)
+                roles.discard('applicant')
+                roles.discard('guest')
+                if not roles and request.user.id != result['id']:
+                    result['company'] = ''
+                    result['position'] = ''
+                    result['link_telegram'] = ''
                 return OrjsonResponse(result)
             else:
                 return err(404, 'Пользователь не найден')
@@ -709,6 +717,16 @@ async def user_summary(request):
 async def user_contacts(request):
     if request.user.id:
         result = await request.user.get_contacts()
+        ### remove data for roles
+        roles = set(request.user.roles)
+        roles.discard('applicant')
+        roles.discard('guest')
+        if not roles:
+            for item in result:
+                if request.user.id != item['id']:
+                    item['company'] = ''
+                    item['position'] = ''
+                    item['link_telegram'] = ''
         return OrjsonResponse({ 'contacts': result })
     else:
         return err(403, 'Нет доступа')
@@ -719,6 +737,21 @@ async def user_contacts(request):
 async def user_recommendations(request):
     if request.user.id:
         result = await request.user.get_recommendations()
+        ### remove data for roles
+        roles = set(request.user.roles)
+        roles.discard('applicant')
+        roles.discard('guest')
+        if not roles:
+            for item in result['tags']:
+                if request.user.id != item['id']:
+                    item['company'] = ''
+                    item['position'] = ''
+                    item['link_telegram'] = ''
+            for item in result['interests']:
+                if request.user.id != item['id']:
+                    item['company'] = ''
+                    item['position'] = ''
+                    item['link_telegram'] = ''
         return OrjsonResponse(result)
     else:
         return err(403, 'Нет доступа')
@@ -735,6 +768,16 @@ async def user_suggestions(request):
                 today_offset = None,
                 from_id = request.params['from_id'],
             )
+            ### remove data for roles
+            roles = set(request.user.roles)
+            roles.discard('applicant')
+            roles.discard('guest')
+            if not roles:
+                for item in result:
+                    if request.user.id != item['id']:
+                        item['company'] = ''
+                        item['position'] = ''
+                        item['link_telegram'] = ''
             return OrjsonResponse({ 'suggestions': result })
         else:
             return err(400, 'Неверный запрос')
@@ -783,8 +826,21 @@ async def user_search(request):
             allow_contacts = {}
             if result:
                 allow_contacts = await request.user.check_multiple_access([ item for item in result if item.id != request.user.id ])
+            ### remove data for roles
+            roles = set(request.user.roles)
+            roles.discard('applicant')
+            roles.discard('guest')
+            persons = []
+            for item in result:
+                if item.id != request.user.id:
+                    temp = item.show()
+                    if not roles:
+                        temp['company'] = ''
+                        temp['position'] = ''
+                        temp['link_telegram'] = ''
+                    persons.append(temp)
             return OrjsonResponse({
-                'persons': [ item.show() for item in result if item.id != request.user.id ],
+                'persons': persons,
                 'contacts_cache': { str(contact['id']): True for contact in contacts if contact['type'] == 'person' },
                 'allow_contacts': allow_contacts,
             })
@@ -1008,8 +1064,20 @@ async def user_residents(request):
             user_status = request.user.status,
             contacts_ids = [ item.id for item in result ]
         )
+        ### remove data for roles
+        roles = set(request.user.roles)
+        roles.discard('applicant')
+        roles.discard('guest')
+        residents = []
+        for item in result:
+            temp = item.show()
+            if not roles and request.user.id != temp['id']:
+                temp['company'] = ''
+                temp['position'] = ''
+                temp['link_telegram'] = ''
+            residents.append(temp)
         return OrjsonResponse({
-            'residents': [ item.show() for item in result ],
+            'residents': residents,
             'contacts': contacts,
         })
     else:
@@ -1039,6 +1107,14 @@ async def new_user_info(request):
                         contacts_ids = [ user.id ]
                     )
                     result.update(contact[str(user.id)])
+                ### remove data for roles
+                roles = set(request.user.roles)
+                roles.discard('applicant')
+                roles.discard('guest')
+                if not roles and request.user.id != result['id']:
+                    result['company'] = ''
+                    result['position'] = ''
+                    result['link_telegram'] = ''
                 return OrjsonResponse(result)
             else:
                 return err(404, 'Пользователь не найден')
