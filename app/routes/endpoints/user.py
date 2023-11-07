@@ -99,6 +99,12 @@ MODELS = {
 			'type': 'bool',
             'default': False,
 		},
+        'target': {
+            'required': True,
+			'type': 'str',
+            'null': True,
+            'values': [ 'tags', 'interests' ],
+        },
 	},
 	'user_suggestions': {
 		'id': {
@@ -821,6 +827,7 @@ async def user_search(request):
                 reverse = request.params['reverse'],
                 offset = 0,
                 limit = 50,
+                target = request.params['target'],
             )
             contacts = await request.user.get_contacts()
             allow_contacts = {}

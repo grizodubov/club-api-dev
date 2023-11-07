@@ -50,7 +50,7 @@ class User:
 
     ################################################################
     @classmethod
-    async def search(cls, text, active_only = True, offset = None, limit = None, count = False, applicant = False, reverse = False):
+    async def search(cls, text, active_only = True, offset = None, limit = None, count = False, applicant = False, reverse = False, target = None):
         api = get_api_context()
         result = []
         amount = None
@@ -67,11 +67,18 @@ class User:
         if applicant is False:
             conditions.append("""'applicant' <> ANY(t4.roles)""")
         if text:
-            if reverse:
-                conditions.append("""(to_tsvector(concat_ws(' ', t1.name, t1.email, t1.phone, t3.company, t3.position, t2.interests)) @@ to_tsquery($1) OR t1.name ILIKE concat_ws('%', $1, '%'))""")
+            if target:
+                if target == 'tags':
+                    conditions.append("""regexp_split_to_array($1, '\s*,\s*') && regexp_split_to_array(t2.tags, '\s*,\s*')""")
+                else:
+                    conditions.append("""regexp_split_to_array($1, '\s*,\s*') && regexp_split_to_array(t2.interests, '\s*,\s*')""")
+                args.append(text)
             else:
-                conditions.append("""(to_tsvector(concat_ws(' ', t1.name, t1.email, t1.phone, t3.company, t3.position, t3.detail, t2.tags)) @@ to_tsquery($1) OR t1.name ILIKE concat_ws('%', $1, '%'))""")
-            args.append(re.sub(r'\s+', ' | ', text))
+                if reverse:
+                    conditions.append("""(to_tsvector(concat_ws(' ', t1.name, t1.email, t1.phone, t3.company, t3.position, t2.interests)) @@ to_tsquery($1) OR t1.name ILIKE concat_ws('%', $1, '%'))""")
+                else:
+                    conditions.append("""(to_tsvector(concat_ws(' ', t1.name, t1.email, t1.phone, t3.company, t3.position, t3.detail, t2.tags, t2.interests)) @@ to_tsquery($1) OR t1.name ILIKE concat_ws('%', $1, '%'))""")
+                args.append(re.sub(r'\s+', ' | ', text))
         if offset is not None and limit is not None:
             slice_query = ' OFFSET $' + str(len(args) + 1) + ' LIMIT $' + str(len(args) + 2)
             args.extend([ offset, limit ])
