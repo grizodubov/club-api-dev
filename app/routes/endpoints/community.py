@@ -6,7 +6,7 @@ from app.core.request import err
 from app.core.response import OrjsonResponse
 from app.core.event import dispatch
 from app.utils.validate import validate
-from app.models.community import Community, get_stats, get_posts, sort_communities, add_post, update_post, move_post, check_post, check_question, check_answer, find_questions, extra_update_post, extra_delete_post, get_data_for_select, get_unverified_questions, get_verified_flag, get_user_questions, get_user_recommendations
+from app.models.community import Community, get_stats, get_posts, sort_communities, add_post, update_post, move_post, check_post, check_question, check_answer, find_questions, extra_update_post, extra_delete_post, get_data_for_select, get_unverified_questions, get_verified_flag, get_user_questions, get_user_recommendations, get_active_communities
 from app.models.user import User
 from app.models.item_ import Items
 from app.models.notification import create_notifications
@@ -116,6 +116,10 @@ MODELS = {
 			'type': 'int',
             'value_min': 1,
 		},
+        'active': {
+			'required': True,
+			'type': 'bool',
+		},
 		'name': {
 			'required': True,
 			'type': 'str',
@@ -223,9 +227,14 @@ MODELS = {
 ################################################################
 async def community_list(request):
     if request.user.id:
+        tester = True if 'tester' in request.user.roles else False
         communities = Items()
-        await communities.search('community')
+        if tester:
+            await communities.search(model = 'community')
+        else:
+            await communities.search(model = 'community', filter = { 'active=': True })
         communities_ids = [ item['id'] for item in communities.items ]
+        #print(communities_ids, tester)
         stats = await get_stats(communities_ids, request.user.id)
         communities_sorted = sort_communities(communities.items, stats)
         community_id = None
@@ -427,6 +436,7 @@ async def moderator_community_search(request):
                 offset = (request.params['page'] - 1) * 10,
                 limit = 10,
                 count = True,
+                sort_active = True,
             )
             users = await User.hash()
             select = await get_data_for_select()

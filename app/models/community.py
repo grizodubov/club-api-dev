@@ -22,25 +22,36 @@ class Community:
         self.members = []
         self.parent_id = None
         self.tags = ''
+        self.active = False
 
 
     ################################################################
     @classmethod
-    async def search(cls, text, offset = None, limit = None, count = False):
+    async def search(cls, text, offset = None, limit = None, count = False, sort_active = False):
         api = get_api_context()
         result = []
         slice_query = ''
         conditions = [ 't1.id >= 10000' ]
         condition_query = ''
+        sort_query = ''
         args = []
+        i = 0
         if text:
-            conditions.append("""to_tsvector(concat_ws(' ', t1.name, t1.description)) @@ to_tsquery($1)""")
+            i += 1
+            conditions.append("""to_tsvector(concat_ws(' ', t1.name, t1.description)) @@ to_tsquery($""" + str(i) + """)""")
             args.append(re.sub(r'\s+', ' | ', text))
-        if offset and limit:
-            slice_query = ' OFFSET $2 LIMIT $3'
-            args.extend([ offset, limit ])
+        if offset:
+            i += 1
+            slice_query += ' OFFSET $' + str(i)
+            args.append(offset)
+        if limit:
+            i += 1
+            slice_query += ' LIMIT $' + str(i)
+            args.append(limit)
         if conditions:
             conditions_query = ' WHERE ' + ' AND '.join(conditions)
+        if sort_active:
+            sort_query = 'active DESC, '
         data = await api.pg.club.fetch(
             """SELECT
                     *
@@ -48,7 +59,7 @@ class Community:
                     SELECT
                         t1.id, t1.time_create, t1.time_update,
                         t1.name, t1.description, coalesce(t2.members, '{}'::bigint[]) AS members,
-                        t1.tags, t1.parent_id,
+                        t1.tags, t1.parent_id, t1.active,
                         t8.hash AS avatar_hash,
                         concat(t7.name || ' : ', t1.name) AS name_meta
                     FROM
@@ -67,7 +78,7 @@ class Community:
                                 community_id
                         ) t2 ON t2.community_id = t1.id""" + conditions_query + """
                 ) m
-                ORDER BY
+                ORDER BY """ + sort_query + """
                     m.name_meta""" + slice_query,
             *args
         )
@@ -77,7 +88,11 @@ class Community:
             result.append(item)
         if count:
             amount = len(result)
-            if offset and limit:
+            if offset or limit:
+                if limit:
+                    args.pop()
+                if offset:
+                    args.pop()
                 amount = await api.pg.club.fetchval(
                     """SELECT
                             count(t1.id)
@@ -113,7 +128,7 @@ class Community:
                 """SELECT
                         t1.id, t1.time_create, t1.time_update,
                         t1.name, t1.description, coalesce(t2.members, '{}'::bigint[]) AS members,
-                        t1.tags, t1.parent_id,
+                        t1.tags, t1.parent_id, t1.active,
                         t8.hash AS avatar_hash,
                         concat(t7.name || ' : ', t1.name) AS name_meta
                     FROM
@@ -144,7 +159,7 @@ class Community:
         cursor = 2
         query = []
         args = []
-        for k in { 'name', 'description', 'parent_id', 'tags' }:
+        for k in { 'active', 'name', 'description', 'parent_id', 'tags' }:
             if k in kwargs:
                 query.append(k + ' = $' + str(cursor))
                 if k == 'tags':
@@ -164,6 +179,31 @@ class Community:
                     WHERE
                         id = $1""",
                 self.id, *args
+            )
+            await api.pg.club.execute(
+                """UPDATE
+                        communities t
+                    SET
+                        active = sub.active
+                    FROM (
+                        SELECT id, active FROM communities WHERE id = $1 AND parent_id IS NULL
+                    ) AS sub
+                    WHERE
+                        t.parent_id = sub.id""",
+                self.id
+            )
+            await api.pg.club.execute(
+                """UPDATE
+                        communities t
+                    SET
+                        active = par.active
+                    FROM 
+                        communities par
+                    WHERE
+                        t.id = $1 AND
+                        t.parent_id IS NOT NULL AND
+                        par.id = t.parent_id""",
+                self.id
             )
         if 'members' in kwargs:
             ids_to_delete = set(self.members) - set(kwargs['members'])
@@ -220,6 +260,8 @@ async def find_questions(community_id, words):
     if community_id:
         query = 'AND t1.community_id = $2'
         args.append(community_id)
+    else:
+        query = 'AND t2.active = TRUE'
     data = await api.pg.club.fetch(
         """SELECT
                 t1.id, t1.community_id, t1.text, ts_rank(t1.text_ts, to_tsquery('russian', $1)) AS rank,
@@ -227,7 +269,7 @@ async def find_questions(community_id, words):
             FROM
                 posts t1
             INNER JOIN
-                communities t2 ON t2.id = t1.community_id
+                communities t2 ON t2.id = t1.community_id AND t2.active = TRUE
             WHERE
                     t1.reply_to_post_id IS NULL
                 """ + query + """
@@ -754,8 +796,8 @@ async def get_user_recommendations(user):
                 posts t1
             INNER JOIN
                 users t2 ON t2.id = t1.author_id
-            LEFT JOIN
-                communities t5 ON t5.id = t1.community_id
+            INNER JOIN
+                communities t5 ON t5.id = t1.community_id AND t5.active IS TRUE
             LEFT JOIN
                 items_views t4 ON t4.item_id = t1.id AND t4.user_id = $1
             LEFT JOIN
@@ -788,3 +830,13 @@ async def get_user_recommendations(user):
         user.id, query
     )
     return [ dict(item) for item in data ]
+
+
+
+###############################################################
+async def get_active_communities():
+    api = get_api_context()
+    result = await api.pg.club.fetch( 
+        """SELECT id FROM communities WHERE active IS TRUE"""
+    )
+    return [ item['id'] for item in result ]

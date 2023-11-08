@@ -311,7 +311,7 @@ MODELS = {
 			'required': True,
 			'type': 'str',
             'list': True,
-            'values': [ 'client', 'guest', 'manager' ],
+            'values': [ 'admin', 'client', 'guest', 'manager', 'moderator', 'editor', 'community manager', 'tester' ],
 		},
 		'tags': {
 			'required': True,
@@ -500,7 +500,7 @@ MODELS = {
 			'required': True,
 			'type': 'str',
             'list': True,
-            'values': [ 'admin', 'client', 'guest', 'manager', 'moderator', 'editor', 'community manager' ],
+            'values': [ 'admin', 'client', 'guest', 'manager', 'moderator', 'editor', 'community manager', 'tester' ],
 		},
 		'tags': {
 			'required': True,

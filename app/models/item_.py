@@ -52,14 +52,14 @@ class Items:
                             k = k[:-1 * len(sample)]
                             if v is None:
                                 if sample == '<>':
-                                    where.append(prefix + k + ' IS NOT NULL')
+                                    where.append('t1.' + k + ' IS NOT NULL')
                                 else:
-                                    where.append(prefix + k + ' IS NULL')
+                                    where.append('t1.' + k + ' IS NULL')
                             else:
                                 if isinstance(v, list):
-                                    where.append(prefix + k + ' ' + sample + ' ANY($' + str(i) + ')')
+                                    where.append('t1.' + k + ' ' + sample + ' ANY($' + str(i) + ')')
                                 else:
-                                    where.append(prefix + k + ' ' + sample + ' $' + str(i))
+                                    where.append('t1.' + k + ' ' + sample + ' $' + str(i))
                                 args.append(v)
                                 i += 1
                 if where:
@@ -88,5 +88,6 @@ class Items:
                 query += ' LIMIT $' + str(i)
                 args.append(limit)
                 i += 1
+            #print(query)
             result = await api.pg.club.fetch(query, *args)
             self.items = [ dict(item) for item in result ]
