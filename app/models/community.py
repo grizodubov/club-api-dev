@@ -38,7 +38,7 @@ class Community:
         i = 0
         if text:
             i += 1
-            conditions.append("""to_tsvector(concat_ws(' ', t1.name, t1.description)) @@ to_tsquery($""" + str(i) + """)""")
+            conditions.append("""(to_tsvector(concat_ws(' ', t1.name, t1.description)) @@ to_tsquery($""" + str(i) + """) OR t1.name ILIKE concat_ws('%', $""" + str(i) + """, '%'))""")
             args.append(re.sub(r'\s+', ' | ', text))
         if offset:
             i += 1
