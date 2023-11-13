@@ -41,6 +41,7 @@ class API:
         }
         self.stream_email = Stream('mail', timeout = 1, retry_error = True, timeout_error = 5)
         self.stream_mobile = Stream('mobile', timeout = 1, retry_error = True, timeout_error = 5)
+        self.stream_telegram = Stream('telegram', timeout = 1, retry_error = True, timeout_error = 5)
 
 
     ################################################################

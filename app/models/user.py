@@ -1471,5 +1471,6 @@ async def get_telegram_pin(user):
         pin = ''.join(choice(string.digits) for _ in range(6))
         check = await api.redis.data.exec('EXISTS', '__TELEGRAM__' + pin)
     await api.redis.data.exec('SET', '__TELEGRAM__' + pin, user.id, ex = 900)
+    print('SET PIN:', '__TELEGRAM__' + pin)
     api.redis.data.release()
     return pin

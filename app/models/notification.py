@@ -5,6 +5,8 @@ from jinja2 import Template
 
 from app.core.context import get_api_context
 from app.models.community import Community
+from app.models.user import User
+from app.helpers.telegram import send_telegram_message
 
 
 
@@ -127,17 +129,20 @@ async def process_post_add(api, user_id, item_id, params):
         query = ' | '.join([ re.sub(r'\s+', ' & ', t.strip()) for t in tags.split(',') ])
         result = await api.pg.club.fetch(
             """SELECT
-                    t1.id
+                    t1.id, t3.id_telegram
                 FROM
                     users t1
                 INNER JOIN
                     users_tags t2 ON t2.user_id = t1.id
+                INNER JOIN
+                    users_info t3 ON t3.user_id = t1.id
                 WHERE
                     to_tsvector(t2.tags) @@ to_tsquery($1) OR
                     to_tsvector(t2.interests) @@ to_tsquery($1)""",
             query
         )
         recepients_ids = [ item['id'] for item in result if item['id'] != user_id ]
+        telegram_chats = [ item['id_telegram'] for item in result if item['id'] != user_id and item['id_telegram'] ]
         template_name = 'answer' if params['reply_to_post_id'] else 'question'
         question_text = None
         if params['reply_to_post_id']:
@@ -166,6 +171,10 @@ async def process_post_add(api, user_id, item_id, params):
         )
         #print('SENDING NOTIFICATIONS!!!!!!!!')
         send_notification(user_id)
+        recepient = User()
+        await recepient.set(id = user_id)
+        if recepient.id_telegram:
+            send_telegram_message(api.stream_telegram, recepient.id_telegram, message)
         if recepients_ids:
             body = Template(TEMPLATES[template_name])
             message = body.render(
@@ -181,3 +190,5 @@ async def process_post_add(api, user_id, item_id, params):
                 message, link, item_id, recepients_ids
             )
             send_notifications(recepients_ids)
+            for chat_id in telegram_chats:
+                send_telegram_message(api.stream_telegram, chat_id, message)

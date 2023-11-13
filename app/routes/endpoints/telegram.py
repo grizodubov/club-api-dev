@@ -1,10 +1,12 @@
 import re
 from starlette.routing import Route
 
+from app.core.context import get_api_context
 from app.core.request import err
 from app.core.response import OrjsonResponse
 from app.core.event import dispatch
 from app.models.user import User
+from app.helpers.telegram import send_telegram_message
 
 import pprint
 
@@ -12,7 +14,7 @@ import pprint
 
 def routes():
     return [
-        Route('/hook/telegram/message', telegram_message, methods = [ 'POST' ]),
+        Route('/club/hook/telegram/message', telegram_message, methods = [ 'POST' ]),
     ]
 
 
@@ -37,20 +39,22 @@ async def telegram_message(request):
                 request.params['message']['from']['is_bot'] is False:
             # pprint.pprint(request.params)
             message = request.params['message']['text']
-            print('message', message)
+            # print('MESSAGE:', message)
             if message != '/start':
                 m = re.match(r'^\D*(\d{6})\D*$', message)
                 if m:
                     pin = str(m.group(1))
+                    # print('PIN:', pin)
                     chat_id = str(request.params['message']['chat']['id'])
-                    id = await api.redis.data.get(str('__TELEGRAM__' + pin))
+                    id = await api.redis.data.exec('GET', '__TELEGRAM__' + pin)
+                    # print('USER_ID:', id)
                     if id:
                         user_id = int(id)
                         user = User()
                         await user.set(id = user_id)
                         if user.id:
                             await user.update_telegram(chat_id)
-                            # send_message(api.stream_telegram, chat_id, 'Спасибо! Телеграм-чат привязан к Digitender. Теперь Вы будете получать сообщения об изменениях в Вашем личном кабинете в системе Digitender.')
+                            send_telegram_message(api.stream_telegram, chat_id, 'Спасибо! Телеграм-чат привязан к боту клуба Germes. Теперь Вы будете получать актуальные сообщения от клуба.')
                             dispatch('user_update', request)
                         return OrjsonResponse({
                             'action': 'link',
