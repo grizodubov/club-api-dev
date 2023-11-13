@@ -38,6 +38,7 @@ class OrjsonResponse(JSONResponse):
                 'status': request.user.status,
                 'avatar_hash': request.user.avatar_hash,
                 'roles': request.user.roles,
+                'telegram': request.user.id_telegram,
             }
         }
         return orjson.dumps(content | token | user | community_manager)

@@ -7,7 +7,7 @@ from app.core.request import err
 from app.core.response import OrjsonResponse
 from app.core.event import dispatch
 from app.utils.validate import validate
-from app.models.user import User, get_residents, get_residents_contacts, get_community_managers
+from app.models.user import User, get_residents, get_residents_contacts, get_community_managers, get_telegram_pin
 from app.models.event import Event
 from app.models.item import Item
 
@@ -31,6 +31,8 @@ def routes():
         Route('/user/thumbsoff', user_thumbs_off, methods = [ 'POST' ]),
 
         Route('/user/{id:int}/helpful', user_helpful, methods = [ 'POST' ]),
+
+        Route('/user/telegram/get/pin', save_telegram_pin, methods = [ 'POST' ]),
 
         Route('/m/user/search', moderator_user_search, methods = [ 'POST' ]),
         Route('/m/user/update', moderator_user_update, methods = [ 'POST' ]),
@@ -1244,5 +1246,26 @@ async def user_helpful(request):
                 return err(404, 'Пользователь не найден')
         else:
             return err(400, 'Неверный поиск')
+    else:
+        return err(403, 'Нет доступа')
+
+
+
+################################################################
+async def save_telegram_pin(request):
+    if request.user.id and request.user.active is True:
+        pin = await get_telegram_pin(request.user)
+        # link = 'https://t.me/DigitenderBot?start=' + pin
+        # if request.user.phone:
+        #     loop = asyncio.get_event_loop()
+        #     loop.create_task(
+        #         send_mobile_message(
+        #             request.user.phone,
+        #             'Ссылка для привязки Telegram к Digitender: ' + link
+        #         )
+        #     )
+        return OrjsonResponse({
+            'pin': pin,
+        })
     else:
         return err(403, 'Нет доступа')

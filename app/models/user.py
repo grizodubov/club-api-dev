@@ -1,5 +1,6 @@
 import re
-from random import randint
+from random import randint, choice
+import string
 import os.path
 
 from app.core.context import get_api_context
@@ -46,6 +47,7 @@ class User:
         self.online = False
         self.community_manager_id = 0
         self.link_telegram = ''
+        self.id_telegram = None
 
 
     ################################################################
@@ -95,7 +97,7 @@ class User:
                     t3.annual, t3.annual_privacy,
                     t3.employees, t3.employees_privacy,
                     t3.catalog, t3.city, t3.hobby,
-                    t3.link_telegram,
+                    t3.link_telegram, t3.id_telegram,
                     to_char(t3.birthdate, 'DD/MM/YYYY') AS birthdate, t3.birthdate_privacy,
                     t3.experience,
                     coalesce(t2.tags, '') AS tags,
@@ -259,7 +261,7 @@ class User:
 
     ################################################################
     def dshow(self):
-        filter = { 'time_create', 'time_update', 'login', 'email', 'phone', 'roles' }
+        filter = { 'time_create', 'time_update', 'login', 'email', 'phone', 'roles', 'id_telegram' }
         data = { k: v for k, v in self.__dict__.items() if not k.startswith('_') and k not in filter }
         return data
 
@@ -289,7 +291,7 @@ class User:
                         t3.annual, t3.annual_privacy,
                         t3.employees, t3.employees_privacy,
                         t3.catalog, t3.city, t3.hobby,
-                        t3.link_telegram,
+                        t3.link_telegram, t3.id_telegram,
                         to_char(t3.birthdate, 'DD/MM/YYYY') AS birthdate, t3.birthdate_privacy,
                         t3.experience,
                         coalesce(t2.tags, '') AS tags,
@@ -488,7 +490,7 @@ class User:
                             t3.annual, t3.annual_privacy,
                             t3.employees, t3.employees_privacy,
                             t3.catalog, t3.city, t3.hobby,
-                            t3.link_telegram,
+                            t3.link_telegram, t3.id_telegram,
                             to_char(t3.birthdate, 'DD/MM/YYYY') AS birthdate, t3.birthdate_privacy,
                             t3.experience,
                             coalesce(t2.tags, '') AS tags,
@@ -547,7 +549,7 @@ class User:
                         t3.annual, t3.annual_privacy,
                         t3.employees, t3.employees_privacy,
                         t3.catalog, t3.city, t3.hobby,
-                        t3.link_telegram,
+                        t3.link_telegram, t3.id_telegram,
                         to_char(t3.birthdate, 'DD/MM/YYYY') AS birthdate, t3.birthdate_privacy,
                         t3.experience,
                         coalesce(t2.tags, '') AS tags,
@@ -1175,7 +1177,7 @@ class User:
             kwargs['password'],
             kwargs['active'] if 'active' in kwargs else True,
         )
-        print(kwargs['birthdate'])
+        #print(kwargs['birthdate'])
         await api.pg.club.execute(
             """UPDATE
                     users_info
@@ -1287,6 +1289,15 @@ class User:
         data = await api.pg.club.execute(
             """UPDATE users SET active = FALSE WHERE id = $1""",
             self.id
+        )
+
+
+    ################################################################
+    async def update_telegram(self, telegram_id):
+        api = get_api_context()
+        data = await api.pg.club.execute(
+            """UPDATE users_info SET id_telegram = $2 WHERE user_id = $1""",
+            self.id, telegram_id
         )
 
 
@@ -1448,3 +1459,17 @@ async def get_community_managers():
     return [
         { 'id': item['id'], 'name': item['name'] } for item in data
     ]
+
+
+
+################################################################
+async def get_telegram_pin(user):
+    api = get_api_context()
+    await api.redis.data.acquire()
+    check = 1
+    while check != 0:
+        pin = ''.join(choice(string.digits) for _ in range(6))
+        check = await api.redis.data.exec('EXISTS', '__TELEGRAM__' + pin)
+    await api.redis.data.exec('SET', '__TELEGRAM__' + pin, user.id, ex = 900)
+    api.redis.data.release()
+    return pin
