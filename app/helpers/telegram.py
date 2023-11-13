@@ -14,8 +14,8 @@ def send_telegram_message(stream, chat_id, body):
     params = {
         'chat_id': chat_id,
         'text': body,
-        # 'parse_mode': 'HTML',
-        'parse_mode': '',
+        'parse_mode': 'HTML',
+        # 'parse_mode': '',
 
     }
     stream.register(

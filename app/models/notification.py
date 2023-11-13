@@ -169,12 +169,13 @@ async def process_post_add(api, user_id, item_id, params):
             """INSERT INTO notifications (message, link, item_id, recepients) VALUES ($1, $2, $3, $4)""",
             message, link, item_id, [ user_id ]
         )
+        link_html = '<a href="https://social.clubgermes.ru' + link + '">Перейти в клуб</a>'
         #print('SENDING NOTIFICATIONS!!!!!!!!')
         send_notification(user_id)
         recepient = User()
         await recepient.set(id = user_id)
         if recepient.id_telegram:
-            send_telegram_message(api.stream_telegram, recepient.id_telegram, message)
+            send_telegram_message(api.stream_telegram, recepient.id_telegram, message + ' ' + link_html)
         if recepients_ids:
             body = Template(TEMPLATES[template_name])
             message = body.render(
@@ -191,4 +192,4 @@ async def process_post_add(api, user_id, item_id, params):
             )
             send_notifications(recepients_ids)
             for chat_id in telegram_chats:
-                send_telegram_message(api.stream_telegram, chat_id, message)
+                send_telegram_message(api.stream_telegram, chat_id, message + ' ' + link_html)
