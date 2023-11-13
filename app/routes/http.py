@@ -13,6 +13,8 @@ from app.routes.endpoints.avatar import routes as routes_avatar
 from app.routes.endpoints.notification import routes as routes_notification
 from app.routes.endpoints.tag import routes as routes_tag
 
+from app.routes.endpoints.telegram import routes as routes_telegram
+
 
 routes = [
     *routes_home(),
@@ -29,4 +31,6 @@ routes = [
     *routes_avatar(),
     *routes_notification(),
     *routes_tag(),
+
+    *routes_telegram(),
 ]

@@ -1255,7 +1255,7 @@ async def user_helpful(request):
 async def save_telegram_pin(request):
     if request.user.id and request.user.active is True:
         pin = await get_telegram_pin(request.user)
-        # link = 'https://t.me/DigitenderBot?start=' + pin
+        # link = 'https://t.me/GermesClubBot?start=' + pin
         # if request.user.phone:
         #     loop = asyncio.get_event_loop()
         #     loop.create_task(
