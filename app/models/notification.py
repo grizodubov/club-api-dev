@@ -111,6 +111,7 @@ async def process_post_add(api, user_id, item_id, params):
         'answer': 'Добавлен новый ответ на вопрос «{{ question.text }}» в сообществе «{{ community.name }}»',
         'answer_self': 'Вы добавили новый ответ на вопрос «{{ question.text }}» в сообществе «{{ community.name }}»',
     }
+    author_id = await api.pg.club.fetchval("""SELECT author_id FROM posts WHERE id = $1""", item_id)
     community = Community()
     await community.set(id = params['community_id'])
     question_tags = None
@@ -141,8 +142,8 @@ async def process_post_add(api, user_id, item_id, params):
                     to_tsvector(t2.interests) @@ to_tsquery($1)""",
             query
         )
-        recepients_ids = [ item['id'] for item in result if item['id'] != user_id ]
-        telegram_chats = [ item['id_telegram'] for item in result if item['id'] != user_id and item['id_telegram'] ]
+        recepients_ids = [ item['id'] for item in result if item['id'] != author_id ]
+        telegram_chats = [ item['id_telegram'] for item in result if item['id'] != author_id and item['id_telegram'] ]
         template_name = 'answer' if params['reply_to_post_id'] else 'question'
         question_text = None
         if params['reply_to_post_id']:
@@ -167,13 +168,13 @@ async def process_post_add(api, user_id, item_id, params):
         )
         await api.pg.club.execute(
             """INSERT INTO notifications (message, link, item_id, recepients) VALUES ($1, $2, $3, $4)""",
-            message, link, item_id, [ user_id ]
+            message, link, item_id, [ author_id ]
         )
         link_html = '<a href="https://social.clubgermes.ru' + link + '">Перейти в клуб</a>'
         #print('SENDING NOTIFICATIONS!!!!!!!!')
-        send_notification(user_id)
+        send_notification(author_id)
         recepient = User()
-        await recepient.set(id = user_id)
+        await recepient.set(id = author_id)
         if recepient.id_telegram:
             send_telegram_message(api.stream_telegram, recepient.id_telegram, message + ' ' + link_html)
         if recepients_ids:
