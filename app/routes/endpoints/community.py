@@ -8,7 +8,7 @@ from app.core.event import dispatch
 from app.utils.validate import validate
 from app.models.community import Community, get_stats, get_posts, sort_communities, add_post, update_post, move_post, check_post, check_question, check_answer, find_questions, extra_update_post, extra_delete_post, get_data_for_select, get_unverified_questions, get_verified_flag, get_user_questions, get_user_recommendations, get_active_communities
 from app.models.user import User
-from app.models.poll import Poll
+from app.models.poll import Poll, get_user_polls_recommendations
 from app.models.item_ import Items
 from app.models.notification import create_notifications
 
@@ -399,12 +399,24 @@ async def community_suggestions(request):
 ################################################################
 async def community_questions_top(request):
     if request.user.id:
-            questions = await get_user_questions(request.user.id)
-            recommendations = await get_user_recommendations(request.user)
-            return OrjsonResponse({
-                'questions': questions,
-                'recommendations': recommendations,
-            })
+        questions = await get_user_questions(request.user.id)
+        recommendations = await get_user_recommendations(request.user)
+        polls = await get_user_polls_recommendations(request.user)
+        polls_result = []
+        for poll in polls:
+            temp = poll.show() | { 'answered': False, 'votes_max': 0 }
+            votes = {}
+            for k, v in temp['votes'].items():
+                votes[k] = len(v)
+                if votes[k] > temp['votes_max']:
+                    temp['votes_max'] = votes[k]
+            temp['votes'] = votes
+            polls_result.append(temp)
+        return OrjsonResponse({
+            'questions': questions,
+            'recommendations': recommendations,
+            'polls_recommendations': polls_result,
+        })
     else:
         return err(403, 'Нет доступа')
 

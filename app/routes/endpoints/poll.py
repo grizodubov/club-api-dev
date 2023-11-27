@@ -47,6 +47,10 @@ MODELS = {
 			'required': True,
 			'type': 'bool',
 		},
+        'wide': {
+			'required': True,
+			'type': 'bool',
+		},
 		'text': {
 			'required': True,
 			'type': 'str',
@@ -83,6 +87,10 @@ MODELS = {
 			'type': 'bool',
 		},
         'closed': {
+			'required': True,
+			'type': 'bool',
+		},
+        'wide': {
 			'required': True,
 			'type': 'bool',
 		},

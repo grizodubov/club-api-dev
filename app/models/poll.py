@@ -20,6 +20,7 @@ class Poll:
         self.answers = []
         self.active = False
         self.closed = False
+        self.wide = False
         self.tags = ''
         self.votes = {}
 
@@ -53,7 +54,7 @@ class Poll:
             """SELECT
                     t1.id, t1.time_create, t1.time_update,
                     t1.community_id, t1.community_id_deleted, t4.name AS community_name,
-                    t1.text, t1.answers, t1.active, t1.closed,
+                    t1.text, t1.answers, t1.active, t1.closed, t1.wide,
                     t1.tags, coalesce(t2.votes, '{}'::jsonb)::jsonb || coalesce(t3.votes, '{}'::jsonb)::jsonb AS votes
                 FROM
                     polls t1
@@ -120,7 +121,7 @@ class Poll:
                 """SELECT
                     t1.id, t1.time_create, t1.time_update,
                     t1.community_id, t1.community_id_deleted, t4.name AS community_name,
-                    t1.text, t1.answers, t1.active, t1.closed,
+                    t1.text, t1.answers, t1.active, t1.closed, t1.wide,
                     t1.tags, coalesce(t2.votes, '{}'::jsonb)::jsonb || coalesce(t3.votes, '{}'::jsonb)::jsonb AS votes
                 FROM
                     polls t1
@@ -169,7 +170,7 @@ class Poll:
             temp = ','.join([ t for t in re.split(r'\s*,\s*', kwargs['tags'].strip()) if t ])
         id = await api.pg.club.fetchval(
             """INSERT INTO
-                    polls (community_id, text, answers, active, closed, tags)
+                    polls (community_id, text, answers, active, closed, tags, wide)
                 VALUES
                     ($1, $2, $3, $4, $5, $6)
                 RETURNING
@@ -180,6 +181,7 @@ class Poll:
             kwargs['active'],
             kwargs['closed'],
             temp,
+            kwargs['wide'],
         )
         await self.set(id = id)
 
@@ -191,7 +193,7 @@ class Poll:
         cursor = 2
         query = []
         args = []
-        for k in { 'active', 'closed', 'text', 'tags', 'answers', 'community_id' }:
+        for k in { 'active', 'closed', 'text', 'tags', 'answers', 'community_id', 'wide' }:
             if k in kwargs:
                 query.append(k + ' = $' + str(cursor))
                 if k == 'tags':
@@ -246,3 +248,71 @@ class Poll:
                     answer = EXCLUDED.answer""",
             self.id, user_id, vote
         )
+
+
+
+###############################################################
+async def get_user_polls_recommendations(user):
+    result = []
+    tags = ''
+    if user.tags:
+        tags += user.tags
+    if user.interests:
+        if tags:
+            tags += ','
+        tags += user.interests
+    query = ' | '.join([ re.sub(r'\s+', ' & ', t.strip()) for t in tags.split(',') ])
+    api = get_api_context()
+    data = await api.pg.club.fetch(
+        """SELECT
+                    t1.id, t1.time_create, t1.time_update,
+                    t1.community_id, t1.community_id_deleted, t4.name AS community_name,
+                    t1.text, t1.answers, t1.active, t1.closed, t1.wide,
+                    t1.tags, coalesce(t2.votes, '{}'::jsonb)::jsonb || coalesce(t3.votes, '{}'::jsonb)::jsonb AS votes
+                FROM
+                    polls t1
+                INNER JOIN
+                    communities t4 ON t4.id = t1.community_id
+                LEFT JOIN
+                    (
+                        SELECT
+                            id, votes
+                        FROM
+                            polls, LATERAL (
+                                SELECT
+                                    jsonb_object_agg(n::text, '{}'::integer[]) AS votes
+                                FROM
+                                    unnest(array_positions(array_fill(1, ARRAY[coalesce(array_length(answers, 1), 0)]), 1)) AS n
+                            ) sub1
+                    ) t2 ON t2.id = t1.id
+                LEFT JOIN
+                    (
+                        SELECT
+                            poll_id, jsonb_object_agg(answer, votes) AS votes
+                        FROM
+                            (
+                                SELECT
+                                    poll_id, answer, array_agg(user_id) AS votes
+                                FROM
+                                    polls_votes
+                                GROUP BY
+                                    poll_id, answer
+                            ) sub2
+                        GROUP BY
+                            poll_id
+                    ) t3 ON t3.poll_id = t1.id
+                LEFT JOIN
+                    polls_votes t5 ON t5.poll_id = t1.id AND t5.user_id = $1    
+                WHERE
+                    t1.active IS TRUE AND
+                    t1.closed IS FALSE AND
+                    t5.answer IS NULL AND
+                    (t1.wide IS TRUE OR to_tsvector(t1.tags) @@ to_tsquery($2))
+                ORDER BY t1.id DESC""",
+        user.id, query
+    )
+    for row in data:
+        item = Poll()
+        item.__dict__ = dict(row)
+        result.append(item)
+    return result
