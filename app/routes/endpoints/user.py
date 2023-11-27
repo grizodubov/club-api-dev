@@ -10,6 +10,7 @@ from app.utils.validate import validate
 from app.models.user import User, get_residents, get_residents_contacts, get_community_managers, get_telegram_pin
 from app.models.event import Event
 from app.models.item import Item
+from app.helpers.mobile import send_mobile_message
 
 
 
@@ -1255,15 +1256,13 @@ async def user_helpful(request):
 async def save_telegram_pin(request):
     if request.user.id and request.user.active is True:
         pin = await get_telegram_pin(request.user)
-        # link = 'https://t.me/GermesClubBot?start=' + pin
-        # if request.user.phone:
-        #     loop = asyncio.get_event_loop()
-        #     loop.create_task(
-        #         send_mobile_message(
-        #             request.user.phone,
-        #             'Ссылка для привязки Telegram к Digitender: ' + link
-        #         )
-        #     )
+        link = 'https://t.me/GermesClubBot?start=' + pin
+        if request.user.phone:
+            send_mobile_message(
+                request.api.stream_mobile,
+                request.user.phone,
+                'Ссылка для привязки Telegram к Germes: ' + link,
+            )
         return OrjsonResponse({
             'pin': pin,
         })
