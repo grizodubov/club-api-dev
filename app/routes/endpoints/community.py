@@ -8,6 +8,7 @@ from app.core.event import dispatch
 from app.utils.validate import validate
 from app.models.community import Community, get_stats, get_posts, sort_communities, add_post, update_post, move_post, check_post, check_question, check_answer, find_questions, extra_update_post, extra_delete_post, get_data_for_select, get_unverified_questions, get_verified_flag, get_user_questions, get_user_recommendations, get_active_communities
 from app.models.user import User
+from app.models.poll import Poll
 from app.models.item_ import Items
 from app.models.notification import create_notifications
 
@@ -271,12 +272,19 @@ async def community_list(request):
                 if k == str(community['id']):
                     community['children'] = v
                     break
+        polls = []
+        if request.params['community_id']:
+            polls = await Poll.search(
+                communities_ids = [ request.params['community_id'] ],
+                active = True,
+            )
         return OrjsonResponse({
             'communities': communities_full,
             'stats': stats,
             'community_root_id': community_root_id,
             'community_id': community_id,
             'posts': posts,
+            'polls': [ poll.show() for poll in polls ],
         })
     else:
         return err(403, 'Нет доступа')

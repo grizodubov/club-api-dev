@@ -11,6 +11,8 @@ from app.models.community import Community, get_data_for_select
 
 def routes():
     return [
+        Route('/poll/add/vote', poll_add_vote, methods = [ 'POST' ]),
+
         Route('/m/poll/list', moderator_poll_list, methods = [ 'POST' ]),
         Route('/m/poll/update', moderator_poll_update, methods = [ 'POST' ]),
         Route('/m/poll/create', moderator_poll_create, methods = [ 'POST' ]),
@@ -19,6 +21,18 @@ def routes():
 
 
 MODELS = {
+    'poll_add_vote': {
+        'poll_id': {
+            'required': True,
+			'type': 'int',
+            'value_min': 1,
+        },
+        'answer': {
+            'required': True,
+			'type': 'int',
+            'value_min': 1,
+        },
+    },
     'moderator_poll_update': {
 		'id': {
 			'required': True,
@@ -156,6 +170,25 @@ async def moderator_poll_create(request):
                 return OrjsonResponse({})
             else:
                 return err(404, 'Сообщество не найдено')
+        else:
+            return err(400, 'Неверный запрос')
+    else:
+        return err(403, 'Нет доступа')
+
+
+
+################################################################
+async def poll_add_vote(request):
+    if request.user.id:
+        if validate(request.params, MODELS['moderator_poll_update']):
+            poll = Poll()
+            await poll.set(id = request.params['poll_id'])
+            if poll.id and request.params['answer'] <= poll.answers.length:
+                await poll.add_vote(request.user.id, request.params['answer'])
+                dispatch('poll_update', request)
+                return OrjsonResponse({})
+            else:
+                return err(404, 'Опрос не найден')
         else:
             return err(400, 'Неверный запрос')
     else:
