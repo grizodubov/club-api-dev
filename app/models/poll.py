@@ -164,6 +164,9 @@ class Poll:
     ################################################################
     async def create(self, **kwargs):
         api = get_api_context()
+        temp = None
+        if kwargs['tags'] and kwargs['tags'].strip():
+            temp = ','.join([ t for t in re.split(r'\s*,\s*', kwargs['tags'].strip()) if t ])
         id = await api.pg.club.fetchval(
             """INSERT INTO
                     polls (community_id, text, answers, active, closed, tags)
@@ -176,7 +179,7 @@ class Poll:
             kwargs['answers'],
             kwargs['active'],
             kwargs['closed'],
-            kwargs['tags']
+            temp,
         )
         await self.set(id = id)
 

@@ -54,6 +54,7 @@ MODELS = {
 			'required': True,
 			'type': 'str',
             'processing': lambda x: x.strip(),
+            'null': True,
 		},
         'history': {
 			'required': True,
@@ -92,6 +93,7 @@ MODELS = {
 			'required': True,
 			'type': 'str',
             'processing': lambda x: x.strip(),
+            'null': True,
 		},
 	},
 }
