@@ -239,10 +239,10 @@ class Poll:
         api = get_api_context()
         await api.pg.club.execute( 
             """INSERT INTO
-                    polls_votes (poll_id, user_id, vote)
+                    polls_votes (poll_id, user_id, answer)
                 VALUES ($1, $2, $3)
                 ON CONFLICT (poll_id, user_id)
                 DO UPDATE SET
-                    vote = EXCLUDED.vote""",
+                    answer = EXCLUDED.answer""",
             self.id, user_id, vote
         )

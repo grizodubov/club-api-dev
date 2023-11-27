@@ -115,6 +115,25 @@ MODELS = {
 
 
 ################################################################
+async def poll_add_vote(request):
+    if request.user.id:
+        if validate(request.params, MODELS['poll_add_vote']):
+            poll = Poll()
+            await poll.set(id = request.params['poll_id'])
+            if poll.id and request.params['answer'] <= len(poll.answers) and poll.closed is False and poll.active is True:
+                await poll.add_vote(request.user.id, request.params['answer'])
+                dispatch('poll_update', request)
+                return OrjsonResponse({})
+            else:
+                return err(404, 'Опрос не найден')
+        else:
+            return err(400, 'Неверный запрос')
+    else:
+        return err(403, 'Нет доступа')
+
+
+
+################################################################
 async def moderator_poll_list(request):
     if request.user.id and request.user.check_roles({ 'admin', 'moderator', 'manager', 'community manager' }):
         polls = await Poll.search()   
@@ -170,25 +189,6 @@ async def moderator_poll_create(request):
                 return OrjsonResponse({})
             else:
                 return err(404, 'Сообщество не найдено')
-        else:
-            return err(400, 'Неверный запрос')
-    else:
-        return err(403, 'Нет доступа')
-
-
-
-################################################################
-async def poll_add_vote(request):
-    if request.user.id:
-        if validate(request.params, MODELS['moderator_poll_update']):
-            poll = Poll()
-            await poll.set(id = request.params['poll_id'])
-            if poll.id and request.params['answer'] <= poll.answers.length:
-                await poll.add_vote(request.user.id, request.params['answer'])
-                dispatch('poll_update', request)
-                return OrjsonResponse({})
-            else:
-                return err(404, 'Опрос не найден')
         else:
             return err(400, 'Неверный запрос')
     else:

@@ -272,19 +272,31 @@ async def community_list(request):
                 if k == str(community['id']):
                     community['children'] = v
                     break
+        polls_result = []
         polls = []
         if request.params['community_id']:
             polls = await Poll.search(
                 communities_ids = [ request.params['community_id'] ],
                 active = True,
             )
+        for poll in polls:
+            temp = poll.show() | { 'answered': False, 'votes_max': 0 }
+            votes = {}
+            for k, v in temp['votes'].items():
+                if request.user.id in v:
+                    temp['answered'] = True
+                votes[k] = len(v)
+                if votes[k] > temp['votes_max']:
+                    temp['votes_max'] = votes[k]
+            temp['votes'] = votes
+            polls_result.append(temp)
         return OrjsonResponse({
             'communities': communities_full,
             'stats': stats,
             'community_root_id': community_root_id,
             'community_id': community_id,
             'posts': posts,
-            'polls': [ poll.show() for poll in polls ],
+            'polls': polls_result,
         })
     else:
         return err(403, 'Нет доступа')
