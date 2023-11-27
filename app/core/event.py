@@ -32,6 +32,8 @@ EVENTS = {
     'post_add': { 'send': True, 'filter_params': None },
     'post_update': { 'send': True, 'filter_params': None },
     'tag_update': { 'send': True, 'filter_params': None },
+    'poll_update': { 'send': True, 'filter_params': None },
+    'poll_create': { 'send': True, 'filter_params': None },
 }
 
 
