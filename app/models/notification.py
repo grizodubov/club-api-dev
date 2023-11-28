@@ -194,3 +194,63 @@ async def process_post_add(api, user_id, item_id, params):
             send_notifications(recepients_ids)
             for chat_id in telegram_chats:
                 send_telegram_message(api.stream_telegram, chat_id, message + ' ' + link_html)
+
+
+
+####################################################################
+async def process_poll_create(api, user_id, item_id, params):
+    TEMPLATES = {
+        'poll': 'Добавлен новый опрос в сообщество «{{ community.name }}»',
+    }
+    community = Community()
+    await community.set(id = params['community_id'])
+    result = []
+    if params['wide']:
+        result = await api.pg.club.fetch(
+            """SELECT
+                    t1.id, t3.id_telegram
+                FROM
+                    users t1
+                INNER JOIN
+                    users_info t3 ON t3.user_id = t1.id
+                WHERE
+                    t1.id >= 10000"""
+        )
+    elif params['tags']:
+        query = ' | '.join([ re.sub(r'\s+', ' & ', t.strip()) for t in tags.split(',') ])
+        result = await api.pg.club.fetch(
+            """SELECT
+                    t1.id, t3.id_telegram
+                FROM
+                    users t1
+                INNER JOIN
+                    users_tags t2 ON t2.user_id = t1.id
+                INNER JOIN
+                    users_info t3 ON t3.user_id = t1.id
+                WHERE
+                    to_tsvector(t2.tags) @@ to_tsquery($1) OR
+                    to_tsvector(t2.interests) @@ to_tsquery($1)""",
+            query
+        )
+    recepients_ids = [ item['id'] for item in result ]
+    telegram_chats = [ item['id_telegram'] for item in result if item['id_telegram'] ]
+    if recepients_ids:
+        link = '/' + str(community.id)
+        if community.parent_id:
+            link = '/' + str(community.parent_id) + link
+        link = '/communities' + link
+        link_html = '<a href="https://social.clubgermes.ru' + link + '">Перейти в клуб</a>'
+        body = Template(TEMPLATES['poll'])
+        message  = body.render(
+            community = {
+                'name': community.name,
+            },
+        )
+        #print(message)
+        await api.pg.club.execute(
+            """INSERT INTO notifications (message, link, item_id, recepients) VALUES ($1, $2, $3, $4)""",
+            message, link, item_id, recepients_ids
+        )
+        send_notifications(recepients_ids)
+        for chat_id in telegram_chats:
+            send_telegram_message(api.stream_telegram, chat_id, message + ' ' + link_html)

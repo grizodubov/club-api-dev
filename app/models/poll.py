@@ -172,7 +172,7 @@ class Poll:
             """INSERT INTO
                     polls (community_id, text, answers, active, closed, tags, wide)
                 VALUES
-                    ($1, $2, $3, $4, $5, $6)
+                    ($1, $2, $3, $4, $5, $6, $7)
                 RETURNING
                     id""",
             kwargs['community_id'],

@@ -308,16 +308,51 @@ async def get_stats(communities_ids, user_id):
                 t1.community_id""",
         communities_ids, user_id
     )
-    return {
-        str(row['community_id']): {
+    data_polls = await api.pg.club.fetch(
+        """SELECT
+                t1.community_id,
+                count(t1.id) AS subjects_open,
+                count(t1.id) FILTER (WHERE t1.closed IS FALSE AND t2.answer IS NULL) AS subjects_new,
+                max(t1.time_create) AS time_last_post,
+                max(t1.time_create) FILTER (WHERE t1.closed IS FALSE AND t2.answer IS NULL) AS time_last_post_new
+            FROM
+                polls t1
+            LEFT JOIN
+                polls_votes t2 ON t2.poll_id = t1.id AND t2.user_id = $1
+            WHERE
+                t1.community_id = ANY($2) AND
+                t1.active IS TRUE
+            GROUP BY
+                t1.community_id""",
+        user_id, communities_ids
+    )
+    result = {}
+    for row in data:
+        k = str(row['community_id'])
+        result[k] = {
             'subjects_open': row['subjects_open'],
             'subjects_new': row['subjects_new'],
             'answers_new': row['answers_new'],
             'time_last_post': row['time_last_post'],
             'time_last_post_new': row['time_last_post_new'],
         }
-        for row in data
-    }
+    for row in data_polls:
+        k = str(row['community_id'])
+        if k not in result:
+            result[k] = {
+                'subjects_open': 0,
+                'subjects_new': 0,
+                'answers_new': 0,
+                'time_last_post': None,
+                'time_last_post_new': None,
+            }
+        result[k]['subjects_open'] += row['subjects_open']
+        result[k]['subjects_new'] += row['subjects_new']
+        if row['time_last_post'] is not None and (result[k]['time_last_post'] is None or row['time_last_post'] > result[k]['time_last_post']):
+            result[k]['time_last_post'] = row['time_last_post']
+        if row['time_last_post_new'] is not None and (result[k]['time_last_post_new'] is None or row['time_last_post_new'] > result[k]['time_last_post_new']):
+            result[k]['time_last_post_new'] = row['time_last_post_new']
+    return result
 
 
 

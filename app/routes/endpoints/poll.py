@@ -6,6 +6,7 @@ from app.core.event import dispatch
 from app.utils.validate import validate
 from app.models.poll import Poll
 from app.models.community import Community, get_data_for_select
+from app.models.notification import create_notifications
 
 
 
@@ -164,9 +165,27 @@ async def moderator_poll_update(request):
         if validate(request.params, MODELS['moderator_poll_update']):
             poll = Poll()
             await poll.set(id = request.params['id'])
+            notify = False
+            if 'active' in request.params and 'closed' in request.params and \
+                    request.params['active'] is True and request.params['closed'] is False and \
+                    (poll.active is False or poll.closed is True):
+                notify = True
             if poll.id:
                 await poll.update(**request.params)
+                await poll.set(id = request.params['id'])
                 dispatch('poll_update', request)
+                if notify:
+                    create_notifications('poll_create', request.user.id, poll.id, {
+                        'id': poll.id,
+                        'active': poll.active,
+                        'closed': poll.closed,
+                        'wide': poll.wide,
+                        'tags': poll.tags,
+                        'community_id': poll.community_id,
+                        'community_name': poll.community_name,
+                        'text': poll.text,
+                        'answers': poll.answers,
+                    })
                 return OrjsonResponse({})
             else:
                 return err(404, 'Группа не найдена')
@@ -192,8 +211,20 @@ async def moderator_poll_create(request):
                     tags = request.params['tags'],
                     active = request.params['active'],
                     closed = request.params['closed'],
+                    wide = request.params['wide'],
                 )
                 dispatch('poll_create', request)
+                create_notifications('poll_create', request.user.id, poll.id, {
+                    'id': poll.id,
+                    'active': poll.active,
+                    'closed': poll.closed,
+                    'wide': poll.wide,
+                    'tags': poll.tags,
+                    'community_id': poll.community_id,
+                    'community_name': poll.community_name,
+                    'text': poll.text,
+                    'answers': poll.answers,
+                })
                 return OrjsonResponse({})
             else:
                 return err(404, 'Сообщество не найдено')
