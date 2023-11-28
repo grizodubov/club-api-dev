@@ -96,6 +96,102 @@ class Session:
                 self.key = key
                 self.time_seen = data['time_last_activity']
                 self.settings = data['settings']
+    
+
+    ################################################################
+    async def auth_by_subtoken(self, token = '', subtoken = ''):
+        api = get_api_context()
+        id = 0
+        data = None
+        user_id = 0
+        if re.fullmatch(r'[0-9A-Fa-f]{64}', subtoken):
+            user_id = await api.redis.tokens.exec('GET', subtoken)
+            if not user_id or user_id == '0':
+                user_id = 0
+            else:
+                user_id = int(user_id)
+        if re.fullmatch(r'[0-9A-Fa-f]{64}', token):
+            session_id = await api.redis.tokens.exec('GET', token)
+            if session_id:
+                id = int(session_id)
+                if id:
+                    data = await api.pg.club.fetchrow(
+                        """UPDATE
+                                sessions
+                            SET
+                                time_last_activity = now() at time zone 'utc'
+                            WHERE
+                                id = $1
+                            RETURNING
+                                coalesce(user_id, 0) AS user_id,
+                                time_last_activity,
+                                settings""",
+                        id
+                    )
+        if data:
+            self.id = id
+            self.token_prev = token
+            if not user_id or user_id == data['user_id']:
+                self.user_id = data['user_id']
+            else:
+                if data['user_id']:
+                    self.user_id = 0
+                    await api.pg.club.fetchrow(
+                        """UPDATE
+                                sessions
+                            SET
+                                user_id = NULL
+                            WHERE
+                                id = $1""",
+                        self.id
+                    )
+                else:
+                    self.user_id = user_id
+                    await api.pg.club.fetchrow(
+                        """UPDATE
+                                sessions
+                            SET
+                                user_id = $2
+                            WHERE
+                                id = $1""",
+                        self.id, user_id
+                    )
+
+            await api.redis.tokens.exec('EXPIRE', token, api.config.settings['AUTH']['TOKEN_DROPTIME'])
+        else:
+            data = await api.pg.club.fetchrow(
+                """INSERT INTO
+                        sessions
+                    DEFAULT VALUES
+                    RETURNING
+                        id,
+                        time_last_activity,
+                        settings"""
+            )
+            self.id = data['id']
+            self.token_prev = ''
+            if user_id:
+                self.user_id = user_id
+                await api.pg.club.fetchrow(
+                    """UPDATE
+                            sessions
+                        SET
+                            user_id = $2
+                        WHERE
+                            id = $1""",
+                    self.id, user_id
+                )
+        self.time_last_activity = data['time_last_activity']
+        self.settings = data['settings']
+        await api.redis.tokens.acquire()
+        while True:
+            token_next = token_hex(32)
+            result = await api.redis.tokens.exec('EXISTS', token_next)
+            if result == 0:
+                break
+        self.token_next = token_next
+        await api.redis.tokens.exec('SET', token_next, self.id, ex = api.config.settings['AUTH']['TOKEN_LIFETIME'])
+        api.redis.tokens.release()
 
 
     ################################################################

@@ -64,6 +64,8 @@ async def before_request(request):
         if params:
             if '_key' in params:
                 await request.state.session.auth_by_key(key = params['_key'])
+            elif '_subtoken' in params:
+                await request.state.session.auth_by_subtoken(token = params['_token'] if '_token' in params else '', subtoken = params['_subtoken'])
             else:
                 await request.state.session.auth_by_token(token = params['_token'] if '_token' in params else '')
     # request.user

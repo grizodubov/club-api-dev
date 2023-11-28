@@ -1,6 +1,7 @@
 import asyncio
 import re
 import orjson
+from secrets import token_hex
 from jinja2 import Template
 
 from app.core.context import get_api_context
@@ -100,6 +101,21 @@ async def get_highlights(user_id):
 
 
 ####################################################################
+async def set_subtoken(api, user_id):
+    subtoken = ''
+    await api.redis.tokens.acquire()
+    while True:
+        subtoken = token_hex(32)
+        result = await api.redis.tokens.exec('EXISTS', subtoken)
+        if result == 0:
+            break
+    await api.redis.tokens.exec('SET', subtoken, str(user_id), ex = 3600)
+    api.redis.tokens.release()
+    return subtoken
+
+
+
+####################################################################
 # METHODS
 ####################################################################
 
@@ -143,7 +159,7 @@ async def process_post_add(api, user_id, item_id, params):
             query
         )
         recepients_ids = [ item['id'] for item in result if item['id'] != author_id ]
-        telegram_chats = [ item['id_telegram'] for item in result if item['id'] != author_id and item['id_telegram'] ]
+        telegram_chats = [ (item['id'], item['id_telegram']) for item in result if item['id'] != author_id and item['id_telegram'] ]
         template_name = 'answer' if params['reply_to_post_id'] else 'question'
         question_text = None
         if params['reply_to_post_id']:
@@ -156,7 +172,7 @@ async def process_post_add(api, user_id, item_id, params):
         link = '/' + str(community.id) + '/' + str(item_id)
         if community.parent_id:
             link = '/' + str(community.parent_id) + link
-        link = '/communities' + link
+        link = '/communities' + link + '?sbt=___SUBTOKEN___'
         body = Template(TEMPLATES[template_name + '_self'])
         message  = body.render(
             community = {
@@ -192,8 +208,10 @@ async def process_post_add(api, user_id, item_id, params):
                 message, link, item_id, recepients_ids
             )
             send_notifications(recepients_ids)
-            for chat_id in telegram_chats:
-                send_telegram_message(api.stream_telegram, chat_id, message + ' ' + link_html)
+            for chat in telegram_chats:
+                subtoken = await set_subtoken(api, chat[0])
+                link_html = link_html.replace('___SUBTOKEN___', subtoken)
+                send_telegram_message(api.stream_telegram, chat[1], message + ' ' + link_html)
 
 
 
@@ -233,12 +251,12 @@ async def process_poll_create(api, user_id, item_id, params):
             query
         )
     recepients_ids = [ item['id'] for item in result ]
-    telegram_chats = [ item['id_telegram'] for item in result if item['id_telegram'] ]
+    telegram_chats = [ (item['id'], item['id_telegram']) for item in result if item['id_telegram'] ]
     if recepients_ids:
         link = '/' + str(community.id)
         if community.parent_id:
             link = '/' + str(community.parent_id) + link
-        link = '/communities' + link
+        link = '/communities' + link + '?sbt=___SUBTOKEN___'
         link_html = '<a href="https://social.clubgermes.ru' + link + '">Перейти в клуб</a>'
         body = Template(TEMPLATES['poll'])
         message  = body.render(
@@ -252,5 +270,8 @@ async def process_poll_create(api, user_id, item_id, params):
             message, link, item_id, recepients_ids
         )
         send_notifications(recepients_ids)
-        for chat_id in telegram_chats:
-            send_telegram_message(api.stream_telegram, chat_id, message + ' ' + link_html)
+        for chat in telegram_chats:
+            subtoken = await set_subtoken(api, chat[0])
+            link_html = link_html.replace('___SUBTOKEN___', subtoken)
+            print(chat[0], chat[1], message + ' ' + link_html)
+            send_telegram_message(api.stream_telegram, chat[1], message + ' ' + link_html)
