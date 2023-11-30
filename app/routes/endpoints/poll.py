@@ -17,6 +17,7 @@ def routes():
         Route('/m/poll/list', moderator_poll_list, methods = [ 'POST' ]),
         Route('/m/poll/update', moderator_poll_update, methods = [ 'POST' ]),
         Route('/m/poll/create', moderator_poll_create, methods = [ 'POST' ]),
+        Route('/m/poll/log', moderator_poll_log, methods = [ 'POST' ]),
     ]
 
 
@@ -117,6 +118,13 @@ MODELS = {
 			'type': 'str',
             'processing': lambda x: x.strip(),
             'null': True,
+		},
+	},
+    'moderator_poll_log': {
+		'id': {
+			'required': True,
+			'type': 'int',
+            'value_min': 1,
 		},
 	},
 }
@@ -228,6 +236,27 @@ async def moderator_poll_create(request):
                 return OrjsonResponse({})
             else:
                 return err(404, 'Сообщество не найдено')
+        else:
+            return err(400, 'Неверный запрос')
+    else:
+        return err(403, 'Нет доступа')
+
+
+
+################################################################
+async def moderator_poll_log(request):
+    if request.user.id and request.user.check_roles({ 'admin', 'moderator', 'manager', 'community manager' }):
+        if validate(request.params, MODELS['moderator_poll_log']):
+            poll = Poll()
+            await poll.set(id = request.params['id'])
+            if poll.id:
+                log = await poll.get_votes_log()
+                return OrjsonResponse({
+                    'poll': poll.show(),
+                    'log': log,
+                })
+            else:
+                return err(404, 'Опрос не найден')
         else:
             return err(400, 'Неверный запрос')
     else:

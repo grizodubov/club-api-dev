@@ -235,7 +235,6 @@ class Poll:
             )
 
 
-
     ################################################################
     async def add_vote(self, user_id, vote):
         api = get_api_context()
@@ -245,9 +244,29 @@ class Poll:
                 VALUES ($1, $2, $3)
                 ON CONFLICT (poll_id, user_id)
                 DO UPDATE SET
-                    answer = EXCLUDED.answer""",
+                    answer = EXCLUDED.answer,
+                    time_update = now() at time zone 'utc'""",
             self.id, user_id, vote
         )
+
+
+    ################################################################
+    async def get_votes_log(self):
+        api = get_api_context()
+        data = await api.pg.club.fetch( 
+            """SELECT
+                    t1.user_id, t1.answer, GREATEST (t1.time_create, t1.time_update) AS time, t2.name
+                FROM
+                    polls_votes t1
+                INNER JOIN
+                    users t2 on t2.id = t1.user_id
+                WHERE
+                    t1.poll_id = $1
+                ORDER BY
+                    GREATEST (t1.time_create, t1.time_update)""",
+            self.id
+        )
+        return [ dict(item) for item in data ]
 
 
 
