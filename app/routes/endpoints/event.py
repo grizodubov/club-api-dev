@@ -226,12 +226,20 @@ async def events_feed(request):
             if not result and request.params['find']:
                 time_event = await find_closest_event(request.params['to'])
             events_ids = [ item.id for item in result ]
-            events_ids_selected = await request.user.filter_selected_events(events_ids)
+            events_selected = await request.user.filter_selected_events(events_ids)
             events_ids_thumbsup = await request.user.filter_thumbsup(events_ids)
+            events = []
+            participants = await get_participants(events_ids = events_ids)
+            for event in result:
+                k = str(event.id)
+                event_participants = { 'participants': participants[k] if k in participants else [] }
+                events.append(
+                    event.show() | event_participants
+                )
             return OrjsonResponse({
-                'events': [ item.show() for item in result ],
-                'events_selected': { str(id): True for id in events_ids_selected },
-                'events_thumbsup': { str(id): True for id in events_ids_thumbsup },
+                'events': events,
+                'events_selected': { str(item['event_id']): item['confirmation'] for item in events_selected },
+                'events_thumbsup': { str(id): True for item in events_ids_thumbsup },
                 'closest_time_event': time_event,
             })
         else:

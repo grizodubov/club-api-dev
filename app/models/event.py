@@ -320,7 +320,7 @@ class Event:
             """INSERT INTO
                     events_speakers (event_id, user_id)
                 VALUES
-                    """ + ', '.join(query),
+                    """ + ', '.join(query) + """ ON CONFLICT (event_id, user_id) DO NOTHING""",
             *args
         )
         await self.set(id = self.id)

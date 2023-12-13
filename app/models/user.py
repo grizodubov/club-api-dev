@@ -1079,14 +1079,14 @@ class User:
         api = get_api_context()
         data = await api.pg.club.fetch(
             """SELECT
-                    event_id
+                    event_id, confirmation
                 FROM
                     events_users
                 WHERE
                     user_id = $1 AND event_id = ANY($2)""",
             self.id, tuple(events_ids)
         )
-        return [ row['event_id'] for row in data ]
+        return [ { 'event_id': str(row['event_id']), 'confirmation': row['confirmation'] } for row in data ]
 
 
     ################################################################
