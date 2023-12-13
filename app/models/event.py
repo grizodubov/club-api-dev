@@ -25,6 +25,8 @@ class Event:
         self.icon = False
         self.image = False
         self.files = False
+        self.speakers = []
+        self.program = []
 
     
     ################################################################
@@ -57,9 +59,31 @@ class Event:
                         t1.id, t1.time_create, t1.time_update,
                         t1.name, t1.format, t1.place, t1.time_event,
                         t1.detail, t1.active,
-                        coalesce(t2.thumbs_up, 0) AS thumbs_up
+                        coalesce(t2.thumbs_up, 0) AS thumbs_up,
+                        coalesce(t3.speakers, '{}'::jsonb[]) AS speakers,
+                        coalesce(t4.program, '{}'::jsonb[]) AS program
                     FROM
                         events t1
+                    LEFT JOIN
+                        (
+                            SELECT
+                                s1.event_id, array_agg(jsonb_build_object('id', s1.user_id, 'name', s2.name)) AS speakers
+                            FROM
+                                events_speakers s1
+                            INNER JOIN
+                                users s2 ON s2.id = s1.user_id
+                            GROUP BY
+                                s1.event_id
+                        ) t3 ON t3.event_id = t1.id
+                    LEFT JOIN
+                        (
+                            SELECT
+                                event_id, array_agg(jsonb_build_object('sort', sort, 'name', name, 'date', round(extract(epoch FROM date_item) * 1000), 'time', time_item, 'speakers', speakers) ORDER BY sort) AS program
+                            FROM
+                                events_programs
+                            GROUP BY
+                                event_id
+                        ) t4 ON t4.event_id = t1.id
                     LEFT JOIN
                         (SELECT item_id, count(user_id) AS thumbs_up FROM items_thumbsup GROUP BY item_id) t2 ON t2.item_id = t1.id
                     """ + where_query + """ORDER BY t1.time_event""" + reverse_query,
@@ -149,9 +173,31 @@ class Event:
                         t1.id, t1.time_create, t1.time_update,
                         t1.name, t1.format, t1.place, t1.time_event,
                         t1.detail, t1.active,
-                        coalesce(t2.thumbs_up, 0) AS thumbs_up
+                        coalesce(t2.thumbs_up, 0) AS thumbs_up,
+                        coalesce(t3.speakers, '{}'::jsonb[]) AS speakers,
+                        coalesce(t4.program, '{}'::jsonb[]) AS program
                     FROM
                         events t1
+                    LEFT JOIN
+                        (
+                            SELECT
+                                s1.event_id, array_agg(jsonb_build_object('id', s1.user_id, 'name', s2.name)) AS speakers
+                            FROM
+                                events_speakers s1
+                            INNER JOIN
+                                users s2 ON s2.id = s1.user_id
+                            GROUP BY
+                                s1.event_id
+                        ) t3 ON t3.event_id = t1.id
+                    LEFT JOIN
+                        (
+                            SELECT
+                                event_id, array_agg(jsonb_build_object('sort', sort, 'name', name, 'date', round(extract(epoch FROM date_item) * 1000), 'time', time_item, 'speakers', speakers) ORDER BY sort) AS program
+                            FROM
+                                events_programs
+                            GROUP BY
+                                event_id
+                        ) t4 ON t4.event_id = t1.id
                     LEFT JOIN
                         (SELECT item_id, count(user_id) AS thumbs_up FROM items_thumbsup GROUP BY item_id) t2 ON t2.item_id = t1.id
                     WHERE
@@ -205,6 +251,13 @@ class Event:
 
 
     ################################################################
+    async def info(self):
+        api = get_api_context()
+        info = self.show()
+        return info
+
+
+    ################################################################
     def check_icon(self):
         self.icon = os.path.isfile('/var/www/static.clubgermes.ru/html/events/' + str(self.id) + '/icon.png')
 
@@ -218,6 +271,88 @@ class Event:
     def check_files(self):
         self.files = os.path.isfile('/var/www/static.clubgermes.ru/html/events/' + str(self.id) + '/index.html') and \
                 os.path.isfile('/var/www/static.clubgermes.ru/html/events/' + str(self.id) + '/menu.json')
+    
+
+    ################################################################
+    async def add_speaker(self, user_id):
+        api = get_api_context()
+        id = await api.pg.club.execute(
+            """INSERT INTO
+                    events_speakers (event_id, user_id)
+                VALUES
+                    ($1, $2)""",
+            self.id, user_id
+        )
+        await self.set(id = self.id)
+    
+
+    ################################################################
+    async def delete_speaker(self, user_id):
+        api = get_api_context()
+        id = await api.pg.club.execute(
+            """DELETE FROM
+                    events_speakers
+                WHERE
+                    event_id = $1 AND user_id = $2""",
+            self.id, user_id
+        )
+        await self.set(id = self.id)
+
+
+    ################################################################
+    async def update_speakers(self, speakers):
+        api = get_api_context()
+        query = []
+        args = [ self.id ]
+        i = 2
+        for speaker in speakers:
+            query.append('($1, $' + str(i) + ')')
+            args.append(speaker)
+            i += 1
+        await api.pg.club.execute(
+            """DELETE FROM
+                    events_speakers
+                WHERE
+                    event_id = $1""",
+            self.id
+        )
+        await api.pg.club.execute(
+            """INSERT INTO
+                    events_speakers (event_id, user_id)
+                VALUES
+                    """ + ', '.join(query),
+            *args
+        )
+        await self.set(id = self.id)
+
+
+    ################################################################
+    async def update_program(self, program):
+        api = get_api_context()
+        query = []
+        args = [ self.id ]
+        j = 1
+        i = 2
+        for item in program:
+            query.append('($1, $' + str(i) + ', $' + str(i + 1) + ', $' + str(i + 2) + ', $' + str(i + 3) + ', $' + str(i + 4) + ')')
+            args.extend([ item['name'], item['speakers'], item['date'], item['time'], j ])
+            i += 5
+            j += 1
+        await api.pg.club.execute(
+            """DELETE FROM
+                    events_programs
+                WHERE
+                    event_id = $1""",
+            self.id
+        )
+        await api.pg.club.execute(
+            """INSERT INTO
+                    events_programs (event_id, name, speakers, date_item, time_item, sort)
+                VALUES
+                    """ + ', '.join(query),
+            *args
+        )
+        await self.set(id = self.id)
 
 
 
@@ -250,3 +385,46 @@ async def find_closest_event(mark):
             mark
         )
     return data
+
+
+
+################################################################
+async def get_participants(events_ids):
+    api = get_api_context()
+    data = await api.pg.club.fetch(
+        """SELECT
+                t1.event_id,
+                array_agg(jsonb_build_object('id', t1.user_id, 'name', t2.name, 'confirmation', t1.confirmation)) AS participants
+            FROM
+                events_users t1
+            INNER JOIN
+                users t2 ON t2.id = t1.user_id
+            WHERE
+                t1.event_id = ANY($1)
+            GROUP BY
+                t1.event_id""",
+        events_ids
+    )
+    return { str(item['event_id']): item['participants'] for item in data }
+
+
+
+################################################################
+async def get_all_speakers():
+    api = get_api_context()
+    data = await api.pg.club.fetch(
+        """SELECT
+                t1.id, t1.name
+            FROM
+                users t1
+            INNER JOIN
+                users_roles t2 ON t2.user_id = t1.id
+            INNER JOIN
+                roles t3 ON t3.id = t2.role_id
+            WHERE
+                t3.alias = $1
+            ORDER BY
+                t1.name""",
+        'speaker'
+    )
+    return [ dict(item) for item in data ]

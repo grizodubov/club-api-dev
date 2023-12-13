@@ -1066,6 +1066,15 @@ class User:
 
 
     ################################################################
+    async def confirm_event(self, event_id):
+        api = get_api_context()
+        await api.pg.club.execute(
+            """UPDATE events_users SET confirmation = TRUE WHERE event_id = $1 AND user_id = $2""",
+            event_id, self.id
+        )
+
+
+    ################################################################
     async def filter_selected_events(self, events_ids):
         api = get_api_context()
         data = await api.pg.club.fetch(
@@ -1338,9 +1347,14 @@ async def validate_registration_new(email, email_code, phone_code):
 
 
 ################################################################
-async def get_residents():
+async def get_residents(users_ids = None):
     api = get_api_context()
     result = []
+    query = ''
+    args = []
+    if users_ids:
+        query = ' AND t1.id = ANY($1)'
+        args.append(users_ids)
     data = await api.pg.club.fetch(
         """SELECT
                 t1.id, t1.time_create, t1.time_update,
@@ -1389,8 +1403,9 @@ async def get_residents():
             LEFT JOIN
                 avatars t8 ON t8.owner_id = t1.id AND t8.active IS TRUE
             WHERE
-                'client' = ANY(t4.roles) OR t1.id = 10004
-            ORDER BY t1.name"""
+                ('client' = ANY(t4.roles) OR t1.id = 10004)""" + query + """
+            ORDER BY t1.name""",
+        *args
     )
     for row in data:
         item = User()

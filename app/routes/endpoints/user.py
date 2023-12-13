@@ -45,6 +45,7 @@ def routes():
 
         Route('/new/m/user/update', new_moderator_user_update, methods = [ 'POST' ]),
         Route('/new/m/user/create', new_moderator_user_create, methods = [ 'POST' ]),
+        Route('/new/m/user/event/confirm', new_moderator_user_confirm_event, methods = [ 'POST' ]),
     ]
 
 
@@ -314,7 +315,7 @@ MODELS = {
 			'required': True,
 			'type': 'str',
             'list': True,
-            'values': [ 'admin', 'client', 'guest', 'manager', 'moderator', 'editor', 'community manager', 'tester' ],
+            'values': [ 'admin', 'client', 'guest', 'manager', 'moderator', 'editor', 'community manager', 'tester', 'speaker' ],
 		},
 		'tags': {
 			'required': True,
@@ -325,6 +326,15 @@ MODELS = {
 			'type': 'str',
 		},
 	},
+    'user_residents': {
+        'users_ids': {
+            'required': False,
+			'type': 'int',
+            'list': True,
+            'null': True,
+            'default': None,
+        },
+    },
     # new
 	'new_user_info': {
 		'id': {
@@ -503,7 +513,7 @@ MODELS = {
 			'required': True,
 			'type': 'str',
             'list': True,
-            'values': [ 'admin', 'client', 'guest', 'manager', 'moderator', 'editor', 'community manager', 'tester' ],
+            'values': [ 'admin', 'client', 'guest', 'manager', 'moderator', 'editor', 'community manager', 'tester', 'speaker' ],
 		},
 		'tags': {
 			'required': True,
@@ -656,7 +666,19 @@ MODELS = {
 			'required': True,
 			'type': 'int',
 		},
-    }
+    },
+    'new_moderator_user_confirm_event': {
+        'user_id': {
+			'required': True,
+			'type': 'int',
+            'value_min': 1,
+		},
+        'event_id': {
+			'required': True,
+			'type': 'int',
+            'value_min': 1,
+		},
+    },
 }
 
 
@@ -1068,28 +1090,31 @@ async def moderator_user_create(request):
 ################################################################
 async def user_residents(request):
     if request.user.id:
-        result = await get_residents()
-        contacts = await get_residents_contacts(
-            user_id = request.user.id,
-            user_status = request.user.status,
-            contacts_ids = [ item.id for item in result ]
-        )
-        ### remove data for roles
-        roles = set(request.user.roles)
-        roles.discard('applicant')
-        roles.discard('guest')
-        residents = []
-        for item in result:
-            temp = item.show()
-            if not roles and request.user.id != temp['id']:
-                temp['company'] = ''
-                temp['position'] = ''
-                temp['link_telegram'] = ''
-            residents.append(temp)
-        return OrjsonResponse({
-            'residents': residents,
-            'contacts': contacts,
-        })
+        if validate(request.path_params, MODELS['user_residents']):
+            result = await get_residents(users_ids = request.params['users_ids'] if 'users_ids' in request.params and request.params['users_ids'] else None)
+            contacts = await get_residents_contacts(
+                user_id = request.user.id,
+                user_status = request.user.status,
+                contacts_ids = [ item.id for item in result ]
+            )
+            ### remove data for roles
+            roles = set(request.user.roles)
+            roles.discard('applicant')
+            roles.discard('guest')
+            residents = []
+            for item in result:
+                temp = item.show()
+                if not roles and request.user.id != temp['id']:
+                    temp['company'] = ''
+                    temp['position'] = ''
+                    temp['link_telegram'] = ''
+                residents.append(temp)
+            return OrjsonResponse({
+                'residents': residents,
+                'contacts': contacts,
+            })
+        else:
+            return err(400, 'Неверный запрос')
     else:
         return err(403, 'Нет доступа')
 
@@ -1225,6 +1250,34 @@ async def new_moderator_user_create(request):
             )
             dispatch('user_create', request)
             return OrjsonResponse({})
+        else:
+            return err(400, 'Неверный запрос')
+    else:
+        return err(403, 'Нет доступа')
+
+
+
+################################################################
+async def new_moderator_user_confirm_event(request):
+    if request.user.id and request.user.check_roles({ 'admin', 'moderator', 'manager', 'community manager' }):
+        if validate(request.params, MODELS['new_moderator_user_confirm_event']):
+            user = User()
+            await user.set(id = request.params['user_id'])
+            if user.id:
+                event = Event()
+                await event.set(id = request.params['event_id'])
+                if event.id:
+                    await user.confirm_event(event_id = event.id)
+                    dispatch('user_update', request)
+                    return OrjsonResponse({
+                        'event_id': event.id,
+                        'user_id': user.id,
+                        'confirmation': True,
+                    })
+                else:
+                    return err(404, 'Событие не найдено')
+            else:
+                return err(404, 'Пользователь не найден')
         else:
             return err(400, 'Неверный запрос')
     else:
