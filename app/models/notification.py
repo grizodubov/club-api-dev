@@ -101,6 +101,46 @@ async def get_highlights(user_id):
 
 
 ####################################################################
+async def notifications_read_all(user_id):
+    api = get_api_context()
+    await api.pg.club.execute('DELETE FROM notifications WHERE item_id NOT IN (SELECT id FROM items_signatures)')
+    ids = await api.pg.club.fetchval(
+        """SELECT
+                array_agg(t1.item_id)
+            FROM
+                notifications t1
+            WHERE
+                NOT EXISTS (
+                    SELECT
+                        t2.item_id
+                    FROM
+                        items_views t2
+                    WHERE
+                        t2.item_id = t1.item_id AND t2.user_id = $1
+                ) AND
+                $1 = ANY(t1.recepients)""",
+        user_id
+    )
+    if ids:
+        query = []
+        args = []
+        for i, item in enumerate(ids, 2):
+            query.append('($' + str(i) + ', $1)')
+            args.append(item)
+        data = await api.pg.club.fetch( 
+            """INSERT INTO
+                    items_views
+                    (item_id, user_id)
+                VALUES """ + ', '.join(query) + """
+                ON CONFLICT
+                    (item_id, user_id)
+                DO NOTHING""",
+            user_id, *ids
+        )
+
+
+
+####################################################################
 async def set_subtoken(api, user_id):
     subtoken = ''
     await api.redis.tokens.acquire()

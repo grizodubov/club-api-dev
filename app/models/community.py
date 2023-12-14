@@ -678,6 +678,7 @@ async def extra_delete_post(post_id):
                 id = $1""",
         post_id
     )
+    await api.pg.club.execute('DELETE FROM notifications WHERE item_id NOT IN (SELECT id FROM items_signatures)')
     return True
 
 
