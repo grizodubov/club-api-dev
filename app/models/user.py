@@ -1489,3 +1489,23 @@ async def get_telegram_pin(user):
     print('SET PIN:', '__TELEGRAM__' + pin)
     api.redis.data.release()
     return pin
+
+
+
+################################################################
+async def get_last_activity(users_ids):
+    api = get_api_context()
+    data = await api.pg.club.fetch(
+        """SELECT
+                user_id, max(time_last_activity) AS time_last_activity
+            FROM
+                sessions
+            WHERE
+                user_id = ANY($1)
+            GROUP BY
+                user_id""",
+        users_ids
+    )
+    return {
+        str(item['user_id']): item['time_last_activity'] for item in data
+    }

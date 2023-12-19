@@ -7,7 +7,7 @@ from app.core.request import err
 from app.core.response import OrjsonResponse
 from app.core.event import dispatch
 from app.utils.validate import validate
-from app.models.user import User, get_residents, get_residents_contacts, get_community_managers, get_telegram_pin
+from app.models.user import User, get_residents, get_residents_contacts, get_community_managers, get_telegram_pin, get_last_activity
 from app.models.event import Event
 from app.models.item import Item
 from app.helpers.mobile import send_mobile_message
@@ -1016,8 +1016,14 @@ async def moderator_user_search(request):
                 applicant = request.params['applicant'] if request.params['applicant'] is not None else False,
             )
             community_managers = await get_community_managers()
+            users_ids = [ user.id for user in result ]
+            activity = await get_last_activity(users_ids = users_ids)
+            users = []
+            for item in result:
+                user_activity = { 'time_last_activity': activity[str(item.id)] if str(item.id) in activity else None }
+                users.append(item.dump() | user_activity)
             return OrjsonResponse({
-                'users': [ item.dump() for item in result ],
+                'users': users,
                 'amount': amount,
                 'community_managers': community_managers,
             })

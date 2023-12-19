@@ -27,7 +27,10 @@ class Echo(WebSocketEndpoint):
 
 
     async def on_disconnect(self, websocket, close_code):
-        api = get_api_context()
+        api = self.scope['app'].state.api
+        print('disconnect! 0')
+        #api = get_api_context()
+        #print(api, self.scope['app'].state.api)
         api.websocket_remove(websocket)
 
 

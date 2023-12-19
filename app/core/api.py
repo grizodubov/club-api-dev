@@ -11,6 +11,7 @@ from app.core.pg import PgBank
 from app.core.mq import MQBank
 
 from app.core.stream import Stream
+from app.models.log import capture_signing
 
 
 
@@ -70,6 +71,7 @@ class API:
 
     ################################################################
     def websocket_append(self, websocket, user_id = 0, session_id = 0):
+        print('connect! 1')
         self.store['websockets'].append({
             'handler': websocket,
             'user_id': user_id,
@@ -77,6 +79,8 @@ class API:
         })
         if user_id:
             self.websocket_mass_send({ 'auth': True, 'status': True, 'user_id': user_id })
+            print('connect! 2', user_id)
+            capture_signing(self, session_id, user_id, True)
 
 
     ################################################################
@@ -91,8 +95,11 @@ class API:
 
     ################################################################
     def websocket_update(self, session_id, user_id):
+        print('update! 1', session_id, user_id)
         for ws in self.store['websockets']:
+            print('update compare', ws['session_id'], session_id)
             if ws['session_id'] == session_id:
+                print('update! 2', session_id, ws['user_id'], user_id)
                 if ws['user_id']:
                     self.websocket_mass_send({ 'auth': True, 'status': False, 'user_id': ws['user_id'] })
                 ws['user_id'] = user_id
@@ -102,18 +109,26 @@ class API:
 
     ################################################################
     def websocket_remove(self, websocket):
+        print('disconnect! 1')
         temp = []
         users = []
+        sign_outs = {}
         for index, ws in enumerate(self.store['websockets']):
+            print('disconnect compare',ws['handler'], websocket)
             if ws['handler'] == websocket:
                 temp.append(index)
                 if ws['user_id']:
                     users.append(ws['user_id'])
+                    sign_outs[str(ws['session_id'])] = ws['user_id']
         for index in reversed(temp):
             self.store['websockets'].pop(index)
         if users:
             for user_id in set(users):
                 self.websocket_mass_send({ 'auth': True, 'status': False, 'user_id': user_id })
+        print('disconnect! 2', sign_outs)
+        if sign_outs:
+            for k, v in sign_outs.items():
+                capture_signing(self, int(k), v, False)
 
 
 

@@ -366,6 +366,7 @@ MODELS = {
 ################################################################
 async def login(request):
     await asyncio.sleep(.5)
+    print('LOGIN!!!')
     if validate(request.params, MODELS['login']):
         user = User()        
         if await user.check(request.params['account'], request.params['password']):
