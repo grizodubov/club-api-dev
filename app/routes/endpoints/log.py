@@ -25,6 +25,13 @@ MODELS = {
             'value_min': 1,
             'default': 1,
         },
+        'roles': {
+            'required': True,
+			'type': 'str',
+            'list': True,
+            'null': True,
+            'values': [ 'client', 'community manager' ],
+        },
 	},
 }
 
@@ -34,7 +41,10 @@ MODELS = {
 async def moderator_get_signings(request):
     if request.user.id and request.user.check_roles({ 'admin', 'moderator', 'manager' }):
         if validate(request.params, MODELS['moderator_get_signings']):
-            log_data = await get_sign_log(page = request.params['page'])
+            log_data = await get_sign_log(
+                page = request.params['page'],
+                roles = request.params['roles'],
+            )
             return OrjsonResponse({
                 'amount': log_data[0],
                 'log': log_data[1],

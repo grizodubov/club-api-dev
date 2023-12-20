@@ -52,4 +52,4 @@ class Echo(WebSocketEndpoint):
                     result = await check_by_token(data['token'])
                     if result and data['user_id'] == result['user_id']:
                         #print('register! 2', result['user_id'])
-                        api.websocket_set(websocket, result['user_id'], result['session_id'])
+                        api.websocket_set(websocket, result['user_id'], result['session_id'], data['client'] if 'client' in data else '', data['agent'] if 'agent' in data else '')

@@ -11,7 +11,7 @@ from app.core.pg import PgBank
 from app.core.mq import MQBank
 
 from app.core.stream import Stream
-from app.models.capture import capture_signing
+from app.models.capture import capture_signing, set_session_settings
 
 
 
@@ -70,7 +70,7 @@ class API:
 
 
     ################################################################
-    def websocket_append(self, websocket, user_id = 0, session_id = 0):
+    def websocket_append(self, websocket, user_id = 0, session_id = 0, client = '', agent = ''):
         #print('connect! 1', user_id, session_id)
         self.store['websockets'].append({
             'handler': websocket,
@@ -84,12 +84,13 @@ class API:
 
 
     ################################################################
-    def websocket_set(self, websocket, user_id, session_id):
+    def websocket_set(self, websocket, user_id, session_id, client, agent):
         #print('set! 1', session_id, user_id)
         for ws in self.store['websockets']:
             if ws['handler'] == websocket:
                 ws['user_id'] = user_id
                 ws['session_id'] = session_id
+                set_session_settings(self, session_id, client, agent)
                 if user_id:
                     #print('set! 2', user_id)
                     self.websocket_mass_send({ 'auth': True, 'status': True, 'user_id': user_id })

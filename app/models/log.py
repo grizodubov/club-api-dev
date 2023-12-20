@@ -6,15 +6,13 @@ from app.core.context import get_api_context
 async def get_sign_log(page = 1, roles = None):
     api = get_api_context()
     offset = (page - 1) * 25
-    if roles is None:
+    if not roles:
         roles = await api.pg.club.fetchval("""SELECT array_agg(alias) FROM roles WHERE id <> 10000""")
     amount = await api.pg.club.fetchval(
         """SELECT
                 count(*)
             FROM
                 signings t1
-            INNER JOIN
-                users t2 ON t2.id = t1.user_id
             INNER JOIN
                 (
                     SELECT
@@ -47,8 +45,6 @@ async def get_sign_log(page = 1, roles = None):
                     ) AS ordered_signings
                     WHERE ordered_signings.row_num = 1
                 ) t4 ON t4.session_id = t1.session_id
-            LEFT JOIN
-                avatars t6 ON t6.owner_id = t1.user_id AND t6.active IS TRUE
             WHERE
                 t1.user_id >= 10000 AND
                 t1.sign_in IS TRUE AND
@@ -57,11 +53,13 @@ async def get_sign_log(page = 1, roles = None):
     )
     data = await api.pg.club.fetch(
         """SELECT
-                t1.session_id, t1.user_id, t1.sign_in, t1.time_sign AS time_from, t2.name, t3.roles, t4.time_sign AS time_to, t6.hash AS avatar_hash
+                t1.session_id, t1.user_id, t1.sign_in, t1.time_sign AS time_from, t2.name, t3.roles, t4.time_sign AS time_to, t6.hash AS avatar_hash, t7.settings
             FROM
                 signings t1
             INNER JOIN
                 users t2 ON t2.id = t1.user_id
+            INNER JOIN
+                sessions t7 ON t7.id = t1.session_id
             INNER JOIN
                 (
                     SELECT
