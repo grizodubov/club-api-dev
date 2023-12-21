@@ -7,7 +7,7 @@ from app.core.response import OrjsonResponse
 from app.core.event import dispatch
 from app.utils.validate import validate
 from app.models.event import Event, find_closest_event, get_participants, get_all_speakers
-from app.models.user import User, get_residents
+from app.models.user import User
 
 
 
@@ -288,7 +288,7 @@ async def event_info(request):
                 users = info['speakers'] + event_participants
                 residents = []
                 if users:
-                    result = await get_residents(users_ids = [ user['id'] for user in users ])
+                    result = await User.search(text = '')
                     ### remove data for roles
                     roles = set(request.user.roles)
                     roles.discard('applicant')
