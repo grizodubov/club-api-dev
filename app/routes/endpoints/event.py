@@ -24,6 +24,8 @@ def routes():
         Route('/m/event/speaker/add', moderator_event_speaker_add, methods = [ 'POST' ]),
         Route('/m/event/speaker/delete', moderator_event_speaker_delete, methods = [ 'POST' ]),
         Route('/m/event/program/update', moderator_event_program_update, methods = [ 'POST' ]),
+        Route('/m/event/user/add', moderator_event_user_add, methods = [ 'POST' ]),
+        Route('/m/event/user/del', moderator_event_user_del, methods = [ 'POST' ]),
     ]
 
 
@@ -208,6 +210,30 @@ MODELS = {
             },
         }
     },
+	'moderator_event_user_add': {
+		'event_id': {
+			'required': True,
+			'type': 'int',
+            'value_min': 1,
+		},
+        'user_id': {
+			'required': True,
+			'type': 'int',
+            'value_min': 1,
+		},
+	},
+	'moderator_event_user_del': {
+		'event_id': {
+			'required': True,
+			'type': 'int',
+            'value_min': 1,
+		},
+        'user_id': {
+			'required': True,
+			'type': 'int',
+            'value_min': 1,
+		},
+	},
 }
 
 
@@ -435,6 +461,54 @@ async def moderator_event_program_update(request):
                 await event.update_program(request.params['program'])
                 dispatch('event_update', request)
                 return OrjsonResponse({})
+            else:
+                return err(404, 'Событие не найдено')
+        else:
+            return err(400, 'Неверный запрос')
+    else:
+        return err(403, 'Нет доступа')
+
+
+
+################################################################
+async def moderator_event_user_add(request):
+    if request.user.id:
+        if validate(request.params, MODELS['moderator_event_user_add']):
+            event = Event()
+            await event.set(id = request.params['event_id'])
+            if event.id:
+                user = User()
+                await user.set(id = request.params['user_id'])
+                if user.id:
+                    await user.add_event(event.id)
+                    dispatch('user_add_event', request)
+                    return OrjsonResponse({})
+                else:
+                    return err(404, 'Пользователь не найден')
+            else:
+                return err(404, 'Событие не найдено')
+        else:
+            return err(400, 'Неверный запрос')
+    else:
+        return err(403, 'Нет доступа')
+        
+
+
+################################################################
+async def moderator_event_user_del(request):
+    if request.user.id:
+        if validate(request.params, MODELS['moderator_event_user_del']):
+            event = Event()
+            await event.set(id = request.params['event_id'])
+            if event.id:
+                user = User()
+                await user.set(id = request.params['user_id'])
+                if user.id:
+                    await user.del_event(event.id)
+                    dispatch('user_add_event', request)
+                    return OrjsonResponse({})
+                else:
+                    return err(404, 'Пользователь не найден')
             else:
                 return err(404, 'Событие не найдено')
         else:

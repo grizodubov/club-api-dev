@@ -173,6 +173,24 @@ class User:
 
     ################################################################
     @classmethod
+    async def for_select(cls):
+        api = get_api_context()
+        data = await api.pg.club.fetch(
+            """SELECT
+                    id, name
+                FROM
+                    users
+                WHERE
+                    id >= 10000
+                ORDER BY
+                    name"""
+
+        )
+        return ( [ dict(item) for item in data ], len(data) )
+
+
+    ################################################################
+    @classmethod
     async def hash(cls):
         api = get_api_context()
         data = await api.pg.club.fetch(

@@ -36,6 +36,7 @@ def routes():
         Route('/user/telegram/get/pin', save_telegram_pin, methods = [ 'POST' ]),
 
         Route('/m/user/search', moderator_user_search, methods = [ 'POST' ]),
+        Route('/m/user/for/select', moderator_user_for_select, methods = [ 'POST' ]),
         Route('/m/user/update', moderator_user_update, methods = [ 'POST' ]),
         Route('/m/user/create', moderator_user_create, methods = [ 'POST' ]),
 
@@ -1031,6 +1032,20 @@ async def moderator_user_search(request):
             return err(400, 'Неверный поиск')
     else:
         return err(403, 'Нет доступа')
+    
+
+
+################################################################
+async def moderator_user_for_select(request):
+    if request.user.id and request.user.check_roles({ 'admin', 'moderator', 'manager', 'community manager' }):
+        (result, amount) = await User.for_select()
+        return OrjsonResponse({
+            'users': [ { 'id': user['id'], 'name': user['name'] } for user in result ],
+            'amount': amount,
+        })
+    else:
+        return err(403, 'Нет доступа')
+
 
 
 
