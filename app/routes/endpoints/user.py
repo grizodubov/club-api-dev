@@ -47,6 +47,8 @@ def routes():
         Route('/new/m/user/update', new_moderator_user_update, methods = [ 'POST' ]),
         Route('/new/m/user/create', new_moderator_user_create, methods = [ 'POST' ]),
         Route('/new/m/user/event/confirm', new_moderator_user_confirm_event, methods = [ 'POST' ]),
+
+        Route('/ma/user/search', manager_user_search, methods = [ 'POST' ]),
     ]
 
 
@@ -680,6 +682,25 @@ MODELS = {
             'value_min': 1,
 		},
     },
+    # manager
+	'manager_user_search': {
+		'text': {
+			'required': True,
+			'type': 'str',
+		},
+		'ids': {
+			'required': True,
+			'type': 'int',
+            'list': True,
+            'null': True,
+		},
+        'page': {
+            'required': True,
+            'type': 'int',
+            'value_min': 1,
+            'default': 1,
+        },
+	},
 }
 
 
@@ -1340,5 +1361,36 @@ async def save_telegram_pin(request):
         return OrjsonResponse({
             'pin': pin,
         })
+    else:
+        return err(403, 'Нет доступа')
+
+
+
+################################################################
+async def manager_user_search(request):
+    if request.user.id and request.user.check_roles({ 'admin', 'moderator', 'manager', 'community manager' }):
+        if validate(request.params, MODELS['manager_user_search']):
+            (result, amount) = await User.client_search(
+                text = request.params['text'],
+                ids = request.params['ids'],
+                active_only = False,
+                offset = (request.params['page'] - 1) * 10,
+                limit = 10,
+                count = True,
+            )
+            community_managers = await get_community_managers()
+            users_ids = [ user.id for user in result ]
+            activity = await get_last_activity(users_ids = users_ids)
+            users = []
+            for item in result:
+                user_activity = { 'time_last_activity': activity[str(item.id)] if str(item.id) in activity else None }
+                users.append(item.dump() | user_activity)
+            return OrjsonResponse({
+                'users': users,
+                'amount': amount,
+                'community_managers': community_managers,
+            })
+        else:
+            return err(400, 'Неверный поиск')
     else:
         return err(403, 'Нет доступа')

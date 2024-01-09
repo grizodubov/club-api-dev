@@ -173,6 +173,130 @@ class User:
 
     ################################################################
     @classmethod
+    async def client_search(cls, text, ids = [], active_only = True, offset = None, limit = None, count = False, applicant = False, reverse = False, target = None):
+        api = get_api_context()
+        result = []
+        amount = None
+        slice_query = ''
+        conditions = [ 't1.id >= 10000' ]
+        condition_query = ''
+        args = []
+        if active_only:
+            conditions.append('t1.active IS TRUE')
+        if applicant is None:
+            applicant = False
+        if applicant is True:
+            conditions.append("""'applicant' = ANY(t4.roles)""")
+        if applicant is False:
+            conditions.append("""'applicant' <> ANY(t4.roles)""")
+        if text:
+            if target:
+                if target == 'tags':
+                    conditions.append("""regexp_split_to_array($1, '\s*,\s*') && regexp_split_to_array(t2.tags, '\s*,\s*')""")
+                else:
+                    conditions.append("""regexp_split_to_array($1, '\s*,\s*') && regexp_split_to_array(t2.interests, '\s*,\s*')""")
+                args.append(text)
+            else:
+                if reverse:
+                    conditions.append("""(to_tsvector(concat_ws(' ', t1.name, t1.email, t1.phone, t3.company, t3.position, t2.interests)) @@ to_tsquery($1) OR t1.name ILIKE concat_ws('%', $1, '%'))""")
+                else:
+                    conditions.append("""(to_tsvector(concat_ws(' ', t1.name, t1.email, t1.phone, t3.company, t3.position, t3.detail, t2.tags, t2.interests)) @@ to_tsquery($1) OR t1.name ILIKE concat_ws('%', $1, '%'))""")
+                args.append(re.sub(r'\s+', ' | ', text))
+        if ids:
+            conditions.append("""t1.id = ANY($""" + str(len(args) + 1) + """)""")
+            args.append(ids)
+        if offset is not None and limit is not None:
+            slice_query = ' OFFSET $' + str(len(args) + 1) + ' LIMIT $' + str(len(args) + 2)
+            args.extend([ offset, limit ])
+        if conditions:
+            conditions_query = ' WHERE ' + ' AND '.join(conditions)
+        data = await api.pg.club.fetch(
+            """SELECT
+                    t1.id, t1.time_create, t1.time_update,
+                    t1.name, t1.login, t1.email, t1.phone,
+                    t1.active,
+                    t1.community_manager_id,
+                    t3.company, t3.position, t3.detail,
+                    t3.status,
+                    t3.annual, t3.annual_privacy,
+                    t3.employees, t3.employees_privacy,
+                    t3.catalog, t3.city, t3.hobby,
+                    t3.link_telegram, t3.id_telegram,
+                    to_char(t3.birthdate, 'DD/MM/YYYY') AS birthdate, t3.birthdate_privacy,
+                    t3.experience,
+                    coalesce(t2.tags, '') AS tags,
+                    coalesce(t2.interests, '') AS interests,
+                    t5.hash AS avatar_hash,
+                    coalesce(t4.roles, '{}'::text[]) AS roles,
+                    t1.password AS _password
+                FROM
+                    users t1
+                INNER JOIN
+                    users_tags t2 ON t2.user_id = t1.id
+                INNER JOIN
+                    users_info t3 ON t3.user_id = t1.id
+                INNER JOIN
+                    (
+                        SELECT
+                            r3.user_id, array_agg(r3.alias) AS roles
+                        FROM
+                            (
+                                SELECT
+                                    r1.user_id, r2.alias
+                                FROM
+                                    users_roles r1
+                                INNER JOIN
+                                    roles r2 ON r2.id = r1.role_id
+                            ) r3
+                        GROUP BY
+                            r3.user_id
+                    ) t4 ON t4.user_id = t1.id AND 'client'::text = ANY(t4.roles)
+                LEFT JOIN
+                    avatars t5 ON t5.owner_id = t1.id AND t5.active IS TRUE""" + conditions_query + ' ORDER BY t1.name' + slice_query,
+            *args
+        )
+        for row in data:
+            item = User()
+            item.__dict__ = dict(row)
+            item.check_online()
+            result.append(item)
+        if count:
+            amount = len(result)
+            if offset is not None and limit is not None:
+                args_count = args[:len(args) - 2]
+                amount = await api.pg.club.fetchval(
+                    """SELECT
+                            count(t1.id)
+                        FROM
+                            users t1
+                        INNER JOIN
+                            users_tags t2 ON t2.user_id = t1.id
+                        INNER JOIN
+                            users_info t3 ON t3.user_id = t1.id
+                        LEFT JOIN
+                            (
+                                SELECT
+                                    r3.user_id, array_agg(r3.alias) AS roles
+                                FROM
+                                    (
+                                        SELECT
+                                            r1.user_id, r2.alias
+                                        FROM
+                                            users_roles r1
+                                        INNER JOIN
+                                            roles r2 ON r2.id = r1.role_id
+                                    ) r3
+                                GROUP BY
+                                    r3.user_id
+                            ) t4 ON t4.user_id = t1.id""" + conditions_query,
+                    *args_count
+                )
+            return (result, amount)
+        return result
+
+
+    ################################################################
+    @classmethod
     async def for_select(cls):
         api = get_api_context()
         data = await api.pg.club.fetch(
