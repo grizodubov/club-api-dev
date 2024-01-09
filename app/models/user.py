@@ -1651,3 +1651,133 @@ async def get_last_activity(users_ids):
     return {
         str(item['user_id']): item['time_last_activity'] for item in data
     }
+
+
+
+################################################################
+async def get_users_memberships(users_ids):
+    api = get_api_context()
+    data = await api.pg.club.fetch(
+        """SELECT
+                t1.id,
+                COALESCE(t4.polls_count, 0) AS polls_count,
+                COALESCE(t5.events_count, 0) AS events_count,
+                t2.review, t3.name AS review_author, t2.time_review AS review_time, t2.rating_id
+            FROM
+                users t1
+            INNER JOIN
+                (
+                    SELECT user_id, count(poll_id) AS polls_count FROM polls_votes GROUP BY user_id
+                ) t4 ON t4.user_id = t1.id
+            INNER JOIN
+                (
+                    SELECT user_id, count(event_id) AS events_count FROM events_users WHERE confirmation IS TRUE GROUP BY user_id
+                ) t5 ON t5.user_id = t1.id
+            LEFT JOIN
+                users_managers_reviews t2 ON t2.user_id = t1.id
+            LEFT JOIN
+                users t3 ON t3.id = t2.author_id
+            WHERE
+                t1.id = ANY($1)""",
+        users_ids
+    )
+
+
+
+
+    return {
+        str(item['user_id']): item['time_last_activity'] for item in data
+    }
+
+
+
+
+    let userMembership = {
+        stage: 3,
+        semaphore: [
+            {
+                id: 1,
+                name: 'Оценка менеджера',
+                rating: 1,
+                data: {
+                    comment: {
+                        text: 'Мой комментарий такой',
+                        author: 'Иванов Иван',
+                        time: Date.now(),
+                    },
+                },
+            },
+            {
+                id: 2,
+                name: 'Участие в опросах',
+                rating: 3,
+                data: {
+                    value: 0,
+                },
+                rejection: false,
+            },
+            {
+                id: 3,
+                name: 'Участие в мероприятиях',
+                rating: 2,
+                data: {
+                    value: 4,
+                },
+                rejection: false,
+            },
+        ],
+        stages: [
+            {
+                id: 1,
+                time: null,
+                data: {
+                    comment: null,
+                },
+                rejection: false,
+            },
+            {
+                id: 2,
+                time: null,
+                data: {
+                    comment: null,
+                },
+                rejection: false,
+            },
+            {
+                id: 3,
+                time: 1689884260000,
+                data: {
+                    comment: {
+                        text: 'Мой комментарий такой',
+                        author: 'Иванов Иван',
+                        time: Date.now(),
+                    },
+                },
+                rejection: false,
+            },
+            {
+                id: 4,
+                time: null,
+                data: {
+                    comment: null,
+                },
+                rejection: false,
+            },
+            {
+                id: 5,
+                time: null,
+                data: {
+                    comment: null,
+                },
+                rejection: false,
+            },
+            {
+                id: 6,
+                time: null,
+                data: {
+                    comment: null,
+                },
+                rejection: false,
+            },
+        ]
+    };

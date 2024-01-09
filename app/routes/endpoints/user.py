@@ -49,6 +49,8 @@ def routes():
         Route('/new/m/user/event/confirm', new_moderator_user_confirm_event, methods = [ 'POST' ]),
 
         Route('/ma/user/search', manager_user_search, methods = [ 'POST' ]),
+        Route('/ma/user/update', manager_user_update, methods = [ 'POST' ]),
+        Route('/ma/user/create', manager_user_create, methods = [ 'POST' ]),
     ]
 
 
@@ -700,6 +702,227 @@ MODELS = {
             'value_min': 1,
             'default': 1,
         },
+	},
+	'manager_user_update': {
+		'id': {
+			'required': True,
+			'type': 'int',
+            'value_min': 1,
+		},
+		'active': {
+			'required': True,
+			'type': 'bool',
+		},
+		'name': {
+			'required': True,
+			'type': 'str',
+            'length_min': 2,
+            'processing': lambda x: x.strip(),
+		},
+		'phone': {
+			'required': True,
+			'type': 'str',
+            'pattern': r'^[0-9\(\)\-\+\s]{10,20}$',
+            'processing': lambda x: x.strip(),
+		},
+		'email': {
+			'required': True,
+			'type': 'str',
+            'pattern': r'^[^@]+@[^@]+\.[^@]+$',
+            'processing': lambda x: x.strip().lower(),
+		},
+		'company': {
+			'required': True,
+			'type': 'str',
+            'processing': lambda x: x.strip(),
+		},
+		'position': {
+			'required': True,
+			'type': 'str',
+            'processing': lambda x: x.strip(),
+		},
+		'catalog': {
+			'required': True,
+			'type': 'str',
+		},
+		'city': {
+			'required': True,
+			'type': 'str',
+		},
+		'hobby': {
+			'required': True,
+			'type': 'str',
+		},
+		'annual': {
+			'required': True,
+			'type': 'str',
+		},
+		'annual_privacy': {
+			'required': True,
+			'type': 'str',
+		},
+		'employees': {
+			'required': True,
+			'type': 'str',
+		},
+		'employees_privacy': {
+			'required': True,
+			'type': 'str',
+		},
+        'password': {
+			'required': True,
+			'type': 'str',
+            'length_min': 2,
+            'processing': lambda x: x.strip(),
+		},
+		'status': {
+			'required': True,
+			'type': 'str',
+            'values': [ 'бронзовый', 'серебряный', 'золотой' ],
+		},
+		'detail': {
+			'required': True,
+			'type': 'str',
+		},
+		'tags': {
+			'required': True,
+			'type': 'str',
+		},
+		'interests': {
+			'required': True,
+			'type': 'str',
+		},
+		'birthdate': {
+			'required': True,
+			'type': 'str',
+            'processing': lambda x: datetime.strptime(x.strip(), "%d/%m/%Y"),
+            'null': True,
+		},
+		'birthdate_privacy': {
+			'required': True,
+			'type': 'str',
+		},
+		'experience': {
+			'required': True,
+			'type': 'int',
+            'null': True,
+		},
+		'community_manager_id': {
+			'type': 'int',
+            'null': True,
+		},
+		'link_telegram': {
+			'required': True,
+			'type': 'str',
+		},
+	},
+	'manager_user_create': {
+		'active': {
+			'required': True,
+			'type': 'bool',
+		},
+		'name': {
+			'required': True,
+			'type': 'str',
+            'length_min': 2,
+            'processing': lambda x: x.strip(),
+		},
+		'phone': {
+			'required': True,
+			'type': 'str',
+            'pattern': r'^[0-9\(\)\-\+\s]{10,20}$',
+            'processing': lambda x: x.strip(),
+		},
+		'email': {
+			'required': True,
+			'type': 'str',
+            'pattern': r'^[^@]+@[^@]+\.[^@]+$',
+            'processing': lambda x: x.strip().lower(),
+		},
+		'company': {
+			'required': True,
+			'type': 'str',
+            'processing': lambda x: x.strip(),
+		},
+		'position': {
+			'required': True,
+			'type': 'str',
+            'processing': lambda x: x.strip(),
+		},
+		'catalog': {
+			'required': True,
+			'type': 'str',
+		},
+		'city': {
+			'required': True,
+			'type': 'str',
+		},
+		'hobby': {
+			'required': True,
+			'type': 'str',
+		},
+		'annual': {
+			'required': True,
+			'type': 'str',
+		},
+		'annual_privacy': {
+			'required': True,
+			'type': 'str',
+		},
+		'employees': {
+			'required': True,
+			'type': 'str',
+		},
+		'employees_privacy': {
+			'required': True,
+			'type': 'str',
+		},
+		'password': {
+			'required': True,
+			'type': 'str',
+            'length_min': 2,
+            'processing': lambda x: x.strip(),
+		},
+		'status': {
+			'required': True,
+			'type': 'str',
+            'values': [ 'бронзовый', 'серебряный', 'золотой' ],
+		},
+		'detail': {
+			'required': True,
+			'type': 'str',
+		},
+		'tags': {
+			'required': True,
+			'type': 'str',
+		},
+		'interests': {
+			'required': True,
+			'type': 'str',
+		},
+		'birthdate': {
+			'required': True,
+			'type': 'str',
+            'processing': lambda x: datetime.strptime(x.strip(), "%d/%m/%Y"),
+            'null': True,
+		},
+		'birthdate_privacy': {
+			'required': True,
+			'type': 'str',
+		},
+		'experience': {
+			'required': True,
+			'type': 'int',
+            'null': True,
+		},
+		'community_manager_id': {
+			'type': 'int',
+            'null': True,
+		},
+		'link_telegram': {
+			'required': True,
+			'type': 'str',
+		},
 	},
 }
 
@@ -1392,5 +1615,78 @@ async def manager_user_search(request):
             })
         else:
             return err(400, 'Неверный поиск')
+    else:
+        return err(403, 'Нет доступа')
+
+
+################################################################
+async def manager_user_update(request):
+    if request.user.id and request.user.check_roles({ 'admin', 'moderator', 'manager', 'community manager' }):
+        if validate(request.params, MODELS['manager_user_update']):
+            user = User()
+            await user.set(id = request.params['id'], active = None)
+            if user.id:
+                temp = User()
+                if await temp.find(email = request.params['email']):
+                    if temp.id != user.id:
+                        return err(400, 'Email уже зарегистрирован')
+                temp = User()
+                if await temp.find(phone = request.params['phone']):
+                    if temp.id != user.id:
+                        return err(400, 'Телефон уже зарегистрирован')
+                args = request.params | { 'roles': user.roles }
+                await user.update(**args)
+                dispatch('user_update', request)
+                return OrjsonResponse({})
+            else:
+                return err(404, 'Пользователь не найден')
+        else:
+            return err(400, 'Неверный запрос')
+    else:
+        return err(403, 'Нет доступа')
+
+
+
+################################################################
+async def manager_user_create(request):
+    if request.user.id and request.user.check_roles({ 'admin', 'moderator', 'manager', 'community manager' }):
+        if validate(request.params, MODELS['manager_user_create']):
+            user = User()
+            if await user.find(email = request.params['email']):
+                return err(400, 'Email уже зарегистрирован')
+            if await user.find(phone = request.params['phone']):
+                return err(400, 'Телефон уже зарегистрирован')
+            if 'admin' in request.params['roles']:
+                if user.id not in { 8000, 10004 }:
+                    return err(400, 'Неверный запрос')
+            await user.create(
+                name = request.params['name'],
+                email = request.params['email'],
+                phone = request.params['phone'],
+                company = request.params['company'],
+                position = request.params['position'],
+                catalog = request.params['catalog'],
+                password = request.params['password'],
+                roles = [ 'client '],
+                active = request.params['active'],
+                detail = request.params['detail'],
+                status = request.params['status'],
+                city = request.params['city'],
+                hobby = request.params['hobby'],
+                tags = request.params['tags'],
+                interests = request.params['interests'],
+                annual = request.params['annual'],
+                annual_privacy = request.params['annual_privacy'],
+                employees = request.params['employees'],
+                employees_privacy = request.params['employees_privacy'],
+                birthdate = request.params['birthdate'],
+                birthdate_privacy = request.params['birthdate_privacy'],
+                experience = request.params['experience'],
+                community_manager_id = request.params['community_manager_id'],
+            )
+            dispatch('user_create', request)
+            return OrjsonResponse({})
+        else:
+            return err(400, 'Неверный запрос')
     else:
         return err(403, 'Нет доступа')
