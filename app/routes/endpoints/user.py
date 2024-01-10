@@ -1639,23 +1639,56 @@ async def manager_user_search(request):
                 text = request.params['text'],
                 ids = request.params['ids'],
                 active_only = False,
-                offset = (request.params['page'] - 1) * 10,
-                limit = 10,
+                offset = None,
+                limit = None,
                 count = True,
             )
             community_managers = await get_community_managers()
             users_ids = [ user.id for user in result ]
             activity = await get_last_activity(users_ids = users_ids)
-            users = []
-            for item in result:
-                user_activity = { 'time_last_activity': activity[str(item.id)] if str(item.id) in activity else None }
-                users.append(item.dump() | user_activity)
             memberships = await get_users_memberships(users_ids)
+            users = []
+            membership_template = {
+                'rating': None,
+                'stage': 1,
+                'semaphore': [
+                    {
+                        'id': 1,
+                        'name': 'Оценка менеджера',
+                        'rating': None,
+                        'data': { 'comment': None, },
+                    },
+                    {
+                        'id': 2,
+                        'name': 'Участие в опросах',
+                        'rating': None,
+                        'data': { 'value': 0, },
+                    },
+                    {
+                        'id': 3,
+                        'name': 'Участие в мероприятиях',
+                        'rating': None,
+                        'data': { 'value': 0, },
+                    },
+                ],
+                'stages': [
+                    {
+                        'id': i + 1,
+                        'time': None,
+                        'data': { 'comment': None, },
+                        'rejection': False,
+                        'active': False,
+                    } for i in range(6)
+                ]
+            }
+            for item in result:
+                k = str(item.id)
+                user_activity = { 'time_last_activity': activity[k] if k in activity else None }
+                users.append(item.dump() | user_activity | { 'membership': memberships[k] if k in memberships else membership_template })
             return OrjsonResponse({
                 'users': users,
                 'amount': amount,
                 'community_managers': community_managers,
-                'memberships': memberships,
             })
         else:
             return err(400, 'Неверный поиск')

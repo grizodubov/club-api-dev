@@ -274,7 +274,7 @@ class User:
                             users_tags t2 ON t2.user_id = t1.id
                         INNER JOIN
                             users_info t3 ON t3.user_id = t1.id
-                        LEFT JOIN
+                        INNER JOIN
                             (
                                 SELECT
                                     r3.user_id, array_agg(r3.alias) AS roles
@@ -289,7 +289,7 @@ class User:
                                     ) r3
                                 GROUP BY
                                     r3.user_id
-                            ) t4 ON t4.user_id = t1.id""" + conditions_query,
+                            ) t4 ON t4.user_id = t1.id AND 'client'::text = ANY(t4.roles)""" + conditions_query,
                     *args_count
                 )
             return (result, amount)
@@ -1880,4 +1880,4 @@ async def get_users_memberships(users_ids):
                     memberships[k]['stages'][stage['id'] - 1][sk] = stage[sk]
                 if stage['active']:
                     memberships[k]['stage'] = stage['id']
-        return memberships
+    return memberships
