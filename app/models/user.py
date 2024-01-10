@@ -1,4 +1,5 @@
 import re
+import math
 from random import randint, choice
 import string
 import os.path
@@ -1452,6 +1453,108 @@ class User:
         )
 
 
+    ################################################################
+    async def membership_stage_update(self, stage_id, field, value, author_id = None):
+        api = get_api_context()
+        if field == 'rejection':
+            v = False
+            if value == 'true':
+                v = True
+            data = await api.pg.club.execute(
+                """INSERT INTO
+                        users_memberships (user_id, stage_id, rejection)
+                    VALUES
+                        ($1, $2, $3)
+                    ON CONFLICT
+                        (user_id, stage_id)
+                    DO UPDATE SET
+                        rejection = EXCLUDED.rejection""",
+                self.id, stage_id, v
+            )
+        if field == 'active':
+            v = False
+            if value == 'true':
+                v = True
+            data = await api.pg.club.execute(
+                """UPDATE
+                        users_memberships
+                    SET
+                        active = FALSE
+                    WHERE
+                        user_id = $1 AND stage_id <> $2""",
+                self.id, stage_id
+            )
+            data = await api.pg.club.execute(
+                """INSERT INTO
+                        users_memberships (user_id, stage_id, active)
+                    VALUES
+                        ($1, $2, $3)
+                    ON CONFLICT
+                        (user_id, stage_id)
+                    DO UPDATE SET
+                        active = EXCLUDED.active""",
+                self.id, stage_id, v
+            )
+        if field == 'comment':
+            data = await api.pg.club.execute(
+                """INSERT INTO
+                        users_memberships (user_id, stage_id, comment, comment_author_id, comment_time)
+                    VALUES
+                        ($1, $2, $3, $4, now() at time zone 'utc')
+                    ON CONFLICT
+                        (user_id, stage_id)
+                    DO UPDATE SET
+                        comment = EXCLUDED.comment,
+                        comment_author_id = EXCLUDED.comment_author_id,
+                        comment_time = EXCLUDED.comment_time""",
+                self.id, stage_id, value, author_id
+            )
+        if field == 'time_control':
+            data = await api.pg.club.execute(
+                """INSERT INTO
+                        users_memberships (user_id, stage_id, time_control)
+                    VALUES
+                        ($1, $2, $3)
+                    ON CONFLICT
+                        (user_id, stage_id)
+                    DO UPDATE SET
+                        time_control = EXCLUDED.time_control""",
+                self.id, stage_id, int(value) if value else None
+            )
+
+
+
+    ################################################################
+    async def membership_rating_update(self, field, value, author_id = None):
+        api = get_api_context()
+        if field == 'comment':
+            data = await api.pg.club.execute(
+                """INSERT INTO
+                        users_managers_reviews (user_id, review, review_author_id, review_time)
+                    VALUES
+                        ($1, $2, $3, now() at time zone 'utc')
+                    ON CONFLICT
+                        (user_id)
+                    DO UPDATE SET
+                        review = EXCLUDED.review,
+                        review_author_id = EXCLUDED.review_author_id,
+                        review_time = EXCLUDED.review_time""",
+                self.id, value, author_id
+            )
+        if field == 'rating':
+            data = await api.pg.club.execute(
+                """INSERT INTO
+                        users_managers_reviews (user_id, rating_id)
+                    VALUES
+                        ($1, $2)
+                    ON CONFLICT
+                        (user_id)
+                    DO UPDATE SET
+                        rating_id = EXCLUDED.rating_id""",
+                self.id, int(value)
+            )
+
+
 
 ################################################################
 def check_online_by_id(id):
@@ -1662,122 +1765,119 @@ async def get_users_memberships(users_ids):
                 t1.id,
                 COALESCE(t4.polls_count, 0) AS polls_count,
                 COALESCE(t5.events_count, 0) AS events_count,
-                t2.review, t3.name AS review_author, t2.time_review AS review_time, t2.rating_id
+                t2.review, t3.name AS review_author, round(extract(epoch FROM t2.review_time) * 1000)::bigint AS review_time, t2.rating_id,
+                t6.stages
             FROM
                 users t1
-            INNER JOIN
+            LEFT JOIN
+                (
+                    SELECT
+                        s.user_id, jsonb_agg(s.stage) AS stages
+                    FROM
+                        (
+                            SELECT
+                                s1.id AS stage_id, s2.user_id, jsonb_build_object(
+                                    'id', s1.id,
+                                    'time', round(extract(epoch FROM s2.time_control) * 1000)::bigint,
+                                    'rejection', coalesce(s2.rejection, FALSE),
+                                    'active', coalesce(s2.active, FALSE),
+                                    'data', jsonb_build_object(
+                                        'comment',
+                                        CASE
+                                            WHEN s2.comment IS NULL THEN
+                                                NULL
+                                            ELSE
+                                                jsonb_build_object(
+                                                    'text', s2.comment,
+                                                    'author', s3.name,
+                                                    'time', round(extract(epoch FROM s2.comment_time) * 1000)::bigint
+                                                )
+                                        END
+                                    )
+                                ) AS stage
+                            FROM
+                                membership_stages s1
+                            LEFT JOIN
+                                users_memberships s2 ON s2.stage_id = s1.id
+                            LEFT JOIN
+                                users s3 ON s3.id = s2.comment_author_id
+                            ORDER BY s1.id
+                        ) s
+                    GROUP BY
+                        s.user_id
+                ) t6 ON t6.user_id = t1.id
+            LEFT JOIN
                 (
                     SELECT user_id, count(poll_id) AS polls_count FROM polls_votes GROUP BY user_id
                 ) t4 ON t4.user_id = t1.id
-            INNER JOIN
+            LEFT JOIN
                 (
                     SELECT user_id, count(event_id) AS events_count FROM events_users WHERE confirmation IS TRUE GROUP BY user_id
                 ) t5 ON t5.user_id = t1.id
             LEFT JOIN
                 users_managers_reviews t2 ON t2.user_id = t1.id
             LEFT JOIN
-                users t3 ON t3.id = t2.author_id
+                users t3 ON t3.id = t2.review_author_id
             WHERE
                 t1.id = ANY($1)""",
         users_ids
     )
-
-
-
-
-    return {
-        str(item['user_id']): item['time_last_activity'] for item in data
-    }
-
-
-
-
-    let userMembership = {
-        stage: 3,
-        semaphore: [
-            {
-                id: 1,
-                name: 'Оценка менеджера',
-                rating: 1,
-                data: {
-                    comment: {
-                        text: 'Мой комментарий такой',
-                        author: 'Иванов Иван',
-                        time: Date.now(),
+    memberships = {}
+    for item in data:
+        k = str(item['id'])
+        memberships[k] = {
+            'rating': 1,
+            'semaphore': [
+                {
+                    'id': 1,
+                    'name': 'Оценка менеджера',
+                    'rating': item['rating_id'] if item['rating_id'] else None,
+                    'data': {
+                        'comment': {
+                            'text': item['review'],
+                            'author': item['review_author'],
+                            'time': item['review_time'],
+                        } if item['review'] else None,
+                    }
+                },
+                {
+                    'id': 2,
+                    'name': 'Участие в опросах',
+                    'rating': 1 if item['polls_count'] >= 4 else 2 if item['polls_count'] >= 2 else 3,
+                    'data': {
+                        'value': item['polls_count'],
+                    }
+                },
+                {
+                    'id': 3,
+                    'name': 'Участие в мероприятиях',
+                    'rating': 1 if item['events_count'] >= 4 else 2 if item['events_count'] >= 2 else 3,
+                    'data': {
+                        'value': item['events_count'],
+                    }
+                },
+            ],
+            'stage': 1,
+            'stages': [
+                {
+                    'id': i + 1,
+                    'time': None,
+                    'data': {
+                        'comment': None,
                     },
-                },
-            },
-            {
-                id: 2,
-                name: 'Участие в опросах',
-                rating: 3,
-                data: {
-                    value: 0,
-                },
-                rejection: false,
-            },
-            {
-                id: 3,
-                name: 'Участие в мероприятиях',
-                rating: 2,
-                data: {
-                    value: 4,
-                },
-                rejection: false,
-            },
-        ],
-        stages: [
-            {
-                id: 1,
-                time: null,
-                data: {
-                    comment: null,
-                },
-                rejection: false,
-            },
-            {
-                id: 2,
-                time: null,
-                data: {
-                    comment: null,
-                },
-                rejection: false,
-            },
-            {
-                id: 3,
-                time: 1689884260000,
-                data: {
-                    comment: {
-                        text: 'Мой комментарий такой',
-                        author: 'Иванов Иван',
-                        time: Date.now(),
-                    },
-                },
-                rejection: false,
-            },
-            {
-                id: 4,
-                time: null,
-                data: {
-                    comment: null,
-                },
-                rejection: false,
-            },
-            {
-                id: 5,
-                time: null,
-                data: {
-                    comment: null,
-                },
-                rejection: false,
-            },
-            {
-                id: 6,
-                time: null,
-                data: {
-                    comment: null,
-                },
-                rejection: false,
-            },
-        ]
-    };
+                    'rejection': False,
+                    'active': False,
+                } for i in range(6)
+            ],
+        }
+        if memberships[k]['semaphore'][0]['rating']:
+            memberships[k]['rating'] = math.floor((memberships[k]['semaphore'][0]['rating'] + memberships[k]['semaphore'][1]['rating'] + memberships[k]['semaphore'][2]['rating']) / 3)
+        else:
+            memberships[k]['rating'] = math.floor((memberships[k]['semaphore'][1]['rating'] + memberships[k]['semaphore'][2]['rating']) / 2)
+        if item['stages']:
+            for stage in item['stages']:
+                for sk in { 'time', 'data', 'rejection', 'active' }:
+                    memberships[k]['stages'][stage['id'] - 1][sk] = stage[sk]
+                if stage['active']:
+                    memberships[k]['stage'] = stage['id']
+        return memberships

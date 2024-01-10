@@ -7,7 +7,7 @@ from app.core.request import err
 from app.core.response import OrjsonResponse
 from app.core.event import dispatch
 from app.utils.validate import validate
-from app.models.user import User, get_residents, get_residents_contacts, get_community_managers, get_telegram_pin, get_last_activity
+from app.models.user import User, get_residents, get_residents_contacts, get_community_managers, get_telegram_pin, get_last_activity, get_users_memberships
 from app.models.event import Event
 from app.models.item import Item
 from app.helpers.mobile import send_mobile_message
@@ -50,6 +50,8 @@ def routes():
 
         Route('/ma/user/search', manager_user_search, methods = [ 'POST' ]),
         Route('/ma/user/update', manager_user_update, methods = [ 'POST' ]),
+        Route('/ma/user/membership/stage/update/{field:str}', manager_user_membership_stage_update, methods = [ 'POST' ]),
+        Route('/ma/user/membership/rating/update/{field:str}', manager_user_membership_rating_update, methods = [ 'POST' ]),
         Route('/ma/user/create', manager_user_create, methods = [ 'POST' ]),
     ]
 
@@ -816,6 +818,46 @@ MODELS = {
 			'type': 'str',
 		},
 	},
+    'manager_user_membership_stage_update': {
+		'user_id': {
+			'required': True,
+			'type': 'int',
+            'value_min': 1,
+		},
+        'stage_id': {
+            'required': True,
+			'type': 'int',
+            'value_min': 1,
+            'value_max': 6,
+        },
+        'field': {
+            'required': True,
+			'type': 'str',
+            'values': [ 'comment', 'time_control', 'rejection', 'active' ],
+        },
+        'value': {
+            'required': True,
+			'type': 'str',
+            'null': True,
+        },
+    },
+    'manager_user_membership_rating_update': {
+		'user_id': {
+			'required': True,
+			'type': 'int',
+            'value_min': 1,
+		},
+        'field': {
+            'required': True,
+			'type': 'str',
+            'values': [ 'comment', 'rating' ],
+        },
+        'value': {
+            'required': True,
+			'type': 'str',
+            'null': True,
+        },
+    },
 	'manager_user_create': {
 		'active': {
 			'required': True,
@@ -1608,10 +1650,12 @@ async def manager_user_search(request):
             for item in result:
                 user_activity = { 'time_last_activity': activity[str(item.id)] if str(item.id) in activity else None }
                 users.append(item.dump() | user_activity)
+            memberships = await get_users_memberships(users_ids)
             return OrjsonResponse({
                 'users': users,
                 'amount': amount,
                 'community_managers': community_managers,
+                'memberships': memberships,
             })
         else:
             return err(400, 'Неверный поиск')
@@ -1636,6 +1680,53 @@ async def manager_user_update(request):
                         return err(400, 'Телефон уже зарегистрирован')
                 args = request.params | { 'roles': user.roles }
                 await user.update(**args)
+                dispatch('user_update', request)
+                return OrjsonResponse({})
+            else:
+                return err(404, 'Пользователь не найден')
+        else:
+            return err(400, 'Неверный запрос')
+    else:
+        return err(403, 'Нет доступа')
+
+
+
+################################################################
+async def manager_user_membership_stage_update(request):
+    if request.user.id and request.user.check_roles({ 'admin', 'moderator', 'manager', 'community manager' }):
+        if validate(request.params | request.path_params, MODELS['manager_user_membership_stage_update']):
+            user = User()
+            await user.set(id = request.params['user_id'], active = None)
+            if user.id:
+                await user.membership_stage_update(
+                    stage_id = request.params['stage_id'],
+                    field = request.path_params['field'], 
+                    value = request.params['value'],
+                    author_id = request.user.id,
+                )
+                dispatch('user_update', request)
+                return OrjsonResponse({})
+            else:
+                return err(404, 'Пользователь не найден')
+        else:
+            return err(400, 'Неверный запрос')
+    else:
+        return err(403, 'Нет доступа')
+
+
+
+################################################################
+async def manager_user_membership_rating_update(request):
+    if request.user.id and request.user.check_roles({ 'admin', 'moderator', 'manager', 'community manager' }):
+        if validate(request.params | request.path_params, MODELS['manager_user_membership_rating_update']):
+            user = User()
+            await user.set(id = request.params['user_id'], active = None)
+            if user.id:
+                await user.membership_rating_update(
+                    field = request.path_params['field'], 
+                    value = request.params['value'],
+                    author_id = request.user.id,
+                )
                 dispatch('user_update', request)
                 return OrjsonResponse({})
             else:
