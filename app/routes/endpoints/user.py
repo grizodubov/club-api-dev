@@ -201,6 +201,12 @@ MODELS = {
             'value_min': 1,
             'default': 1,
         },
+        'filter': {
+            'required': True,
+            'type': 'str',
+            'list': True,
+            'null': True,
+        }
 	},
 	'moderator_user_update': {
 		'id': {
@@ -702,7 +708,7 @@ MODELS = {
             'required': True,
             'type': 'int',
             'value_min': 1,
-            'default': 1,
+            'null': True,
         },
 	},
 	'manager_user_update': {
@@ -1639,8 +1645,8 @@ async def manager_user_search(request):
                 text = request.params['text'],
                 ids = request.params['ids'],
                 active_only = False,
-                offset = None,
-                limit = None,
+                offset = (request.params['page'] - 1) * 20 if request.params['page'] else None,
+                limit = 20 if request.params['page'] else None,
                 count = True,
             )
             community_managers = await get_community_managers()
@@ -1685,6 +1691,8 @@ async def manager_user_search(request):
                 k = str(item.id)
                 user_activity = { 'time_last_activity': activity[k] if k in activity else None }
                 users.append(item.dump() | user_activity | { 'membership': memberships[k] if k in memberships else membership_template })
+            if request.params['filter']:
+                users = [ { k: user[k] for k in request.params['filter'] } for user in users ]
             return OrjsonResponse({
                 'users': users,
                 'amount': amount,
