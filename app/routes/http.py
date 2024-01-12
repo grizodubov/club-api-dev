@@ -14,6 +14,7 @@ from app.routes.endpoints.notification import routes as routes_notification
 from app.routes.endpoints.tag import routes as routes_tag
 from app.routes.endpoints.poll import routes as routes_poll
 from app.routes.endpoints.log import routes as routes_log
+from app.routes.endpoints.note import routes as routes_note
 
 from app.routes.endpoints.telegram import routes as routes_telegram
 
@@ -35,6 +36,7 @@ routes = [
     *routes_tag(),
     *routes_poll(),
     *routes_log(),
+    *routes_note(),
 
     *routes_telegram(),
 ]

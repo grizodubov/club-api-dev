@@ -34,6 +34,8 @@ EVENTS = {
     'tag_update': { 'send': True, 'filter_params': None },
     'poll_update': { 'send': True, 'filter_params': None },
     'poll_create': { 'send': True, 'filter_params': None },
+    'note_create': { 'send': True, 'filter_params': None },
+    'note_update': { 'send': True, 'filter_params': None },
 }
 
 
