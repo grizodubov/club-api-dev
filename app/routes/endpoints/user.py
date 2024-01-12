@@ -201,12 +201,6 @@ MODELS = {
             'value_min': 1,
             'default': 1,
         },
-        'filter': {
-            'required': True,
-            'type': 'str',
-            'list': True,
-            'null': True,
-        }
 	},
 	'moderator_user_update': {
 		'id': {
@@ -328,7 +322,7 @@ MODELS = {
 			'required': True,
 			'type': 'str',
             'list': True,
-            'values': [ 'admin', 'client', 'guest', 'manager', 'moderator', 'editor', 'community manager', 'tester', 'speaker' ],
+            'values': [ 'admin', 'client', 'guest', 'manager', 'moderator', 'editor', 'chief', 'community manager', 'tester', 'speaker' ],
 		},
 		'tags': {
 			'required': True,
@@ -526,7 +520,7 @@ MODELS = {
 			'required': True,
 			'type': 'str',
             'list': True,
-            'values': [ 'admin', 'client', 'guest', 'manager', 'moderator', 'editor', 'community manager', 'tester', 'speaker' ],
+            'values': [ 'admin', 'client', 'guest', 'manager', 'moderator', 'editor', 'chief', 'community manager', 'tester', 'speaker' ],
 		},
 		'tags': {
 			'required': True,
@@ -640,7 +634,7 @@ MODELS = {
 			'required': True,
 			'type': 'str',
             'list': True,
-            'values': [ 'client', 'guest', 'manager', 'community manager' ],
+            'values': [ 'client', 'guest', 'manager', 'chief', 'community manager' ],
 		},
 		'tags': {
 			'required': True,
@@ -708,6 +702,12 @@ MODELS = {
             'required': True,
             'type': 'int',
             'value_min': 1,
+            'null': True,
+        },
+        'filter': {
+            'required': True,
+            'type': 'str',
+            'list': True,
             'null': True,
         },
 	},
@@ -1639,14 +1639,18 @@ async def save_telegram_pin(request):
 
 ################################################################
 async def manager_user_search(request):
-    if request.user.id and request.user.check_roles({ 'admin', 'moderator', 'manager', 'community manager' }):
+    if request.user.id and request.user.check_roles({ 'admin', 'moderator', 'manager', 'chief', 'community manager' }):
         if validate(request.params, MODELS['manager_user_search']):
+            community_manager_id = None
+            if not request.user.check_roles({ 'admin', 'moderator', 'manager', 'chief' }):
+                community_manager_id = request.user.id
             (result, amount) = await User.client_search(
                 text = request.params['text'],
                 ids = request.params['ids'],
+                community_manager_id = community_manager_id,
                 active_only = False,
-                offset = (request.params['page'] - 1) * 20 if request.params['page'] else None,
-                limit = 20 if request.params['page'] else None,
+                offset = (request.params['page'] - 1) * 15 if request.params['page'] else None,
+                limit = 15 if request.params['page'] else None,
                 count = True,
             )
             community_managers = await get_community_managers()
@@ -1704,25 +1708,29 @@ async def manager_user_search(request):
         return err(403, 'Нет доступа')
 
 
+
 ################################################################
 async def manager_user_update(request):
-    if request.user.id and request.user.check_roles({ 'admin', 'moderator', 'manager', 'community manager' }):
+    if request.user.id and request.user.check_roles({ 'admin', 'moderator', 'manager', 'chief', 'community manager' }):
         if validate(request.params, MODELS['manager_user_update']):
             user = User()
             await user.set(id = request.params['id'], active = None)
             if user.id:
-                temp = User()
-                if await temp.find(email = request.params['email']):
-                    if temp.id != user.id:
-                        return err(400, 'Email уже зарегистрирован')
-                temp = User()
-                if await temp.find(phone = request.params['phone']):
-                    if temp.id != user.id:
-                        return err(400, 'Телефон уже зарегистрирован')
-                args = request.params | { 'roles': user.roles }
-                await user.update(**args)
-                dispatch('user_update', request)
-                return OrjsonResponse({})
+                if request.user.check_roles({ 'admin', 'moderator', 'manager', 'chief' }) or user.community_manager_id == request.user.id:
+                    temp = User()
+                    if await temp.find(email = request.params['email']):
+                        if temp.id != user.id:
+                            return err(400, 'Email уже зарегистрирован')
+                    temp = User()
+                    if await temp.find(phone = request.params['phone']):
+                        if temp.id != user.id:
+                            return err(400, 'Телефон уже зарегистрирован')
+                    args = request.params | { 'roles': user.roles }
+                    await user.update(**args)
+                    dispatch('user_update', request)
+                    return OrjsonResponse({})
+                else:
+                    return err(403, 'Нет доступа')
             else:
                 return err(404, 'Пользователь не найден')
         else:
@@ -1734,19 +1742,22 @@ async def manager_user_update(request):
 
 ################################################################
 async def manager_user_membership_stage_update(request):
-    if request.user.id and request.user.check_roles({ 'admin', 'moderator', 'manager', 'community manager' }):
+    if request.user.id and request.user.check_roles({ 'admin', 'moderator', 'manager', 'chief', 'community manager' }):
         if validate(request.params | request.path_params, MODELS['manager_user_membership_stage_update']):
             user = User()
             await user.set(id = request.params['user_id'], active = None)
             if user.id:
-                await user.membership_stage_update(
-                    stage_id = request.params['stage_id'],
-                    field = request.path_params['field'], 
-                    value = request.params['value'],
-                    author_id = request.user.id,
-                )
-                dispatch('user_update', request)
-                return OrjsonResponse({})
+                if request.user.check_roles({ 'admin', 'moderator', 'manager', 'chief' }) or user.community_manager_id == request.user.id:
+                    await user.membership_stage_update(
+                        stage_id = request.params['stage_id'],
+                        field = request.path_params['field'], 
+                        value = request.params['value'],
+                        author_id = request.user.id,
+                    )
+                    dispatch('user_update', request)
+                    return OrjsonResponse({})
+                else:
+                    return err(403, 'Нет доступа')
             else:
                 return err(404, 'Пользователь не найден')
         else:
@@ -1758,18 +1769,21 @@ async def manager_user_membership_stage_update(request):
 
 ################################################################
 async def manager_user_membership_rating_update(request):
-    if request.user.id and request.user.check_roles({ 'admin', 'moderator', 'manager', 'community manager' }):
+    if request.user.id and request.user.check_roles({ 'admin', 'moderator', 'manager', 'chief', 'community manager' }):
         if validate(request.params | request.path_params, MODELS['manager_user_membership_rating_update']):
             user = User()
             await user.set(id = request.params['user_id'], active = None)
             if user.id:
-                await user.membership_rating_update(
-                    field = request.path_params['field'], 
-                    value = request.params['value'],
-                    author_id = request.user.id,
-                )
-                dispatch('user_update', request)
-                return OrjsonResponse({})
+                if request.user.check_roles({ 'admin', 'moderator', 'manager', 'chief' }) or user.community_manager_id == request.user.id:
+                    await user.membership_rating_update(
+                        field = request.path_params['field'], 
+                        value = request.params['value'],
+                        author_id = request.user.id,
+                    )
+                    dispatch('user_update', request)
+                    return OrjsonResponse({})
+                else:
+                    return err(403, 'Нет доступа')
             else:
                 return err(404, 'Пользователь не найден')
         else:
@@ -1781,16 +1795,16 @@ async def manager_user_membership_rating_update(request):
 
 ################################################################
 async def manager_user_create(request):
-    if request.user.id and request.user.check_roles({ 'admin', 'moderator', 'manager', 'community manager' }):
+    if request.user.id and request.user.check_roles({ 'admin', 'moderator', 'manager', 'chief', 'community manager' }):
         if validate(request.params, MODELS['manager_user_create']):
             user = User()
             if await user.find(email = request.params['email']):
                 return err(400, 'Email уже зарегистрирован')
             if await user.find(phone = request.params['phone']):
                 return err(400, 'Телефон уже зарегистрирован')
-            if 'admin' in request.params['roles']:
-                if user.id not in { 8000, 10004 }:
-                    return err(400, 'Неверный запрос')
+            community_manager_id = request.params['community_manager_id']
+            if not request.user.check_roles({ 'admin', 'moderator', 'manager', 'chief' }):
+                community_manager_id = request.user.id
             await user.create(
                 name = request.params['name'],
                 email = request.params['email'],
@@ -1799,7 +1813,7 @@ async def manager_user_create(request):
                 position = request.params['position'],
                 catalog = request.params['catalog'],
                 password = request.params['password'],
-                roles = [ 'client '],
+                roles = [ 'client' ],
                 active = request.params['active'],
                 detail = request.params['detail'],
                 status = request.params['status'],
@@ -1814,7 +1828,7 @@ async def manager_user_create(request):
                 birthdate = request.params['birthdate'],
                 birthdate_privacy = request.params['birthdate_privacy'],
                 experience = request.params['experience'],
-                community_manager_id = request.params['community_manager_id'],
+                community_manager_id = community_manager_id,
             )
             dispatch('user_create', request)
             return OrjsonResponse({})

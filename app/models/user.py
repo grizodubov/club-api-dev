@@ -72,16 +72,17 @@ class User:
         if text:
             if target:
                 if target == 'tags':
-                    conditions.append("""regexp_split_to_array($1, '\s*,\s*') && regexp_split_to_array(t2.tags, '\s*,\s*')""")
+                    conditions.append("""regexp_split_to_array($1::text, '\s*,\s*') && regexp_split_to_array(t2.tags, '\s*,\s*')""")
                 else:
-                    conditions.append("""regexp_split_to_array($1, '\s*,\s*') && regexp_split_to_array(t2.interests, '\s*,\s*')""")
-                args.append(text)
+                    conditions.append("""regexp_split_to_array($1::text, '\s*,\s*') && regexp_split_to_array(t2.interests, '\s*,\s*')""")
+                args.append(str(text))
             else:
                 if reverse:
-                    conditions.append("""(to_tsvector(concat_ws(' ', t1.name, t1.email, t1.phone, t3.company, t3.position, t2.interests)) @@ to_tsquery($1) OR t1.name ILIKE concat_ws('%', $1, '%'))""")
+                    conditions.append("""(to_tsvector(concat_ws(' ', t1.name, t1.email, t1.phone, t3.company, t3.position, t2.interests)) @@ to_tsquery($1) OR t1.name ILIKE concat('%', $2::text, '%') OR t3.company ILIKE concat('%', $2::text, '%'))""")
                 else:
-                    conditions.append("""(to_tsvector(concat_ws(' ', t1.name, t1.email, t1.phone, t3.company, t3.position, t3.detail, t2.tags, t2.interests)) @@ to_tsquery($1) OR t1.name ILIKE concat_ws('%', $1, '%'))""")
+                    conditions.append("""(to_tsvector(concat_ws(' ', t1.name, t1.email, t1.phone, t3.company, t3.position, t3.detail, t2.tags, t2.interests)) @@ to_tsquery($1) OR t1.name ILIKE concat('%', $2::text, '%') OR t3.company ILIKE concat('%', $2::text, '%'))""")
                 args.append(re.sub(r'\s+', ' | ', text))
+                args.append(str(text))
         if offset is not None and limit is not None:
             slice_query = ' OFFSET $' + str(len(args) + 1) + ' LIMIT $' + str(len(args) + 2)
             args.extend([ offset, limit ])
@@ -174,7 +175,7 @@ class User:
 
     ################################################################
     @classmethod
-    async def client_search(cls, text, ids = [], active_only = True, offset = None, limit = None, count = False, applicant = False, reverse = False, target = None):
+    async def client_search(cls, text, ids = [], community_manager_id = None, active_only = True, offset = None, limit = None, count = False, applicant = False, reverse = False, target = None):
         api = get_api_context()
         result = []
         amount = None
@@ -193,19 +194,23 @@ class User:
         if text:
             if target:
                 if target == 'tags':
-                    conditions.append("""regexp_split_to_array($1, '\s*,\s*') && regexp_split_to_array(t2.tags, '\s*,\s*')""")
+                    conditions.append("""regexp_split_to_array($1::text, '\s*,\s*') && regexp_split_to_array(t2.tags, '\s*,\s*')""")
                 else:
-                    conditions.append("""regexp_split_to_array($1, '\s*,\s*') && regexp_split_to_array(t2.interests, '\s*,\s*')""")
-                args.append(text)
+                    conditions.append("""regexp_split_to_array($1::text, '\s*,\s*') && regexp_split_to_array(t2.interests, '\s*,\s*')""")
+                args.append(str(text))
             else:
                 if reverse:
-                    conditions.append("""(to_tsvector(concat_ws(' ', t1.name, t1.email, t1.phone, t3.company, t3.position, t2.interests)) @@ to_tsquery($1) OR t1.name ILIKE concat_ws('%', $1, '%'))""")
+                    conditions.append("""(to_tsvector(concat_ws(' ', t1.name, t1.email, t1.phone, t3.company, t3.position, t2.interests)) @@ to_tsquery($1) OR t1.name ILIKE concat('%', $2::text, '%') OR t3.company ILIKE concat('%', $2::text, '%'))""")
                 else:
-                    conditions.append("""(to_tsvector(concat_ws(' ', t1.name, t1.email, t1.phone, t3.company, t3.position, t3.detail, t2.tags, t2.interests)) @@ to_tsquery($1) OR t1.name ILIKE concat_ws('%', $1, '%'))""")
+                    conditions.append("""(to_tsvector(concat_ws(' ', t1.name, t1.email, t1.phone, t3.company, t3.position, t3.detail, t2.tags, t2.interests)) @@ to_tsquery($1) OR t1.name ILIKE concat('%', $2::text, '%') OR t3.company ILIKE concat('%', $2::text, '%'))""")
                 args.append(re.sub(r'\s+', ' | ', text))
+                args.append(str(text))
         if ids:
             conditions.append("""t1.id = ANY($""" + str(len(args) + 1) + """)""")
             args.append(ids)
+        if community_manager_id:
+            conditions.append("""t1.community_manager_id = $""" + str(len(args) + 1))
+            args.append(community_manager_id)
         if offset is not None and limit is not None:
             slice_query = ' OFFSET $' + str(len(args) + 1) + ' LIMIT $' + str(len(args) + 2)
             args.extend([ offset, limit ])
@@ -1026,7 +1031,6 @@ class User:
             'tags': [ dict(item) | { 'online': check_online_by_id(item['id']) } for item in data1 ],
             'interests': [ dict(item) | { 'online': check_online_by_id(item['id']) } for item in data2 ],
         }
-
 
 
     ################################################################
