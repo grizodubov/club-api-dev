@@ -387,7 +387,7 @@ async def login_email(request):
     await asyncio.sleep(.25)
     if validate(request.params, MODELS['login_email']):
         user = User()
-        if await user.find(email = request.params['account']):
+        if await user.find(email = request.params['account']) and user.active:
             code = str(randint(1000, 9999))
             await user.set_validation_code(code = code)
             send_email(request.api.stream_email, user.email, VERIFICATION_CODE['subject'], VERIFICATION_CODE['body'], { 'code': code })
@@ -404,7 +404,7 @@ async def login_email_validate(request):
     await asyncio.sleep(.5)
     if validate(request.params, MODELS['login_email_validate']):
         user = User()
-        if await user.find(email = request.params['account']):
+        if await user.find(email = request.params['account']) and user.active:
             if await user.check_validation_code(code = request.params['code']):
                 await request.session.assign(user.id)
                 request.user.copy(user = user)
@@ -425,7 +425,7 @@ async def login_mobile(request):
     await asyncio.sleep(.25)
     if validate(request.params, MODELS['login_mobile']):
         user = User()
-        if await user.find(phone = request.params['account']):
+        if await user.find(phone = request.params['account']) and user.active:
             code = str(randint(1000, 9999))
             await user.set_validation_code(code = code)
             send_mobile_message(request.api.stream_mobile, user.phone, VERIFICATION_CODE['message'], { 'code': code })
@@ -442,7 +442,7 @@ async def login_mobile_validate(request):
     await asyncio.sleep(.5)
     if validate(request.params, MODELS['login_mobile_validate']):
         user = User()
-        if await user.find(phone = request.params['account']):
+        if await user.find(phone = request.params['account']) and user.active:
             if await user.check_validation_code(code = request.params['code']):
                 await request.session.assign(user.id)
                 request.user.copy(user = user)
@@ -664,7 +664,7 @@ async def moderator_login_email_validate(request):
     await asyncio.sleep(.5)
     if validate(request.params, MODELS['moderator_login_email_validate']):
         user = User()
-        if await user.find(email = request.params['account']):
+        if await user.find(email = request.params['account']) and user.active:
             if await user.check_validation_code(code = request.params['code']):
                 if set(user.roles) & { 'admin', 'moderator', 'editor', 'manager', 'community manager' }:
                     await request.session.assign(user.id)
@@ -687,7 +687,7 @@ async def moderator_login_mobile_validate(request):
     await asyncio.sleep(.5)
     if validate(request.params, MODELS['moderator_login_mobile_validate']):
         user = User()
-        if await user.find(phone = request.params['account']):
+        if await user.find(phone = request.params['account']) and user.active:
             if await user.check_validation_code(code = request.params['code']):
                 if set(user.roles) & { 'admin', 'moderator', 'editor', 'manager', 'community manager' }:
                     await request.session.assign(user.id)

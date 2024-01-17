@@ -670,7 +670,7 @@ class User:
                                 GROUP BY
                                     r3.user_id
                             ) t4 ON t4.user_id = t1.id
-                        WHERE t1.active IS TRUE AND """ + ' AND '.join(qr),
+                        WHERE """ + ' AND '.join(qr),
                     *ar
                 )
                 if data:
@@ -1322,9 +1322,9 @@ class User:
         # только мобильники рф
         id = await api.pg.club.fetchval(
             """INSERT INTO
-                    users (name, email, phone, password, active)
+                    users (name, email, phone, password, active, community_manager_id)
                 VALUES
-                    ($1, $2, $3, $4, $5)
+                    ($1, $2, $3, $4, $5, $6)
                 RETURNING
                     id""",
             kwargs['name'],
@@ -1332,6 +1332,7 @@ class User:
             '+7' + ''.join(list(re.sub(r'[^\d]+', '', kwargs['phone']))[-10:]),
             kwargs['password'],
             kwargs['active'] if 'active' in kwargs else True,
+            kwargs['community_manager_id'] if 'community_manager_id' in kwargs and kwargs['community_manager_id'] else None,
         )
         #print(kwargs['birthdate'])
         await api.pg.club.execute(
