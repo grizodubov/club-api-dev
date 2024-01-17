@@ -313,8 +313,8 @@ class Event:
             """DELETE FROM
                     events_speakers
                 WHERE
-                    event_id = $1""",
-            self.id
+                    event_id = $1 AND user_id <> ANY($2)""",
+            self.id, speakers
         )
         await api.pg.club.execute(
             """INSERT INTO

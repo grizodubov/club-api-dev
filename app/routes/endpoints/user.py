@@ -710,6 +710,11 @@ MODELS = {
             'list': True,
             'null': True,
         },
+        'ignore_community_manager': {
+            'required': True,
+            'type': 'bool',
+            'default': False,
+        },
 	},
 	'manager_user_update': {
 		'id': {
@@ -1643,7 +1648,8 @@ async def manager_user_search(request):
         if validate(request.params, MODELS['manager_user_search']):
             community_manager_id = None
             if not request.user.check_roles({ 'admin', 'moderator', 'manager', 'chief' }):
-                community_manager_id = request.user.id
+                if not request.params['ignore_community_manager']:
+                    community_manager_id = request.user.id
             (result, amount) = await User.client_search(
                 text = request.params['text'],
                 ids = request.params['ids'],
@@ -1802,8 +1808,10 @@ async def manager_user_create(request):
                 return err(400, 'Email уже зарегистрирован')
             if await user.find(phone = request.params['phone']):
                 return err(400, 'Телефон уже зарегистрирован')
-            community_manager_id = request.params['community_manager_id']
-            if not request.user.check_roles({ 'admin', 'moderator', 'manager', 'chief' }):
+            community_manager_id = None
+            if request.user.check_roles({ 'admin', 'moderator', 'manager', 'chief' }):
+                community_manager_id = request.params['community_manager_id']
+            else:
                 community_manager_id = request.user.id
             await user.create(
                 name = request.params['name'],
