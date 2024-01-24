@@ -1,5 +1,6 @@
 from datetime import datetime
 import asyncio
+import re
 from random import randint
 from starlette.routing import Route
 
@@ -356,6 +357,10 @@ MODELS = {
 		},
 	},
 	'new_user_update': {
+        'id': {
+            'required': True,
+            'type': 'int',
+        },
 		'name': {
 			'required': True,
 			'type': 'str',
@@ -420,7 +425,7 @@ MODELS = {
 		'birthdate': {
 			'required': True,
 			'type': 'str',
-            'processing': lambda x: datetime.strptime(x.strip(), "%d/%m/%Y"),
+            'processing': lambda x: datetime.strptime(x.strip(), "%d/%m/%Y") if x and x.strip() and re.fullmatch(r'\d\d\/\d\d\/\d\d\d\d', re.sub(r'\s', '', x.strip())) else None,
             'null': True,
 		},
 		'birthdate_privacy': {
@@ -538,7 +543,7 @@ MODELS = {
 		'birthdate': {
 			'required': True,
 			'type': 'str',
-            'processing': lambda x: datetime.strptime(x.strip(), "%d/%m/%Y"),
+            'processing': lambda x: datetime.strptime(x.strip(), "%d/%m/%Y") if x and x.strip() and re.fullmatch(r'\d\d\/\d\d\/\d\d\d\d', re.sub(r'\s', '', x.strip())) else None,
             'null': True,
 		},
 		'birthdate_privacy': {
@@ -652,7 +657,7 @@ MODELS = {
 		'birthdate': {
 			'required': True,
 			'type': 'str',
-            'processing': lambda x: datetime.strptime(x.strip(), "%d/%m/%Y"),
+            'processing': lambda x: datetime.strptime(x.strip(), "%d/%m/%Y") if x and x.strip() and re.fullmatch(r'\d\d\/\d\d\/\d\d\d\d', re.sub(r'\s', '', x.strip())) else None,
             'null': True,
 		},
 		'birthdate_privacy': {
@@ -813,7 +818,7 @@ MODELS = {
 		'birthdate': {
 			'required': True,
 			'type': 'str',
-            'processing': lambda x: datetime.strptime(x.strip(), "%d/%m/%Y"),
+            'processing': lambda x: datetime.strptime(x.strip(), "%d/%m/%Y") if x and x.strip() and re.fullmatch(r'\d\d\/\d\d\/\d\d\d\d', re.sub(r'\s', '', x.strip())) else None,
             'null': True,
 		},
 		'birthdate_privacy': {
@@ -961,7 +966,7 @@ MODELS = {
 		'birthdate': {
 			'required': True,
 			'type': 'str',
-            'processing': lambda x: datetime.strptime(x.strip(), "%d/%m/%Y"),
+            'processing': lambda x: datetime.strptime(x.strip(), "%d/%m/%Y") if x and x.strip() and re.fullmatch(r'\d\d\/\d\d\/\d\d\d\d', re.sub(r'\s', '', x.strip())) else None,
             'null': True,
 		},
 		'birthdate_privacy': {
@@ -1539,16 +1544,34 @@ async def new_user_info(request):
 async def new_user_update(request):
     if request.user.id:
         if validate(request.params, MODELS['new_user_update']):
-            await request.user.update(**request.params)
-            dispatch('user_update', request)
-            user = User()
-            await user.set(id = request.user.id)
-            result = user.dshow()
-            result.update({ 
-                'contact': False,
-                'allow_contact': False
-            })
-            return OrjsonResponse(result)
+            if request.params['id'] == request.user.id:
+                await request.user.update(**request.params)
+                dispatch('user_update', request)
+                user = User()
+                await user.set(id = request.user.id)
+                result = user.dshow()
+                result.update({ 
+                    'contact': False,
+                    'allow_contact': False
+                })
+                return OrjsonResponse(result)
+            else:
+                user = User()
+                await user.set(id = request.params['id'])
+                if user.id:
+                    if (request.user.check_roles({ 'admin', 'moderator', 'manager', 'chief' })) or \
+                            (request.user.check_roles({ 'community manager' }) and request.user.id == user.community_manager_id):
+                        await user.update(**request.params)
+                        dispatch('user_update', request)
+                        await user.set(id = request.params['id'])
+                        result = user.dshow()
+                        result.update({ 
+                            'contact': False,
+                            'allow_contact': False
+                        })
+                        return OrjsonResponse(result)
+                else:
+                    return err(404, 'Пользователь не найден')
         else:
             return err(400, 'Неверный запрос')
     else:
