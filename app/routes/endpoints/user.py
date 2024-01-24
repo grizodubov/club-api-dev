@@ -53,6 +53,11 @@ def routes():
         Route('/ma/user/membership/stage/update/{field:str}', manager_user_membership_stage_update, methods = [ 'POST' ]),
         Route('/ma/user/membership/rating/update/{field:str}', manager_user_membership_rating_update, methods = [ 'POST' ]),
         Route('/ma/user/create', manager_user_create, methods = [ 'POST' ]),
+
+        Route('/ma/user/event/confirm', manager_user_confirm_event, methods = [ 'POST' ]),
+        Route('/ma/user/event/add', manager_user_add_event, methods = [ 'POST' ]),
+        Route('/ma/user/event/del', manager_user_del_event, methods = [ 'POST' ]),
+        Route('/ma/user/event/audit', manager_user_audit_event, methods = [ 'POST' ]),
     ]
 
 
@@ -977,6 +982,58 @@ MODELS = {
 			'type': 'str',
 		},
 	},
+    'manager_user_confirm_event': {
+        'user_id': {
+			'required': True,
+			'type': 'int',
+            'value_min': 1,
+		},
+        'event_id': {
+			'required': True,
+			'type': 'int',
+            'value_min': 1,
+		},
+    },
+    'manager_user_add_event': {
+        'user_id': {
+			'required': True,
+			'type': 'int',
+            'value_min': 1,
+		},
+        'event_id': {
+			'required': True,
+			'type': 'int',
+            'value_min': 1,
+		},
+    },
+    'manager_user_del_event': {
+        'user_id': {
+			'required': True,
+			'type': 'int',
+            'value_min': 1,
+		},
+        'event_id': {
+			'required': True,
+			'type': 'int',
+            'value_min': 1,
+		},
+    },
+    'manager_user_audit_event': {
+        'user_id': {
+			'required': True,
+			'type': 'int',
+            'value_min': 1,
+		},
+        'event_id': {
+			'required': True,
+			'type': 'int',
+            'value_min': 1,
+		},
+        'audit': {
+			'required': True,
+			'type': 'bool',
+		},
+    },
 }
 
 
@@ -1700,7 +1757,10 @@ async def manager_user_search(request):
             for item in result:
                 k = str(item.id)
                 user_activity = { 'time_last_activity': activity[k] if k in activity else None }
-                users.append(item.dump() | user_activity | { 'membership': memberships[k] if k in memberships else membership_template })
+                events_pendings = {}
+                if len(result) == 1:
+                     events_pendings = { 'events_confirmations_pendings': await item.get_events_confirmations_pendings() }
+                users.append(item.dump() | user_activity | { 'membership': memberships[k] if k in memberships else membership_template } | events_pendings)
             if request.params['filter']:
                 users = [ { k: user[k] for k in request.params['filter'] } for user in users ]
             return OrjsonResponse({
@@ -1840,6 +1900,123 @@ async def manager_user_create(request):
             )
             dispatch('user_create', request)
             return OrjsonResponse({})
+        else:
+            return err(400, 'Неверный запрос')
+    else:
+        return err(403, 'Нет доступа')
+
+
+
+################################################################
+async def manager_user_confirm_event(request):
+    if request.user.id and request.user.check_roles({ 'admin', 'moderator', 'manager', 'chief', 'community manager' }):
+        if validate(request.params, MODELS['manager_user_confirm_event']):
+            user = User()
+            await user.set(id = request.params['user_id'])
+            if user.id:
+                event = Event()
+                await event.set(id = request.params['event_id'])
+                if event.id:
+                    if request.user.check_roles({ 'admin', 'moderator', 'manager', 'chief' }) or \
+                            user.community_manager_id == request.user.id:
+                        await user.confirm_event(event_id = event.id)
+                        dispatch('user_update', request)
+                        return OrjsonResponse({
+                            'event_id': event.id,
+                            'user_id': user.id,
+                            'confirmation': True,
+                        })
+                    else:
+                        return err(403, 'Нет доступа')
+                else:
+                    return err(404, 'Событие не найдено')
+            else:
+                return err(404, 'Пользователь не найден')
+        else:
+            return err(400, 'Неверный запрос')
+    else:
+        return err(403, 'Нет доступа')
+
+
+
+################################################################
+async def manager_user_add_event(request):
+    if request.user.id and request.user.check_roles({ 'admin', 'moderator', 'manager', 'chief', 'community manager' }):
+        if validate(request.params, MODELS['manager_user_add_event']):
+            event = Event()
+            await event.set(id = request.params['event_id'])
+            if event.id:
+                user = User()
+                await user.set(id = request.params['user_id'])
+                if user.id:
+                    if request.user.check_roles({ 'admin', 'moderator', 'manager', 'chief' }) or \
+                            user.community_manager_id == request.user.id:
+                        await user.add_event(event_id = event.id)
+                        await user.confirm_event(event_id = event.id)
+                        dispatch('user_add_event', request)
+                        return OrjsonResponse({})
+                    else:
+                        return err(403, 'Нет доступа')
+                else:
+                    return err(404, 'Пользователь не найден')
+            else:
+                return err(404, 'Событие не найдено')
+        else:
+            return err(400, 'Неверный запрос')
+    else:
+        return err(403, 'Нет доступа')
+        
+
+
+################################################################
+async def manager_user_del_event(request):
+    if request.user.id and request.user.check_roles({ 'admin', 'moderator', 'manager', 'chief', 'community manager' }):
+        if validate(request.params, MODELS['manager_user_del_event']):
+            event = Event()
+            await event.set(id = request.params['event_id'])
+            if event.id:
+                user = User()
+                await user.set(id = request.params['user_id'])
+                if user.id:
+                    if request.user.check_roles({ 'admin', 'moderator', 'manager', 'chief' }) or \
+                            user.community_manager_id == request.user.id:
+                        await user.del_event(event_id = event.id)
+                        dispatch('user_update', request)
+                        return OrjsonResponse({})
+                    else:
+                        return err(403, 'Нет доступа')
+                else:
+                    return err(404, 'Пользователь не найден')
+            else:
+                return err(404, 'Событие не найдено')
+        else:
+            return err(400, 'Неверный запрос')
+    else:
+        return err(403, 'Нет доступа')
+
+
+
+################################################################
+async def manager_user_audit_event(request):
+    if request.user.id and request.user.check_roles({ 'admin', 'moderator', 'manager', 'chief', 'community manager' }):
+        if validate(request.params, MODELS['manager_user_audit_event']):
+            event = Event()
+            await event.set(id = request.params['event_id'])
+            if event.id:
+                user = User()
+                await user.set(id = request.params['user_id'])
+                if user.id:
+                    if request.user.check_roles({ 'admin', 'moderator', 'manager', 'chief' }) or \
+                            user.community_manager_id == request.user.id:
+                        await user.audit_event(event_id = event.id, audit = request.params['audit'])
+                        dispatch('user_update', request)
+                        return OrjsonResponse({})
+                    else:
+                        return err(403, 'Нет доступа')
+                else:
+                    return err(404, 'Пользователь не найден')
+            else:
+                return err(404, 'Событие не найдено')
         else:
             return err(400, 'Неверный запрос')
     else:

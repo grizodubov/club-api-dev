@@ -799,7 +799,7 @@ class User:
                 LEFT JOIN
                     events_users t4 ON t4.user_id = t1.id AND t4.event_id IN
                         (
-                            SELECT id FROM events WHERE time_event >= (now() at time zone 'utc')::date
+                            SELECT id FROM events WHERE time_event >= (now() at time zone 'utc')::date AND active IS TRUE
                         )
                 WHERE
                     t1.id = $1""",
@@ -1204,12 +1204,83 @@ class User:
 
 
     ################################################################
+    async def audit_event(self, event_id, audit):
+        api = get_api_context()
+        data = await api.pg.club.execute(
+            """UPDATE events_users SET audit = $3 WHERE event_id = $1 AND user_id = $2""",
+            event_id, self.id, audit
+        )
+
+
+    ################################################################
     async def del_event(self, event_id):
         api = get_api_context()
         data = await api.pg.club.execute(
             """DELETE FROM events_users WHERE event_id = $1 AND user_id = $2""",
             event_id, self.id
         )
+
+
+    ################################################################
+    async def get_events(self):
+        api = get_api_context()
+        data = await api.pg.club.fetch(
+            """SELECT
+                    t1.id, t1.name, t1.format, t1.place, t1.time_event, t1.detail,
+                    t2.confirmation, t2.audit, FALSE AS archive
+                FROM
+                    events t1
+                LEFT JOIN
+                    events_users t2 ON t2.event_id = t1.id AND t2.user_id = $1
+                WHERE
+                    t1.active IS TRUE AND
+                    t1.time_event >= (now() at time zone 'utc')::date
+                ORDER BY
+                    t1.time_event""",
+            self.id
+        )
+        return [ dict(item) for item in data ]
+
+
+    ################################################################
+    async def get_events_confirmations_pendings(self):
+        api = get_api_context()
+        amount = await api.pg.club.fetchval(
+            """SELECT
+                    count(t1.id)
+                FROM
+                    events t1
+                INNER JOIN
+                    events_users t2 ON t2.event_id = t1.id AND t2.user_id = $1
+                WHERE
+                    t1.active IS TRUE AND
+                    t1.time_event >= (now() at time zone 'utc')::date AND
+                    t2.confirmation IS FALSE""",
+            self.id
+        )
+        return amount
+
+
+    ################################################################
+    async def get_events_archive(self):
+        api = get_api_context()
+        data = await api.pg.club.fetch(
+            """SELECT
+                    t1.id, t1.name, t1.format, t1.place, t1.time_event, t1.detail,
+                    t2.confirmation, t2.audit, TRUE AS archive
+                FROM
+                    events t1
+                INNER JOIN
+                    events_users t2 ON t2.event_id = t1.id AND t2.user_id = $1
+                WHERE
+                    t1.active IS TRUE AND
+                    t1.time_event < (now() at time zone 'utc')::date AND
+                    t2.confirmation IS TRUE
+                ORDER BY
+                    t1.time_event DESC""",
+            self.id
+        )
+        return [ dict(item) for item in data ]
 
 
     ################################################################
@@ -1817,7 +1888,16 @@ async def get_users_memberships(users_ids):
                 ) t4 ON t4.user_id = t1.id
             LEFT JOIN
                 (
-                    SELECT user_id, count(event_id) AS events_count FROM events_users WHERE confirmation IS TRUE GROUP BY user_id
+                    SELECT
+                        t1.user_id, count(t1.event_id) AS events_count
+                    FROM
+                        events_users t1
+                    INNER JOIN
+                        events t2 ON t2.id = t1.event_id
+                    WHERE
+                        t1.confirmation IS TRUE AND
+                        t2.active IS TRUE
+                    GROUP BY t1.user_id
                 ) t5 ON t5.user_id = t1.id
             LEFT JOIN
                 users_managers_reviews t2 ON t2.user_id = t1.id

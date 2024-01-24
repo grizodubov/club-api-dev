@@ -26,6 +26,8 @@ def routes():
         Route('/m/event/program/update', moderator_event_program_update, methods = [ 'POST' ]),
         Route('/m/event/user/add', moderator_event_user_add, methods = [ 'POST' ]),
         Route('/m/event/user/del', moderator_event_user_del, methods = [ 'POST' ]),
+
+        Route('/ma/event/user/list', manager_event_user_list, methods = [ 'POST' ]),
     ]
 
 
@@ -234,6 +236,18 @@ MODELS = {
             'value_min': 1,
 		},
 	},
+    # manager
+    'manager_event_user_list': {
+        'user_id': {
+            'required': True,
+            'type': 'int',
+            'value_min': 1,
+        },
+        'archive': {
+            'required': True,
+            'type': 'bool',
+        },
+    },
 }
 
 
@@ -511,6 +525,29 @@ async def moderator_event_user_del(request):
                     return err(404, 'Пользователь не найден')
             else:
                 return err(404, 'Событие не найдено')
+        else:
+            return err(400, 'Неверный запрос')
+    else:
+        return err(403, 'Нет доступа')
+
+
+
+################################################################
+async def manager_event_user_list(request):
+    if request.user.id and request.user.check_roles({ 'admin', 'moderator', 'manager', 'chief', 'community manager' }):
+        if validate(request.params, MODELS['manager_event_user_list']):
+            user = User()
+            await user.set(id = request.params['user_id'])
+            if user.id:
+                if request.params['archive']:
+                    events = await user.get_events_archive()
+                else:
+                    events = await user.get_events()
+                return OrjsonResponse({
+                    'events': events,
+                })
+            else:
+                return err(404, 'Пользователь не найден')
         else:
             return err(400, 'Неверный запрос')
     else:
