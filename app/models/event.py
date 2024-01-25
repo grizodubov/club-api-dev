@@ -428,3 +428,37 @@ async def get_all_speakers():
         'speaker'
     )
     return [ dict(item) for item in data ]
+
+
+
+################################################################
+async def get_events_confirmations_pendings(users_ids = None):
+    api = get_api_context()
+    query = ''
+    args = []
+    if users_ids:
+        query += ' AND t2.user_id = ANY($1)'
+        args.append(users_ids)
+    result = await api.pg.club.fetch(
+        """SELECT
+                t2.user_id, count(t1.id) AS amount
+            FROM
+                events t1
+            INNER JOIN
+                events_users t2 ON t2.event_id = t1.id
+            INNER JOIN
+                users_roles t3 ON t3.user_id = t2.user_id
+            INNER JOIN
+                roles t4 ON t4.id = t3.role_id
+            WHERE
+                t1.active IS TRUE AND
+                t1.time_event >= (now() at time zone 'utc')::date AND
+                t2.confirmation IS FALSE AND
+                t4.alias = 'client'""" + query + """
+            GROUP BY
+                t2.user_id""",
+       *args
+    )
+    return {
+        str(item['user_id']): item['amount'] for item in result
+    }

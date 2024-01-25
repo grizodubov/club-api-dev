@@ -9,7 +9,7 @@ from app.core.response import OrjsonResponse
 from app.core.event import dispatch
 from app.utils.validate import validate
 from app.models.user import User, get_residents, get_residents_contacts, get_community_managers, get_telegram_pin, get_last_activity, get_users_memberships
-from app.models.event import Event
+from app.models.event import Event, get_events_confirmations_pendings
 from app.models.item import Item
 from app.helpers.mobile import send_mobile_message
 
@@ -721,6 +721,11 @@ MODELS = {
             'null': True,
         },
         'ignore_community_manager': {
+            'required': True,
+            'type': 'bool',
+            'default': False,
+        },
+        'show_events_confirmations_pendings': {
             'required': True,
             'type': 'bool',
             'default': False,
@@ -1777,15 +1782,18 @@ async def manager_user_search(request):
                     } for i in range(6)
                 ]
             }
+            events_pendings = {}
+            if request.params['show_events_confirmations_pendings']:
+                events_pendings = await get_events_confirmations_pendings()
             for item in result:
                 k = str(item.id)
                 user_activity = { 'time_last_activity': activity[k] if k in activity else None }
-                events_pendings = {}
-                if len(result) == 1:
-                     events_pendings = { 'events_confirmations_pendings': await item.get_events_confirmations_pendings() }
-                users.append(item.dump() | user_activity | { 'membership': memberships[k] if k in memberships else membership_template } | events_pendings)
+                temp = {}
+                if k in events_pendings:
+                    temp = { 'events_confirmations_pendings': events_pendings[k] }
+                users.append(item.dump() | user_activity | { 'membership': memberships[k] if k in memberships else membership_template } | temp)
             if request.params['filter']:
-                users = [ { k: user[k] for k in request.params['filter'] } for user in users ]
+                users = [ { k: user[k] if k in user else None for k in request.params['filter'] } for user in users ]
             return OrjsonResponse({
                 'users': users,
                 'amount': amount,
