@@ -1514,7 +1514,7 @@ class User:
     ################################################################
     async def terminate(self):
         api = get_api_context()
-        data = await api.pg.club.execute(
+        await api.pg.club.execute(
             """UPDATE users SET active = FALSE WHERE id = $1""",
             self.id
         )
@@ -1523,7 +1523,7 @@ class User:
     ################################################################
     async def update_telegram(self, telegram_id):
         api = get_api_context()
-        data = await api.pg.club.execute(
+        await api.pg.club.execute(
             """UPDATE users_info SET id_telegram = $2 WHERE user_id = $1""",
             self.id, telegram_id
         )
@@ -1536,7 +1536,7 @@ class User:
             v = False
             if value == 'true':
                 v = True
-            data = await api.pg.club.execute(
+            await api.pg.club.execute(
                 """INSERT INTO
                         users_memberships (user_id, stage_id, rejection)
                     VALUES
@@ -1551,7 +1551,7 @@ class User:
             v = False
             if value == 'true':
                 v = True
-            data = await api.pg.club.execute(
+            await api.pg.club.execute(
                 """UPDATE
                         users_memberships
                     SET
@@ -1560,7 +1560,7 @@ class User:
                         user_id = $1 AND stage_id <> $2""",
                 self.id, stage_id
             )
-            data = await api.pg.club.execute(
+            await api.pg.club.execute(
                 """INSERT INTO
                         users_memberships (user_id, stage_id, active)
                     VALUES
@@ -1572,7 +1572,7 @@ class User:
                 self.id, stage_id, v
             )
         if field == 'comment':
-            data = await api.pg.club.execute(
+            await api.pg.club.execute(
                 """INSERT INTO
                         users_memberships (user_id, stage_id, comment, comment_author_id, comment_time)
                     VALUES
@@ -1586,7 +1586,7 @@ class User:
                 self.id, stage_id, value, author_id
             )
         if field == 'time_control':
-            data = await api.pg.club.execute(
+            await api.pg.club.execute(
                 """INSERT INTO
                         users_memberships (user_id, stage_id, time_control)
                     VALUES
@@ -1601,10 +1601,28 @@ class User:
 
 
     ################################################################
+    async def control_update(self, field, value):
+        api = get_api_context()
+        if field == 'time_control':
+            await api.pg.club.execute(
+                """INSERT INTO
+                        users_managers_reviews (user_id, time_control)
+                    VALUES
+                        ($1, $2)
+                    ON CONFLICT
+                        (user_id)
+                    DO UPDATE SET
+                        time_control = EXCLUDED.time_control""",
+                self.id, int(value) if value else None
+            )
+
+
+
+    ################################################################
     async def membership_rating_update(self, field, value, author_id = None):
         api = get_api_context()
         if field == 'comment':
-            data = await api.pg.club.execute(
+            await api.pg.club.execute(
                 """INSERT INTO
                         users_managers_reviews (user_id, review, review_author_id, review_time)
                     VALUES
@@ -1618,7 +1636,7 @@ class User:
                 self.id, value, author_id
             )
         if field == 'rating':
-            data = await api.pg.club.execute(
+            await api.pg.club.execute(
                 """INSERT INTO
                         users_managers_reviews (user_id, rating_id)
                     VALUES
@@ -1842,6 +1860,7 @@ async def get_users_memberships(users_ids):
                 COALESCE(t4.polls_count, 0) AS polls_count,
                 COALESCE(t5.events_count, 0) AS events_count,
                 t2.review, t3.name AS review_author, round(extract(epoch FROM t2.review_time) * 1000)::bigint AS review_time, t2.rating_id,
+                round(extract(epoch FROM t2.time_control) * 1000)::bigint AS time_control,
                 t6.stages
             FROM
                 users t1
@@ -1918,6 +1937,7 @@ async def get_users_memberships(users_ids):
                     'name': 'Оценка менеджера',
                     'rating': item['rating_id'] if item['rating_id'] else None,
                     'data': {
+                        'time_control': item['time_control'],
                         'comment': {
                             'text': item['review'],
                             'author': item['review_author'],

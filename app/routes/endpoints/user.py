@@ -59,6 +59,8 @@ def routes():
         Route('/ma/user/event/add', manager_user_add_event, methods = [ 'POST' ]),
         Route('/ma/user/event/del', manager_user_del_event, methods = [ 'POST' ]),
         Route('/ma/user/event/audit', manager_user_audit_event, methods = [ 'POST' ]),
+
+        Route('/ma/user/control/update', manager_user_control_update, methods = [ 'POST' ]),
     ]
 
 
@@ -1043,6 +1045,23 @@ MODELS = {
 			'required': True,
 			'type': 'bool',
 		},
+    },
+    'manager_user_control_update': {
+		'user_id': {
+			'required': True,
+			'type': 'int',
+            'value_min': 1,
+		},
+        'field': {
+            'required': True,
+			'type': 'str',
+            'values': [ 'time_control' ],
+        },
+        'value': {
+            'required': True,
+			'type': 'str',
+            'null': True,
+        },
     },
 }
 
@@ -2048,6 +2067,32 @@ async def manager_user_audit_event(request):
                     return err(404, 'Пользователь не найден')
             else:
                 return err(404, 'Событие не найдено')
+        else:
+            return err(400, 'Неверный запрос')
+    else:
+        return err(403, 'Нет доступа')
+
+
+
+################################################################
+async def manager_user_control_update(request):
+    if request.user.id and request.user.check_roles({ 'admin', 'moderator', 'manager', 'chief', 'community manager' }):
+        if validate(request.params, MODELS['manager_user_control_update']):
+            user = User()
+            await user.set(id = request.params['user_id'], active = None)
+            if user.id:
+                if request.user.check_roles({ 'admin', 'moderator', 'manager', 'chief' }) or user.community_manager_id == request.user.id:
+                    await user.control_update(
+                        field = request.params['field'], 
+                        value = request.params['value'],
+                        #author_id = request.user.id,
+                    )
+                    dispatch('user_update', request)
+                    return OrjsonResponse({})
+                else:
+                    return err(403, 'Нет доступа')
+            else:
+                return err(404, 'Пользователь не найден')
         else:
             return err(400, 'Неверный запрос')
     else:
