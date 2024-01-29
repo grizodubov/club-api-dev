@@ -1,7 +1,7 @@
 from datetime import datetime
 import asyncio
 import re
-from random import randint
+from random import randint, choices
 from starlette.routing import Route
 
 from app.core.request import err
@@ -61,6 +61,9 @@ def routes():
         Route('/ma/user/event/audit', manager_user_audit_event, methods = [ 'POST' ]),
 
         Route('/ma/user/control/update', manager_user_control_update, methods = [ 'POST' ]),
+
+        Route('/ma/user/agent/search', manager_agent_search, methods = [ 'POST' ]),
+        Route('/ma/user/agent/create', manager_agent_create, methods = [ 'POST' ]),
     ]
 
 
@@ -330,7 +333,7 @@ MODELS = {
 			'required': True,
 			'type': 'str',
             'list': True,
-            'values': [ 'admin', 'client', 'guest', 'manager', 'moderator', 'editor', 'chief', 'community manager', 'tester', 'speaker' ],
+            'values': [ 'admin', 'client', 'guest', 'manager', 'moderator', 'editor', 'chief', 'community manager', 'tester', 'speaker', 'agent' ],
 		},
 		'tags': {
 			'required': True,
@@ -532,7 +535,7 @@ MODELS = {
 			'required': True,
 			'type': 'str',
             'list': True,
-            'values': [ 'admin', 'client', 'guest', 'manager', 'moderator', 'editor', 'chief', 'community manager', 'tester', 'speaker' ],
+            'values': [ 'admin', 'client', 'guest', 'manager', 'moderator', 'editor', 'chief', 'community manager', 'tester', 'speaker', 'agent' ],
 		},
 		'tags': {
 			'required': True,
@@ -646,7 +649,7 @@ MODELS = {
 			'required': True,
 			'type': 'str',
             'list': True,
-            'values': [ 'client', 'guest', 'manager', 'chief', 'community manager' ],
+            'values': [ 'client', 'guest', 'manager', 'chief', 'community manager', 'agent' ],
 		},
 		'tags': {
 			'required': True,
@@ -841,6 +844,10 @@ MODELS = {
 			'type': 'int',
             'null': True,
 		},
+		'agent_id': {
+			'type': 'int',
+            'null': True,
+		},
 		'link_telegram': {
 			'required': True,
 			'type': 'str',
@@ -989,6 +996,10 @@ MODELS = {
 			'type': 'int',
             'null': True,
 		},
+        'agent_id': {
+			'type': 'int',
+            'null': True,
+		},
 		'link_telegram': {
 			'required': True,
 			'type': 'str',
@@ -1063,6 +1074,60 @@ MODELS = {
             'null': True,
         },
     },
+	'manager_agent_search': {
+		'text': {
+			'required': True,
+			'type': 'str',
+		},
+		'ids': {
+			'required': True,
+			'type': 'int',
+            'list': True,
+            'null': True,
+		},
+        'page': {
+            'required': True,
+            'type': 'int',
+            'value_min': 1,
+            'null': True,
+        },
+        'filter': {
+            'required': True,
+            'type': 'str',
+            'list': True,
+            'null': True,
+        },
+        'ignore_community_manager': {
+            'required': True,
+            'type': 'bool',
+            'default': False,
+        },
+        'show_events_confirmations_pendings': {
+            'required': True,
+            'type': 'bool',
+            'default': False,
+        },
+	},
+	'manager_agent_create': {
+		'name': {
+			'required': True,
+			'type': 'str',
+            'length_min': 2,
+            'processing': lambda x: x.strip(),
+		},
+		'phone': {
+			'required': True,
+			'type': 'str',
+            'pattern': r'^[0-9\(\)\-\+\s]{10,20}$',
+            'processing': lambda x: x.strip(),
+		},
+		'email': {
+			'required': True,
+			'type': 'str',
+            'pattern': r'^[^@]+@[^@]+\.[^@]+$',
+            'processing': lambda x: x.strip().lower(),
+		},
+	},
 }
 
 
@@ -2093,6 +2158,119 @@ async def manager_user_control_update(request):
                     return err(403, 'Нет доступа')
             else:
                 return err(404, 'Пользователь не найден')
+        else:
+            return err(400, 'Неверный запрос')
+    else:
+        return err(403, 'Нет доступа')
+
+
+
+################################################################
+async def manager_agent_search(request):
+    if request.user.id and request.user.check_roles({ 'admin', 'moderator', 'manager', 'chief', 'community manager' }):
+        if validate(request.params, MODELS['manager_agent_search']):
+            community_manager_id = None
+            if not request.user.check_roles({ 'admin', 'moderator', 'manager', 'chief' }):
+                if not request.params['ignore_community_manager']:
+                    community_manager_id = request.user.id
+            (result, amount) = await User.agent_search(
+                text = request.params['text'],
+                ids = request.params['ids'],
+                community_manager_id = community_manager_id,
+                active_only = False,
+                offset = (request.params['page'] - 1) * 15 if request.params['page'] else None,
+                limit = 15 if request.params['page'] else None,
+                count = True,
+            )
+            community_managers = await get_community_managers()
+            users_ids = [ user.id for user in result ]
+            activity = await get_last_activity(users_ids = users_ids)
+            memberships = await get_users_memberships(users_ids)
+            users = []
+            membership_template = {
+                'rating': None,
+                'stage': 1,
+                'semaphore': [
+                    {
+                        'id': 1,
+                        'name': 'Оценка менеджера',
+                        'rating': None,
+                        'data': { 'comment': None, },
+                    },
+                    {
+                        'id': 2,
+                        'name': 'Участие в опросах',
+                        'rating': None,
+                        'data': { 'value': 0, },
+                    },
+                    {
+                        'id': 3,
+                        'name': 'Участие в мероприятиях',
+                        'rating': None,
+                        'data': { 'value': 0, },
+                    },
+                ],
+                'stages': [
+                    {
+                        'id': i + 1,
+                        'time': None,
+                        'data': { 'comment': None, },
+                        'rejection': False,
+                        'active': False,
+                    } for i in range(6)
+                ]
+            }
+            events_pendings = {}
+            if request.params['show_events_confirmations_pendings']:
+                events_pendings = await get_events_confirmations_pendings()
+            for item in result:
+                k = str(item.id)
+                user_activity = { 'time_last_activity': activity[k] if k in activity else None }
+                temp = {}
+                if k in events_pendings:
+                    temp = { 'events_confirmations_pendings': events_pendings[k] }
+                users.append(item.dump() | user_activity | { 'membership': memberships[k] if k in memberships else membership_template } | temp)
+            if request.params['filter']:
+                users = [ { k: user[k] if k in user else None for k in request.params['filter'] } for user in users ]
+            return OrjsonResponse({
+                'users': users,
+                'amount': amount,
+                'community_managers': community_managers,
+            })
+        else:
+            return err(400, 'Неверный поиск')
+    else:
+        return err(403, 'Нет доступа')
+
+
+
+################################################################
+async def manager_agent_create(request):
+    if request.user.id and request.user.check_roles({ 'admin', 'moderator', 'manager', 'chief', 'community manager' }):
+        if validate(request.params, MODELS['manager_agent_create']):
+            user = User()
+            if await user.find(email = request.params['email']):
+                return err(400, 'Email уже зарегистрирован')
+            if await user.find(phone = request.params['phone']):
+                return err(400, 'Телефон уже зарегистрирован')
+            password = ''.join(choices('ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_!@#$%&*', k = 9))
+            await user.create(
+                name = request.params['name'],
+                email = request.params['email'],
+                phone = request.params['phone'],
+                company = '',
+                position = '',
+                catalog = '',
+                password = password,
+                roles = [ 'agent' ],
+                active = True,
+                community_manager_id = None,
+            )
+            dispatch('user_create', request)
+            return OrjsonResponse({
+                'id': user.id,
+                'name': user.name,
+            })
         else:
             return err(400, 'Неверный запрос')
     else:

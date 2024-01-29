@@ -47,6 +47,8 @@ class User:
         self.avatar_hash = None
         self.online = False
         self.community_manager_id = 0
+        self.agent_id = 0
+        self.agent_name = ''
         self.link_telegram = ''
         self.id_telegram = None
 
@@ -69,6 +71,7 @@ class User:
             conditions.append("""'applicant' = ANY(t4.roles)""")
         if applicant is False:
             conditions.append("""'applicant' <> ANY(t4.roles)""")
+        text = text.strip()
         if text:
             if target:
                 if target == 'tags':
@@ -94,6 +97,8 @@ class User:
                     t1.name, t1.login, t1.email, t1.phone,
                     t1.active,
                     t1.community_manager_id,
+                    t1.agent_id,
+                    coalesce(t9.name, '') AS agent_name,
                     t3.company, t3.position, t3.detail,
                     t3.status,
                     t3.annual, t3.annual_privacy,
@@ -113,6 +118,8 @@ class User:
                     users_tags t2 ON t2.user_id = t1.id
                 INNER JOIN
                     users_info t3 ON t3.user_id = t1.id
+                LEFT JOIN
+                    users t9 ON t9.id = t1.agent_id
                 LEFT JOIN
                     avatars t5 ON t5.owner_id = t1.id AND t5.active IS TRUE
                 LEFT JOIN
@@ -191,6 +198,7 @@ class User:
             conditions.append("""'applicant' = ANY(t4.roles)""")
         if applicant is False:
             conditions.append("""'applicant' <> ANY(t4.roles)""")
+        text = text.strip()
         if text:
             if target:
                 if target == 'tags':
@@ -222,6 +230,8 @@ class User:
                     t1.name, t1.login, t1.email, t1.phone,
                     t1.active,
                     t1.community_manager_id,
+                    t1.agent_id,
+                    coalesce(t9.name, '') AS agent_name,
                     t3.company, t3.position, t3.detail,
                     t3.status,
                     t3.annual, t3.annual_privacy,
@@ -257,6 +267,141 @@ class User:
                         GROUP BY
                             r3.user_id
                     ) t4 ON t4.user_id = t1.id AND 'client'::text = ANY(t4.roles)
+                LEFT JOIN
+                    users t9 ON t9.id = t1.agent_id
+                LEFT JOIN
+                    avatars t5 ON t5.owner_id = t1.id AND t5.active IS TRUE""" + conditions_query + ' ORDER BY t1.name' + slice_query,
+            *args
+        )
+        for row in data:
+            item = User()
+            item.__dict__ = dict(row)
+            item.check_online()
+            result.append(item)
+        if count:
+            amount = len(result)
+            if offset is not None and limit is not None:
+                args_count = args[:len(args) - 2]
+                amount = await api.pg.club.fetchval(
+                    """SELECT
+                            count(t1.id)
+                        FROM
+                            users t1
+                        INNER JOIN
+                            users_tags t2 ON t2.user_id = t1.id
+                        INNER JOIN
+                            users_info t3 ON t3.user_id = t1.id
+                        INNER JOIN
+                            (
+                                SELECT
+                                    r3.user_id, array_agg(r3.alias) AS roles
+                                FROM
+                                    (
+                                        SELECT
+                                            r1.user_id, r2.alias
+                                        FROM
+                                            users_roles r1
+                                        INNER JOIN
+                                            roles r2 ON r2.id = r1.role_id
+                                    ) r3
+                                GROUP BY
+                                    r3.user_id
+                            ) t4 ON t4.user_id = t1.id AND 'client'::text = ANY(t4.roles)""" + conditions_query,
+                    *args_count
+                )
+            return (result, amount)
+        return result
+
+
+    ################################################################
+    @classmethod
+    async def agent_search(cls, text, ids = [], community_manager_id = None, active_only = True, offset = None, limit = None, count = False, applicant = False, reverse = False, target = None):
+        api = get_api_context()
+        result = []
+        amount = None
+        slice_query = ''
+        conditions = [ 't1.id >= 10000' ]
+        condition_query = ''
+        args = []
+        if active_only:
+            conditions.append('t1.active IS TRUE')
+        if applicant is None:
+            applicant = False
+        if applicant is True:
+            conditions.append("""'applicant' = ANY(t4.roles)""")
+        if applicant is False:
+            conditions.append("""'applicant' <> ANY(t4.roles)""")
+        text = text.strip()
+        if text:
+            if target:
+                if target == 'tags':
+                    conditions.append("""regexp_split_to_array($1::text, '\s*,\s*') && regexp_split_to_array(t2.tags, '\s*,\s*')""")
+                else:
+                    conditions.append("""regexp_split_to_array($1::text, '\s*,\s*') && regexp_split_to_array(t2.interests, '\s*,\s*')""")
+                args.append(str(text))
+            else:
+                if reverse:
+                    conditions.append("""(to_tsvector(concat_ws(' ', t1.name, t1.email, t1.phone, t3.company, t3.position, t2.interests)) @@ to_tsquery($1) OR t1.name ILIKE concat('%', $2::text, '%') OR t3.company ILIKE concat('%', $2::text, '%'))""")
+                else:
+                    conditions.append("""(to_tsvector(concat_ws(' ', t1.name, t1.email, t1.phone, t3.company, t3.position, t3.detail, t2.tags, t2.interests)) @@ to_tsquery($1) OR t1.name ILIKE concat('%', $2::text, '%') OR t3.company ILIKE concat('%', $2::text, '%'))""")
+                args.append(re.sub(r'\s+', ' | ', text))
+                args.append(str(text))
+        if ids:
+            conditions.append("""t1.id = ANY($""" + str(len(args) + 1) + """)""")
+            args.append(ids)
+        if community_manager_id:
+            conditions.append("""t1.community_manager_id = $""" + str(len(args) + 1))
+            args.append(community_manager_id)
+        if offset is not None and limit is not None:
+            slice_query = ' OFFSET $' + str(len(args) + 1) + ' LIMIT $' + str(len(args) + 2)
+            args.extend([ offset, limit ])
+        if conditions:
+            conditions_query = ' WHERE ' + ' AND '.join(conditions)
+        data = await api.pg.club.fetch(
+            """SELECT
+                    t1.id, t1.time_create, t1.time_update,
+                    t1.name, t1.login, t1.email, t1.phone,
+                    t1.active,
+                    t1.community_manager_id,
+                    t1.agent_id,
+                    coalesce(t9.name, '') AS agent_name,
+                    t3.company, t3.position, t3.detail,
+                    t3.status,
+                    t3.annual, t3.annual_privacy,
+                    t3.employees, t3.employees_privacy,
+                    t3.catalog, t3.city, t3.hobby,
+                    t3.link_telegram, t3.id_telegram,
+                    to_char(t3.birthdate, 'DD/MM/YYYY') AS birthdate, t3.birthdate_privacy,
+                    t3.experience,
+                    coalesce(t2.tags, '') AS tags,
+                    coalesce(t2.interests, '') AS interests,
+                    t5.hash AS avatar_hash,
+                    coalesce(t4.roles, '{}'::text[]) AS roles,
+                    t1.password AS _password
+                FROM
+                    users t1
+                INNER JOIN
+                    users_tags t2 ON t2.user_id = t1.id
+                INNER JOIN
+                    users_info t3 ON t3.user_id = t1.id
+                INNER JOIN
+                    (
+                        SELECT
+                            r3.user_id, array_agg(r3.alias) AS roles
+                        FROM
+                            (
+                                SELECT
+                                    r1.user_id, r2.alias
+                                FROM
+                                    users_roles r1
+                                INNER JOIN
+                                    roles r2 ON r2.id = r1.role_id
+                            ) r3
+                        GROUP BY
+                            r3.user_id
+                    ) t4 ON t4.user_id = t1.id
+                LEFT JOIN
+                    users t9 ON t9.id = t1.agent_id
                 LEFT JOIN
                     avatars t5 ON t5.owner_id = t1.id AND t5.active IS TRUE""" + conditions_query + ' ORDER BY t1.name' + slice_query,
             *args
@@ -345,7 +490,7 @@ class User:
 
     ################################################################
     def show(self):
-        filter = { 'time_create', 'time_update', 'community_manager_id', 'login', 'email', 'phone', 'roles', 'annual', 'annual_privacy', 'employees', 'employees_privacy', 'birthdate', 'birthdate_privacy' }
+        filter = { 'time_create', 'time_update', 'community_manager_id', 'agent_id', 'agent_name', 'login', 'email', 'phone', 'roles', 'annual', 'annual_privacy', 'employees', 'employees_privacy', 'birthdate', 'birthdate_privacy' }
         data = { k: v for k, v in self.__dict__.items() if not k.startswith('_') and k not in filter }
         # annual
         if self.annual_privacy == 'показывать':
@@ -434,6 +579,8 @@ class User:
                         t1.name, t1.login, t1.email, t1.phone,
                         t1.active,
                         t1.community_manager_id,
+                        t1.agent_id,
+                        coalesce(t9.name, '') AS agent_name,
                         t3.company, t3.position, t3.detail,
                         t3.status,
                         t3.annual, t3.annual_privacy,
@@ -453,6 +600,8 @@ class User:
                         users_tags t2 ON t2.user_id = t1.id
                     INNER JOIN
                         users_info t3 ON t3.user_id = t1.id
+                    LEFT JOIN
+                        users t9 ON t9.id = t1.agent_id
                     LEFT JOIN
                         avatars t5 ON t5.owner_id = t1.id AND t5.active IS TRUE
                     LEFT JOIN
@@ -488,7 +637,7 @@ class User:
         cursor = 2
         query = []
         args = []
-        for k in { 'active', 'name', 'email', 'phone', 'password', 'community_manager_id' }:
+        for k in { 'active', 'name', 'email', 'phone', 'password', 'community_manager_id', 'agent_id' }:
             if k in kwargs:
                 query.append(k + ' = $' + str(cursor))
                 if k == 'phone':
@@ -619,12 +768,15 @@ class User:
             i = 1
             for k, v in kwargs.items():
                 if re.fullmatch(check, k) is not None:
-                    qr.append(k + ' = $' + str(i))
                     if k == 'phone':
                         # Только мобильные телефоны РФ
                         ar.append('+7' + ''.join(list(re.sub(r'[^\d]+', '', v))[-10:]))
                     else:
                         ar.append(v)
+                    rk = k
+                    if k in { 'email', 'phone' }:
+                        rk = 't1.' + rk
+                    qr.append(rk + ' = $' + str(i))
                     i += 1
             if qr:
                 data = await api.pg.club.fetchrow(
@@ -633,6 +785,8 @@ class User:
                             t1.name, t1.login, t1.email, t1.phone,
                             t1.active,
                             t1.community_manager_id,
+                            t1.agent_id,
+                            coalesce(t9.name, '') AS agent_name,
                             t3.company, t3.position, t3.detail,
                             t3.status,
                             t3.annual, t3.annual_privacy,
@@ -652,6 +806,8 @@ class User:
                             users_tags t2 ON t2.user_id = t1.id
                         INNER JOIN
                             users_info t3 ON t3.user_id = t1.id
+                        LEFT JOIN
+                            users t9 ON t9.id = t1.agent_id
                         LEFT JOIN
                             avatars t5 ON t5.owner_id = t1.id AND t5.active IS TRUE
                         LEFT JOIN
@@ -692,6 +848,8 @@ class User:
                         t1.name, t1.login, t1.email, t1.phone,
                         t1.active,
                         t1.community_manager_id,
+                        t1.agent_id,
+                        coalesce(t9.name, '') AS agent_name,
                         t3.company, t3.position, t3.detail,
                         t3.status,
                         t3.annual, t3.annual_privacy,
@@ -712,6 +870,8 @@ class User:
                     INNER JOIN
                         users_info t3 ON t3.user_id = t1.id
                     LEFT JOIN
+                        users t9 ON t9.id = t1.agent_id
+                    LEFT JOIN
                         avatars t5 ON t5.owner_id = t1.id AND t5.active IS TRUE
                     LEFT JOIN
                         (
@@ -730,7 +890,7 @@ class User:
                                 r3.user_id
                         ) t4 ON t4.user_id = t1.id
                     WHERE
-                        (login = $1 OR email = $1 OR phone = $2) AND
+                        (t1.login = $1 OR t1.email = $1 OR t1.phone = $2) AND
                         t1.active IS TRUE""",
                 account, phone
             )
@@ -1393,9 +1553,9 @@ class User:
         # только мобильники рф
         id = await api.pg.club.fetchval(
             """INSERT INTO
-                    users (name, email, phone, password, active, community_manager_id)
+                    users (name, email, phone, password, active, community_manager_id, agent_id)
                 VALUES
-                    ($1, $2, $3, $4, $5, $6)
+                    ($1, $2, $3, $4, $5, $6, $7)
                 RETURNING
                     id""",
             kwargs['name'],
@@ -1404,6 +1564,7 @@ class User:
             kwargs['password'],
             kwargs['active'] if 'active' in kwargs else True,
             kwargs['community_manager_id'] if 'community_manager_id' in kwargs and kwargs['community_manager_id'] else None,
+            kwargs['agent_id'] if 'agent_id' in kwargs and kwargs['agent_id'] else None,
         )
         #print(kwargs['birthdate'])
         await api.pg.club.execute(
@@ -1472,7 +1633,7 @@ class User:
             temp_interests,
             id
         )
-        await self.set(id = id)
+        await self.set(id = id, active = kwargs['active'] if 'active' in kwargs else True)
 
 
     ################################################################
