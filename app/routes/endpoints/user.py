@@ -2170,9 +2170,9 @@ async def manager_agent_search(request):
     if request.user.id and request.user.check_roles({ 'admin', 'moderator', 'manager', 'chief', 'community manager' }):
         if validate(request.params, MODELS['manager_agent_search']):
             community_manager_id = None
-            if not request.user.check_roles({ 'admin', 'moderator', 'manager', 'chief' }):
-                if not request.params['ignore_community_manager']:
-                    community_manager_id = request.user.id
+            #if not request.user.check_roles({ 'admin', 'moderator', 'manager', 'chief' }):
+            #    if not request.params['ignore_community_manager']:
+            #        community_manager_id = request.user.id
             (result, amount) = await User.agent_search(
                 text = request.params['text'],
                 ids = request.params['ids'],
