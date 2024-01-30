@@ -47,22 +47,17 @@ async def get_sign_log(page = 1, roles = None, community_manager_id = None):
             INNER JOIN
                 (
                     SELECT
-                        r3.user_id
+                        r1.user_id
                     FROM
-                        (
-                            SELECT
-                                r1.user_id, r2.alias
-                            FROM
-                                users_roles r1
-                            INNER JOIN
-                                roles r2 ON r2.id = r1.role_id
-                            WHERE
-                                r1.user_id >= 10000 AND
-                                """ + query + """
-                                r2.alias = ANY($""" + str(len(args)) + """)
-                        ) r3
+                        users_roles r1
+                    INNER JOIN
+                        roles r2 ON r2.id = r1.role_id
+                    WHERE
+                        r1.user_id >= 10000 AND
+                        """ + query + """
+                        r2.alias = ANY($""" + str(len(args)) + """)
                     GROUP BY
-                        r3.user_id
+                        r1.user_id
                 ) t3 ON t3.user_id = t1.user_id""",
         *args
     )
@@ -98,22 +93,17 @@ async def get_sign_log(page = 1, roles = None, community_manager_id = None):
             INNER JOIN
                 (
                     SELECT
-                        r3.user_id, array_agg(r3.alias) AS roles
+                        r1.user_id, array_agg(r2.alias) AS roles
                     FROM
-                        (
-                            SELECT
-                                r1.user_id, r2.alias
-                            FROM
-                                users_roles r1
-                            INNER JOIN
-                                roles r2 ON r2.id = r1.role_id
-                            WHERE
-                                r1.user_id >= 10000 AND
-                                """ + query + """
-                                r2.alias = ANY($""" + str(len(args) - 1) + """)
-                        ) r3
+                        users_roles r1
+                    INNER JOIN
+                        roles r2 ON r2.id = r1.role_id
+                    WHERE
+                        r1.user_id >= 10000 AND
+                        """ + query + """
+                        r2.alias = ANY($""" + str(len(args) - 1) + """)
                     GROUP BY
-                        r3.user_id
+                        r1.user_id
                 ) t3 ON t3.user_id = t1.user_id
             LEFT JOIN
                 avatars t6 ON t6.owner_id = t1.user_id AND t6.active IS TRUE

@@ -1816,7 +1816,8 @@ async def manager_user_search(request):
     if request.user.id and request.user.check_roles({ 'admin', 'moderator', 'manager', 'chief', 'community manager' }):
         if validate(request.params, MODELS['manager_user_search']):
             community_manager_id = None
-            if not request.user.check_roles({ 'admin', 'moderator', 'manager', 'chief' }):
+            access = request.user.check_roles({ 'admin', 'moderator', 'manager', 'chief' })
+            if not access:
                 if not request.params['ignore_community_manager']:
                     community_manager_id = request.user.id
             (result, amount) = await User.client_search(
@@ -1875,7 +1876,10 @@ async def manager_user_search(request):
                 temp = {}
                 if k in events_pendings:
                     temp = { 'events_confirmations_pendings': events_pendings[k] }
-                users.append(item.dump() | user_activity | { 'membership': memberships[k] if k in memberships else membership_template } | temp)
+                hide_password = { '_password': '' }
+                if access or item.community_manager_id == request.user.id:
+                    hide_password = {}
+                users.append(item.dump() | user_activity | { 'membership': memberships[k] if k in memberships else membership_template } | temp | hide_password)
             if request.params['filter']:
                 users = [ { k: user[k] if k in user else None for k in request.params['filter'] } for user in users ]
             return OrjsonResponse({
@@ -2173,6 +2177,7 @@ async def manager_agent_search(request):
             #if not request.user.check_roles({ 'admin', 'moderator', 'manager', 'chief' }):
             #    if not request.params['ignore_community_manager']:
             #        community_manager_id = request.user.id
+            access = request.user.check_roles({ 'admin', 'moderator', 'manager', 'chief' })
             (result, amount) = await User.agent_search(
                 text = request.params['text'],
                 ids = request.params['ids'],
@@ -2229,7 +2234,10 @@ async def manager_agent_search(request):
                 temp = {}
                 if k in events_pendings:
                     temp = { 'events_confirmations_pendings': events_pendings[k] }
-                users.append(item.dump() | user_activity | { 'membership': memberships[k] if k in memberships else membership_template } | temp)
+                hide_password = { '_password': '' }
+                if access or item.community_manager_id == request.user.id:
+                    hide_password = {}
+                users.append(item.dump() | user_activity | { 'membership': memberships[k] if k in memberships else membership_template } | temp | hide_password)
             if request.params['filter']:
                 users = [ { k: user[k] if k in user else None for k in request.params['filter'] } for user in users ]
             return OrjsonResponse({
