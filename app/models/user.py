@@ -2075,7 +2075,7 @@ async def get_users_memberships(users_ids):
                     INNER JOIN
                         events t2 ON t2.id = t1.event_id
                     WHERE
-                        t1.confirmation IS TRUE AND
+                        t1.audit IS TRUE AND
                         t2.active IS TRUE
                     GROUP BY t1.user_id
                 ) t5 ON t5.user_id = t1.id
