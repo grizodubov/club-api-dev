@@ -14,7 +14,7 @@ async def get_sign_log(page = 1, roles = None, community_manager_id = None):
         users_ids = await api.pg.club.fetchval("""SELECT array_agg(id) FROM users WHERE community_manager_id = $1""", community_manager_id)
         if not users_ids:
             return (0, [])
-        query = 't3.user_id = ANY($1) AND'
+        query = 'r1.user_id = ANY($1) AND'
         args.append(list(users_ids))
     elif community_manager_id == 0:
         users_ids = await api.pg.club.fetchval(
@@ -29,18 +29,25 @@ async def get_sign_log(page = 1, roles = None, community_manager_id = None):
         )
         if not users_ids:
             return (0, [])
-        query = 't3.user_id = ANY($1) AND'
+        query = 'r1.user_id = ANY($1) AND'
         args.append(list(users_ids))
     args.append(roles)
     amount = await api.pg.club.fetchval(
         """SELECT
                 count(*)
             FROM
-                signings t1
+            (
+                SELECT
+                    session_id, user_id
+                FROM
+                    signings
+                WHERE
+                    sign_in IS TRUE
+            ) AS t1
             INNER JOIN
                 (
                     SELECT
-                        r3.user_id, array_agg(r3.alias) AS roles
+                        r3.user_id
                     FROM
                         (
                             SELECT
@@ -49,39 +56,41 @@ async def get_sign_log(page = 1, roles = None, community_manager_id = None):
                                 users_roles r1
                             INNER JOIN
                                 roles r2 ON r2.id = r1.role_id
+                            WHERE
+                                r1.user_id >= 10000 AND
+                                """ + query + """
+                                r2.alias = ANY($""" + str(len(args)) + """)
                         ) r3
                     GROUP BY
                         r3.user_id
-                ) t3 ON t3.user_id = t1.user_id
-            LEFT JOIN LATERAL
-                (
-                    SELECT
-                        *
-                    FROM (
-                        SELECT *, row_number() OVER (
-                            PARTITION BY session_id
-                            ORDER BY time_sign
-                        ) AS row_num
-                        FROM
-                            signings t5
-                        WHERE t5.time_sign > t1.time_sign AND t5.sign_in IS FALSE
-                        
-                    ) AS ordered_signings
-                    WHERE ordered_signings.row_num = 1
-                ) t4 ON t4.session_id = t1.session_id
-            WHERE
-                t1.user_id >= 10000 AND
-                t1.sign_in IS TRUE AND
-                """ + query + """
-                t3.roles && $""" + str(len(args)),
+                ) t3 ON t3.user_id = t1.user_id""",
         *args
     )
     args.append(offset)
     data = await api.pg.club.fetch(
-        """SELECT
-                t1.session_id, t1.user_id, t1.sign_in, t1.time_sign AS time_from, t2.name, t3.roles, t4.time_sign AS time_to, t6.hash AS avatar_hash, t7.settings
+        """
+            SELECT
+                t1.*, t3.roles, t2.name, t6.hash AS avatar_hash, t7.settings
             FROM
-                signings t1
+            (
+                SELECT
+                    r1.session_id, r1.user_id, r1.time_sign AS time_from, min(r2.time_sign) AS time_to
+                FROM
+                    signings r1
+                LEFT JOIN
+                    (
+                        SELECT
+                            session_id, time_sign
+                        FROM
+                            signings
+                        WHERE
+                            sign_in IS FALSE
+                    ) r2 ON r2.session_id = r1.session_id AND r2.time_sign > r1.time_sign
+                WHERE
+                    r1.sign_in IS TRUE
+                GROUP BY
+                    r1.session_id, r1.user_id, r1.time_sign
+            ) AS t1
             INNER JOIN
                 users t2 ON t2.id = t1.user_id
             INNER JOIN
@@ -98,35 +107,18 @@ async def get_sign_log(page = 1, roles = None, community_manager_id = None):
                                 users_roles r1
                             INNER JOIN
                                 roles r2 ON r2.id = r1.role_id
+                            WHERE
+                                r1.user_id >= 10000 AND
+                                """ + query + """
+                                r2.alias = ANY($""" + str(len(args) - 1) + """)
                         ) r3
                     GROUP BY
                         r3.user_id
                 ) t3 ON t3.user_id = t1.user_id
-            LEFT JOIN LATERAL
-                (
-                    SELECT
-                        *
-                    FROM (
-                        SELECT *, row_number() OVER (
-                            PARTITION BY session_id
-                            ORDER BY time_sign
-                        ) AS row_num
-                        FROM
-                            signings t5
-                        WHERE t5.time_sign > t1.time_sign AND t5.sign_in IS FALSE
-                        
-                    ) AS ordered_signings
-                    WHERE ordered_signings.row_num = 1
-                ) t4 ON t4.session_id = t1.session_id
             LEFT JOIN
                 avatars t6 ON t6.owner_id = t1.user_id AND t6.active IS TRUE
-            WHERE
-                t1.user_id >= 10000 AND
-                t1.sign_in IS TRUE AND
-                """ + query + """
-                t3.roles && $""" + str(len(args) - 1) + """
             ORDER BY
-                t4.time_sign DESC NULLS FIRST, t1.time_sign DESC
+                t1.time_to DESC NULLS FIRST, t1.time_from DESC
             OFFSET
                 $""" + str(len(args)) + """
             LIMIT
