@@ -38,6 +38,10 @@ def routes():
 
         Route('/new/validate', new_validate, methods = [ 'POST' ]),
         Route('/new/register', new_register, methods = [ 'POST' ]),
+
+        Route('/man/login/mobile/validate', manager_login_mobile_validate, methods = [ 'POST' ]),
+        Route('/man/login/email/validate', manager_login_email_validate, methods = [ 'POST' ]),
+        Route('/man/login', manager_login, methods = [ 'POST' ]),
     ]
 
 
@@ -366,7 +370,7 @@ MODELS = {
 ################################################################
 async def login(request):
     await asyncio.sleep(.5)
-    print('LOGIN!!!')
+    #print('LOGIN!!!')
     if validate(request.params, MODELS['login']):
         user = User()        
         if await user.check(request.params['account'], request.params['password']):
@@ -644,7 +648,7 @@ async def moderator_login(request):
     if validate(request.params, MODELS['moderator_login']):
         user = User()        
         if await user.check(request.params['account'], request.params['password']):
-            if set(user.roles) & { 'admin', 'moderator', 'editor', 'manager', 'community manager' }:
+            if set(user.roles) & { 'admin', 'moderator', 'editor', 'manager', 'community manager', 'chief' }:
                 await request.session.assign(user.id)
                 request.user.copy(user = user)
                 request.api.websocket_update(request.session.id, request.user.id)
@@ -791,5 +795,72 @@ async def new_register(request):
             return OrjsonResponse({})
         else:
             return err(403, 'Проверочный код не верен')
+    else:
+        return err(400, 'Не указан email')
+
+
+
+################################################################
+async def manager_login(request):
+    await asyncio.sleep(.5)
+    if validate(request.params, MODELS['moderator_login']):
+        user = User()        
+        if await user.check(request.params['account'], request.params['password']):
+            if set(user.roles) & { 'admin', 'moderator', 'manager', 'community manager', 'chief', 'agent' }:
+                await request.session.assign(user.id)
+                request.user.copy(user = user)
+                request.api.websocket_update(request.session.id, request.user.id)
+                # dispatch('user_login', request)
+                return OrjsonResponse({})
+            else:
+                return err(403, 'Нет доступа')
+        else:
+            return err(403, 'Пользователь и / или пароль не верны')
+    else:
+        return err(400, 'Не указаны логин и / или пароль')
+
+
+
+################################################################
+async def manager_login_email_validate(request):
+    await asyncio.sleep(.5)
+    if validate(request.params, MODELS['moderator_login_email_validate']):
+        user = User()
+        if await user.find(email = request.params['account']) and user.active:
+            if await user.check_validation_code(code = request.params['code']):
+                if set(user.roles) & { 'admin', 'moderator', 'manager', 'community manager', 'chief', 'agent' }:
+                    await request.session.assign(user.id)
+                    request.user.copy(user = user)
+                    request.api.websocket_update(request.session.id, request.user.id)
+                    return OrjsonResponse({})
+                else:
+                    return err(403, 'Нет доступа')
+            else:
+                return err(403, 'Код не верен')
+        else:
+            return err(404, 'Пользователь не найден')
+    else:
+        return err(400, 'Не указан email')
+
+
+
+################################################################
+async def manager_login_mobile_validate(request):
+    await asyncio.sleep(.5)
+    if validate(request.params, MODELS['moderator_login_mobile_validate']):
+        user = User()
+        if await user.find(phone = request.params['account']) and user.active:
+            if await user.check_validation_code(code = request.params['code']):
+                if set(user.roles) & { 'admin', 'moderator', 'manager', 'community manager', 'chief', 'agent' }:
+                    await request.session.assign(user.id)
+                    request.user.copy(user = user)
+                    request.api.websocket_update(request.session.id, request.user.id)
+                    return OrjsonResponse({})
+                else:
+                    return err(403, 'Нет доступа')
+            else:
+                return err(403, 'Код не верен')
+        else:
+            return err(404, 'Пользователь не найден')
     else:
         return err(400, 'Не указан email')

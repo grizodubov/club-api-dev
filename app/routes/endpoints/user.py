@@ -1813,17 +1813,21 @@ async def save_telegram_pin(request):
 
 ################################################################
 async def manager_user_search(request):
-    if request.user.id and request.user.check_roles({ 'admin', 'moderator', 'manager', 'chief', 'community manager' }):
+    if request.user.id and request.user.check_roles({ 'admin', 'moderator', 'manager', 'chief', 'community manager', 'agent' }):
         if validate(request.params, MODELS['manager_user_search']):
             community_manager_id = None
+            agent_id = None
             access = request.user.check_roles({ 'admin', 'moderator', 'manager', 'chief' })
             if not access:
                 if not request.params['ignore_community_manager']:
                     community_manager_id = request.user.id
+                if not request.user.check_roles({ 'community manager' }):
+                    agent_id = request.user.id
             (result, amount) = await User.client_search(
                 text = request.params['text'],
                 ids = request.params['ids'],
                 community_manager_id = community_manager_id,
+                agent_id = agent_id,
                 active_only = False,
                 offset = (request.params['page'] - 1) * 15 if request.params['page'] else None,
                 limit = 15 if request.params['page'] else None,

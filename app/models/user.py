@@ -182,7 +182,7 @@ class User:
 
     ################################################################
     @classmethod
-    async def client_search(cls, text, ids = [], community_manager_id = None, active_only = True, offset = None, limit = None, count = False, applicant = False, reverse = False, target = None):
+    async def client_search(cls, text, ids = [], community_manager_id = None, agent_id = None, active_only = True, offset = None, limit = None, count = False, applicant = False, reverse = False, target = None):
         api = get_api_context()
         result = []
         amount = None
@@ -216,9 +216,17 @@ class User:
         if ids:
             conditions.append("""t1.id = ANY($""" + str(len(args) + 1) + """)""")
             args.append(ids)
-        if community_manager_id:
-            conditions.append("""t1.community_manager_id = $""" + str(len(args) + 1))
+        if community_manager_id and agent_id:
+            conditions.append("""(t1.community_manager_id = $""" + str(len(args) + 1) + """ OR t1.agent_id = $""" + str(len(args) + 2) + """)""")
             args.append(community_manager_id)
+            args.append(agent_id)
+        else:
+            if community_manager_id:
+                conditions.append("""t1.community_manager_id = $""" + str(len(args) + 1))
+                args.append(community_manager_id)
+            if agent_id:
+                conditions.append("""t1.agent_id = $""" + str(len(args) + 1))
+                args.append(agent_id)
         if offset is not None and limit is not None:
             slice_query = ' OFFSET $' + str(len(args) + 1) + ' LIMIT $' + str(len(args) + 2)
             args.extend([ offset, limit ])

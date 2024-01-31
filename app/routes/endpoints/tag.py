@@ -59,7 +59,7 @@ async def list_tags(request):
 
 ################################################################
 async def moderator_list_tags(request):
-    if request.user.id and request.user.check_roles({ 'admin', 'moderator', 'manager', 'community manager' }):
+    if request.user.id and request.user.check_roles({ 'admin', 'moderator', 'manager', 'community manager', 'chief', 'agent' }):
         tags = await get_tags()
         return OrjsonResponse({
             'tags': [

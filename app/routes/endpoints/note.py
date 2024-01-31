@@ -59,7 +59,7 @@ MODELS = {
 
 ################################################################
 async def manager_notes_list(request):
-    if request.user.id and request.user.check_roles({ 'admin', 'editor', 'manager', 'chief', 'community manager' }):
+    if request.user.id and request.user.check_roles({ 'admin', 'editor', 'manager', 'chief', 'community manager', 'agent' }):
         if validate(request.params, MODELS['manager_notes_list']):
             user = User()
             await user.set(id = request.params['user_id'])

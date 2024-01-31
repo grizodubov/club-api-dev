@@ -534,7 +534,7 @@ async def moderator_event_user_del(request):
 
 ################################################################
 async def manager_event_user_list(request):
-    if request.user.id and request.user.check_roles({ 'admin', 'moderator', 'manager', 'chief', 'community manager' }):
+    if request.user.id and request.user.check_roles({ 'admin', 'moderator', 'manager', 'chief', 'community manager', 'agent' }):
         if validate(request.params, MODELS['manager_event_user_list']):
             user = User()
             await user.set(id = request.params['user_id'])
