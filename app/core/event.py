@@ -36,6 +36,8 @@ EVENTS = {
     'poll_create': { 'send': True, 'filter_params': None },
     'note_create': { 'send': True, 'filter_params': None },
     'note_update': { 'send': True, 'filter_params': None },
+    'agent_note_create': { 'send': True, 'filter_params': None },
+    'agent_note_update': { 'send': True, 'filter_params': None },
 }
 
 

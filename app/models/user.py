@@ -2155,3 +2155,53 @@ async def get_users_memberships(users_ids):
                 if stage['active']:
                     memberships[k]['stage'] = stage['id']
     return memberships
+
+
+
+################################################################
+async def get_agents_list(community_manager_id, active_only = True):
+    api = get_api_context()
+    conditions = [ 't1.id >= 10000' ]
+    condition_query = ''
+    args = []
+    if active_only:
+        conditions.append('t1.active IS TRUE')
+    if community_manager_id:
+        conditions.append("""t1.community_manager_id = $""" + str(len(args) + 1))
+        args.append(community_manager_id)
+    if conditions:
+        conditions_query = ' WHERE ' + ' AND '.join(conditions)
+    data = await api.pg.club.fetch(
+        """SELECT
+                s1.*, s2.hash AS avatar
+            FROM (
+                SELECT
+                    t1.id, t1.name,
+                    jsonb_agg(json_build_object('id', t2.id, 'name', t2.name, 'company', t3.company, 'community_manager_id', coalesce(t4.id, 0))) AS clients
+                FROM
+                    users t1
+                INNER JOIN
+                    users t2 ON t2.agent_id = t1.id
+                INNER JOIN
+                    users_info t3 ON t3.user_id = t2.id
+                LEFT JOIN
+                    users t4 ON t4.id = t2.community_manager_id
+                """ + conditions_query + """
+                GROUP BY
+                    t1.id
+            ) s1
+            LEFT JOIN
+                avatars s2 ON s2.owner_id = s1.id AND s2.active IS TRUE
+            ORDER BY
+                    s1.name""",
+        *args
+    )
+    return [
+        {
+            'id': item['id'],
+            'name': item['name'],
+            'clients': sorted(item['clients'], key=lambda x: x['name']),
+            'avatar_hash': item['avatar'],
+        }
+        for item in data
+    ]

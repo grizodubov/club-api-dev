@@ -8,7 +8,7 @@ from app.core.request import err
 from app.core.response import OrjsonResponse
 from app.core.event import dispatch
 from app.utils.validate import validate
-from app.models.user import User, get_residents, get_residents_contacts, get_community_managers, get_telegram_pin, get_last_activity, get_users_memberships
+from app.models.user import User, get_residents, get_residents_contacts, get_community_managers, get_telegram_pin, get_last_activity, get_users_memberships, get_agents_list
 from app.models.event import Event, get_events_confirmations_pendings
 from app.models.item import Item
 from app.helpers.mobile import send_mobile_message
@@ -64,6 +64,8 @@ def routes():
 
         Route('/ma/user/agent/search', manager_agent_search, methods = [ 'POST' ]),
         Route('/ma/user/agent/create', manager_agent_create, methods = [ 'POST' ]),
+
+        Route('/ma/user/agent/list', manager_agent_list, methods = [ 'POST' ]),
     ]
 
 
@@ -1098,11 +1100,6 @@ MODELS = {
             'null': True,
         },
         'ignore_community_manager': {
-            'required': True,
-            'type': 'bool',
-            'default': False,
-        },
-        'show_events_confirmations_pendings': {
             'required': True,
             'type': 'bool',
             'default': False,
@@ -2178,9 +2175,6 @@ async def manager_agent_search(request):
     if request.user.id and request.user.check_roles({ 'admin', 'moderator', 'manager', 'chief', 'community manager' }):
         if validate(request.params, MODELS['manager_agent_search']):
             community_manager_id = None
-            #if not request.user.check_roles({ 'admin', 'moderator', 'manager', 'chief' }):
-            #    if not request.params['ignore_community_manager']:
-            #        community_manager_id = request.user.id
             access = request.user.check_roles({ 'admin', 'moderator', 'manager', 'chief' })
             (result, amount) = await User.agent_search(
                 text = request.params['text'],
@@ -2191,63 +2185,21 @@ async def manager_agent_search(request):
                 limit = 15 if request.params['page'] else None,
                 count = True,
             )
-            community_managers = await get_community_managers()
             users_ids = [ user.id for user in result ]
             activity = await get_last_activity(users_ids = users_ids)
-            memberships = await get_users_memberships(users_ids)
             users = []
-            membership_template = {
-                'rating': None,
-                'stage': 1,
-                'semaphore': [
-                    {
-                        'id': 1,
-                        'name': 'Оценка менеджера',
-                        'rating': None,
-                        'data': { 'comment': None, },
-                    },
-                    {
-                        'id': 2,
-                        'name': 'Участие в опросах',
-                        'rating': None,
-                        'data': { 'value': 0, },
-                    },
-                    {
-                        'id': 3,
-                        'name': 'Участие в мероприятиях',
-                        'rating': None,
-                        'data': { 'value': 0, },
-                    },
-                ],
-                'stages': [
-                    {
-                        'id': i + 1,
-                        'time': None,
-                        'data': { 'comment': None, },
-                        'rejection': False,
-                        'active': False,
-                    } for i in range(6)
-                ]
-            }
-            events_pendings = {}
-            if request.params['show_events_confirmations_pendings']:
-                events_pendings = await get_events_confirmations_pendings()
             for item in result:
                 k = str(item.id)
                 user_activity = { 'time_last_activity': activity[k] if k in activity else None }
-                temp = {}
-                if k in events_pendings:
-                    temp = { 'events_confirmations_pendings': events_pendings[k] }
                 hide_password = { '_password': '' }
                 if access or item.community_manager_id == request.user.id:
                     hide_password = {}
-                users.append(item.dump() | user_activity | { 'membership': memberships[k] if k in memberships else membership_template } | temp | hide_password)
+                users.append(item.dump() | user_activity | hide_password)
             if request.params['filter']:
                 users = [ { k: user[k] if k in user else None for k in request.params['filter'] } for user in users ]
             return OrjsonResponse({
                 'users': users,
                 'amount': amount,
-                'community_managers': community_managers,
             })
         else:
             return err(400, 'Неверный поиск')
@@ -2285,5 +2237,23 @@ async def manager_agent_create(request):
             })
         else:
             return err(400, 'Неверный запрос')
+    else:
+        return err(403, 'Нет доступа')
+
+
+
+################################################################
+async def manager_agent_list(request):
+    if request.user.id and request.user.check_roles({ 'admin', 'moderator', 'manager', 'chief', 'community manager' }):
+        community_manager_id = None
+        if not request.user.check_roles({ 'admin', 'moderator', 'manager', 'chief' }):
+            community_manager_id = request.user.id
+        agents = await get_agents_list(community_manager_id = community_manager_id)
+        community_managers = await get_community_managers()
+        return OrjsonResponse({
+            'agents': agents,
+            'amount': len(agents),
+            'community_managers': community_managers,
+        })
     else:
         return err(403, 'Нет доступа')
