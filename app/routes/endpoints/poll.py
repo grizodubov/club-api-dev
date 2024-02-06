@@ -62,7 +62,7 @@ MODELS = {
 		'community_id': {
 			'required': True,
 			'type': 'int',
-            'value_min': 1,
+            'null': True,
 		},
 		'answers': {
 			'required': True,
@@ -80,6 +80,15 @@ MODELS = {
 			'required': True,
 			'type': 'str',
             'list': True,
+            'null': True,
+		},
+        'rating': {
+			'required': True,
+			'type': 'bool',
+		},
+        'rating_format': {
+			'required': True,
+			'type': 'str',
             'null': True,
 		},
 	},
@@ -105,7 +114,7 @@ MODELS = {
 		'community_id': {
 			'required': True,
 			'type': 'int',
-            'value_min': 1,
+            'null': True,
 		},
 		'answers': {
 			'required': True,
@@ -117,6 +126,15 @@ MODELS = {
 			'required': True,
 			'type': 'str',
             'processing': lambda x: x.strip(),
+            'null': True,
+		},
+        'rating': {
+			'required': True,
+			'type': 'bool',
+		},
+        'rating_format': {
+			'required': True,
+			'type': 'str',
             'null': True,
 		},
 	},
@@ -171,18 +189,29 @@ async def moderator_poll_list(request):
 async def moderator_poll_update(request):
     if request.user.id and request.user.check_roles({ 'admin', 'moderator', 'manager', 'community manager' }):
         if validate(request.params, MODELS['moderator_poll_update']):
+            rating = True if 'rating' in request.params and request.params['rating'] is True else False
+            if not rating:
+                community = Community()
+                if request.params['community_id']:
+                    await community.set(id = request.params['community_id'])
+                if not community.id:
+                    return err(404, 'Сообщество не найдено')
             poll = Poll()
             await poll.set(id = request.params['id'])
-            notify = False
-            if 'active' in request.params and 'closed' in request.params and \
-                    request.params['active'] is True and request.params['closed'] is False and \
-                    (poll.active is False or poll.closed is True):
-                notify = True
+            temp = {
+                'active': poll.active,
+                'closed': poll.closed,
+                'rating': poll.rating,
+            }
             if poll.id:
                 await poll.update(**request.params)
                 await poll.set(id = request.params['id'])
                 dispatch('poll_update', request)
-                if notify:
+                # notify
+                if not rating and \
+                        'active' in request.params and 'closed' in request.params and \
+                        request.params['active'] is True and request.params['closed'] is False and \
+                        (temp['active'] is False or temp['closed'] is True or temp['rating'] is True):
                     create_notifications('poll_create', request.user.id, poll.id, {
                         'id': poll.id,
                         'active': poll.active,
@@ -196,7 +225,7 @@ async def moderator_poll_update(request):
                     })
                 return OrjsonResponse({})
             else:
-                return err(404, 'Группа не найдена')
+                return err(404, 'Опрос не найден')
         else:
             return err(400, 'Неверный запрос')
     else:
@@ -208,20 +237,30 @@ async def moderator_poll_update(request):
 async def moderator_poll_create(request):
     if request.user.id and request.user.check_roles({ 'admin', 'moderator', 'manager', 'community manager' }):
         if validate(request.params, MODELS['moderator_poll_create']):
-            community = Community()
-            await community.set(id = request.params['community_id'])
-            if community.id:
-                poll = Poll()
-                await poll.create(
-                    text = request.params['text'],
-                    community_id = request.params['community_id'],
-                    answers = request.params['answers'],
-                    tags = request.params['tags'],
-                    active = request.params['active'],
-                    closed = request.params['closed'],
-                    wide = request.params['wide'],
-                )
-                dispatch('poll_create', request)
+            rating = True if 'rating' in request.params and request.params['rating'] is True else False
+            if not rating:
+                community = Community()
+                if request.params['community_id']:
+                    await community.set(id = request.params['community_id'])
+                if not community.id:
+                    return err(404, 'Сообщество не найдено')
+            poll = Poll()
+            await poll.create(
+                text = request.params['text'],
+                community_id = request.params['community_id'] if not rating else None,
+                answers = request.params['answers'],
+                tags = request.params['tags'] if not rating else '',
+                rating = rating,
+                rating_format = request.params['rating_format'] if rating else None,
+                active = request.params['active'],
+                closed = request.params['closed'],
+                wide = request.params['wide'],
+            )
+            dispatch('poll_create', request)
+            # notify
+            if not rating and \
+                    'active' in request.params and 'closed' in request.params and \
+                    request.params['active'] is True and request.params['closed'] is False:
                 create_notifications('poll_create', request.user.id, poll.id, {
                     'id': poll.id,
                     'active': poll.active,
@@ -233,9 +272,7 @@ async def moderator_poll_create(request):
                     'text': poll.text,
                     'answers': poll.answers,
                 })
-                return OrjsonResponse({})
-            else:
-                return err(404, 'Сообщество не найдено')
+            return OrjsonResponse({})
         else:
             return err(400, 'Неверный запрос')
     else:

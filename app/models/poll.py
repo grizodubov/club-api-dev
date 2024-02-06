@@ -21,6 +21,8 @@ class Poll:
         self.active = False
         self.closed = False
         self.wide = False
+        self.rating = False
+        self.rating_format = None
         self.tags = ''
         self.votes = {}
 
@@ -54,11 +56,11 @@ class Poll:
             """SELECT
                     t1.id, t1.time_create, t1.time_update,
                     t1.community_id, t1.community_id_deleted, t4.name AS community_name,
-                    t1.text, t1.answers, t1.active, t1.closed, t1.wide,
+                    t1.text, t1.answers, t1.active, t1.closed, t1.wide, t1.rating, t1.rating_format,
                     t1.tags, coalesce(t2.votes, '{}'::jsonb)::jsonb || coalesce(t3.votes, '{}'::jsonb)::jsonb AS votes
                 FROM
                     polls t1
-                INNER JOIN
+                LEFT JOIN
                     communities t4 ON t4.id = t1.community_id
                 LEFT JOIN
                     (
@@ -121,11 +123,11 @@ class Poll:
                 """SELECT
                     t1.id, t1.time_create, t1.time_update,
                     t1.community_id, t1.community_id_deleted, t4.name AS community_name,
-                    t1.text, t1.answers, t1.active, t1.closed, t1.wide,
+                    t1.text, t1.answers, t1.active, t1.closed, t1.wide, t1.rating, t1.rating_format,
                     t1.tags, coalesce(t2.votes, '{}'::jsonb)::jsonb || coalesce(t3.votes, '{}'::jsonb)::jsonb AS votes
                 FROM
                     polls t1
-                INNER JOIN
+                LEFT JOIN
                     communities t4 ON t4.id = t1.community_id
                 LEFT JOIN
                     (
@@ -166,22 +168,24 @@ class Poll:
     async def create(self, **kwargs):
         api = get_api_context()
         temp = None
-        if kwargs['tags'] and kwargs['tags'].strip():
+        if not kwargs['rating'] and kwargs['tags'] and kwargs['tags'].strip():
             temp = ','.join([ t for t in re.split(r'\s*,\s*', kwargs['tags'].strip()) if t ])
         id = await api.pg.club.fetchval(
             """INSERT INTO
-                    polls (community_id, text, answers, active, closed, tags, wide)
+                    polls (community_id, text, answers, active, closed, tags, wide, rating, rating_format)
                 VALUES
-                    ($1, $2, $3, $4, $5, $6, $7)
+                    ($1, $2, $3, $4, $5, $6, $7, $8, $9)
                 RETURNING
                     id""",
-            kwargs['community_id'],
+            kwargs['community_id'] if not kwargs['rating'] else None,
             kwargs['text'],
             kwargs['answers'],
             kwargs['active'],
             kwargs['closed'],
             temp,
             kwargs['wide'],
+            kwargs['rating'],
+            kwargs['rating_format'] if kwargs['rating'] else None,
         )
         await self.set(id = id)
 
@@ -193,13 +197,23 @@ class Poll:
         cursor = 2
         query = []
         args = []
-        for k in { 'active', 'closed', 'text', 'tags', 'answers', 'community_id', 'wide' }:
+        for k in { 'active', 'closed', 'text', 'tags', 'answers', 'community_id', 'wide', 'rating', 'rating_format' }:
             if k in kwargs:
                 query.append(k + ' = $' + str(cursor))
                 if k == 'tags':
                     temp = None
-                    if kwargs[k] and kwargs[k].strip():
+                    if not kwargs['rating'] and kwargs[k] and kwargs[k].strip():
                         temp = ','.join([ t for t in re.split(r'\s*,\s*', kwargs[k].strip()) if t ])
+                elif k == 'community_id':
+                    if not kwargs['rating']:
+                        temp = kwargs[k]
+                    else:
+                        temp = None
+                elif k == 'rating_format':
+                    if kwargs['rating']:
+                        temp = kwargs[k]
+                    else:
+                        temp = None
                 else:
                     temp = kwargs[k]
                 args.append(temp)
@@ -286,11 +300,11 @@ async def get_user_polls_recommendations(user):
         """SELECT
                     t1.id, t1.time_create, t1.time_update,
                     t1.community_id, t1.community_id_deleted, t4.name AS community_name,
-                    t1.text, t1.answers, t1.active, t1.closed, t1.wide,
+                    t1.text, t1.answers, t1.active, t1.closed, t1.wide, t1.rating, t1.rating_format
                     t1.tags, coalesce(t2.votes, '{}'::jsonb)::jsonb || coalesce(t3.votes, '{}'::jsonb)::jsonb AS votes
                 FROM
                     polls t1
-                INNER JOIN
+                LEFT JOIN
                     communities t4 ON t4.id = t1.community_id
                 LEFT JOIN
                     (
@@ -325,6 +339,7 @@ async def get_user_polls_recommendations(user):
                 WHERE
                     t1.active IS TRUE AND
                     t1.closed IS FALSE AND
+                    t1.rating IS FALSE AND
                     t5.answer IS NULL AND
                     (t1.wide IS TRUE OR to_tsvector(t1.tags) @@ to_tsquery($2))
                 ORDER BY t1.id DESC""",
@@ -335,3 +350,47 @@ async def get_user_polls_recommendations(user):
         item.__dict__ = dict(row)
         result.append(item)
     return result
+
+
+
+###############################################################
+async def get_user_rating_polls(user):
+    result = []
+    api = get_api_context()
+    data = await api.pg.club.fetch(
+        """SELECT
+                t1.id, t1.time_create, t1.time_update, t1.text, t1.answers
+            FROM
+                polls t1
+            WHERE
+                t1.active IS TRUE AND
+                t1.closed IS FALSE AND
+                t1.rating IS TRUE AND
+                (
+                    (
+                        t1.rating_format = 'Один раз' AND
+                        t1.id NOT IN (
+                            SELECT
+                                s1.poll_id
+                            FROM
+                                polls_votes s1
+                            WHERE
+                                s1.user_id = $1
+                        )
+                    ) OR
+                    (
+                        t1.rating_format = 'Каждый месяц' AND
+                        t1.id NOT IN (
+                            SELECT
+                                s1.poll_id
+                            FROM
+                                polls_votes s1
+                            WHERE
+                                s1.user_id = $1 AND
+                                
+                        )
+                    ) OR
+                }
+            ORDER BY t1.id DESC""",
+        user.id
+    )
