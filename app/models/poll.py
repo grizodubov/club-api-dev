@@ -300,7 +300,7 @@ async def get_user_polls_recommendations(user):
         """SELECT
                     t1.id, t1.time_create, t1.time_update,
                     t1.community_id, t1.community_id_deleted, t4.name AS community_name,
-                    t1.text, t1.answers, t1.active, t1.closed, t1.wide, t1.rating, t1.rating_format
+                    t1.text, t1.answers, t1.active, t1.closed, t1.wide, t1.rating, t1.rating_format,
                     t1.tags, coalesce(t2.votes, '{}'::jsonb)::jsonb || coalesce(t3.votes, '{}'::jsonb)::jsonb AS votes
                 FROM
                     polls t1
