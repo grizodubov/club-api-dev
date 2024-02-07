@@ -174,10 +174,13 @@ async def poll_add_vote(request):
 ################################################################
 async def poll_rating_list(request):
     if request.user.id:
-        polls = []
+        result = {
+            'polls': [],
+            'choice': '',
+        }
         if request.user.check_roles({ 'client' }):
-            polls = await get_user_rating_polls(request.user)
-        return OrjsonResponse({ 'polls': polls })
+            result = await get_user_rating_polls(request.user)
+        return OrjsonResponse(result)
     else:
         return err(403, 'Нет доступа')
 
