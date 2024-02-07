@@ -354,7 +354,7 @@ async def get_user_polls_recommendations(user):
 ###############################################################
 async def get_user_rating_polls(user):
     polls = []
-    choice = ''
+    votes = []
     api = get_api_context()
 
     # Раз в месяц
@@ -426,26 +426,44 @@ async def get_user_rating_polls(user):
                 ORDER BY t1.id DESC""",
             user.id, dt_control1.timestamp() * 1000, dt_control2_1.timestamp() * 1000, dt_control2_2.timestamp() * 1000
         )
-        choice = await api.pg.club.fetchval(
+        cache = {}
+        if data:
+            for item in data:
+                cache[str(item['id'])] = True
+                polls.append(dict(item))
+        data = await api.pg.club.fetch(
             """SELECT
-                    v2.answers[v1.answer]
+                    v2.id, v2.text, v2.answers[v1.answer] AS answer
                 FROM
                     polls_votes v1
                 INNER JOIN
                     polls v2 ON v2.id = v1.poll_id
                 WHERE
+                    v1.user_id = $1 AND
                     v2.active IS TRUE AND
                     v2.rating IS TRUE AND
-                    v1.user_id = $1 AND
-                    v1.time_create >= $2
+                    v2.closed IS FALSE AND
+                    (
+                        (
+                            v2.rating_format = 'Один раз' AND
+                            v1.time_create >= $2
+                        ) OR
+                        (
+                            v2.rating_format = 'Каждый месяц' AND
+                            v1.time_create >= $2
+                        )
+                    )
                 ORDER BY
-                    v1.time_create DESC
-                LIMIT 1""",
+                    v1.time_create DESC""",
+
             user.id, dt_control2_1.timestamp() * 1000
         )
         if data:
-            polls = [ dict(item) for item in data ]
+            for item in data:
+                if str(item['id']) not in cache:
+                    cache[str(item['id'])] = True
+                    votes.append(dict(item))
     return {
         'polls': polls,
-        'choice': choice if choice else '',
+        'votes': votes,
     }

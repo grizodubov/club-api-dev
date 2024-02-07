@@ -29,6 +29,7 @@ class User:
         self.active = False
         self.company = ''
         self.position = ''
+        self.inn = ''
         self.detail = ''
         self.status = ''
         self.annual = ''
@@ -101,7 +102,7 @@ class User:
                     t1.community_manager_id,
                     t1.agent_id,
                     coalesce(t9.name, '') AS agent_name,
-                    t3.company, t3.position, t3.detail,
+                    t3.company, t3.position, t3.inn, t3.detail,
                     t3.status,
                     t3.annual, t3.annual_privacy,
                     t3.employees, t3.employees_privacy,
@@ -184,7 +185,7 @@ class User:
 
     ################################################################
     @classmethod
-    async def client_search(cls, text, ids = [], community_manager_id = None, agent_id = None, active_only = True, offset = None, limit = None, count = False, applicant = False, reverse = False, target = None):
+    async def client_search(cls, text, ids = [], community_manager_id = None, agent_id = None, active_only = True, offset = None, limit = None, count = False, applicant = False, reverse = False, target = None, inn = False):
         api = get_api_context()
         result = []
         amount = None
@@ -202,6 +203,9 @@ class User:
             conditions.append("""'applicant' <> ANY(t4.roles)""")
         text = text.strip()
         if text:
+            inn_query = ''
+            if inn:
+                inn_query = """ OR t3.inn ILIKE concat('%', $2::text, '%')"""
             if target:
                 if target == 'tags':
                     conditions.append("""regexp_split_to_array($1::text, '\s*,\s*') && regexp_split_to_array(t2.tags, '\s*,\s*')""")
@@ -210,9 +214,9 @@ class User:
                 args.append(str(text))
             else:
                 if reverse:
-                    conditions.append("""(to_tsvector(concat_ws(' ', t1.name, t1.email, t1.phone, t3.company, t3.position, t2.interests)) @@ to_tsquery($1) OR t1.name ILIKE concat('%', $2::text, '%') OR t3.company ILIKE concat('%', $2::text, '%'))""")
+                    conditions.append("""(to_tsvector(concat_ws(' ', t1.name, t1.email, t1.phone, t3.company, t3.position, t2.interests)) @@ to_tsquery($1) OR t1.name ILIKE concat('%', $2::text, '%') OR t3.company ILIKE concat('%', $2::text, '%'))""" + inn_query)
                 else:
-                    conditions.append("""(to_tsvector(concat_ws(' ', t1.name, t1.email, t1.phone, t3.company, t3.position, t3.detail, t2.tags, t2.interests)) @@ to_tsquery($1) OR t1.name ILIKE concat('%', $2::text, '%') OR t3.company ILIKE concat('%', $2::text, '%'))""")
+                    conditions.append("""(to_tsvector(concat_ws(' ', t1.name, t1.email, t1.phone, t3.company, t3.position, t3.detail, t2.tags, t2.interests)) @@ to_tsquery($1) OR t1.name ILIKE concat('%', $2::text, '%') OR t3.company ILIKE concat('%', $2::text, '%'))""" + inn_query)
                 args.append(re.sub(r'\s+', ' | ', text))
                 args.append(str(text))
         if ids:
@@ -242,7 +246,7 @@ class User:
                     t1.community_manager_id,
                     t1.agent_id,
                     coalesce(t9.name, '') AS agent_name,
-                    t3.company, t3.position, t3.detail,
+                    t3.company, t3.position, t3.inn, t3.detail,
                     t3.status,
                     t3.annual, t3.annual_privacy,
                     t3.employees, t3.employees_privacy,
@@ -375,7 +379,7 @@ class User:
                     t1.community_manager_id,
                     t1.agent_id,
                     coalesce(t9.name, '') AS agent_name,
-                    t3.company, t3.position, t3.detail,
+                    t3.company, t3.position, t3.inn, t3.detail,
                     t3.status,
                     t3.annual, t3.annual_privacy,
                     t3.employees, t3.employees_privacy,
@@ -500,7 +504,7 @@ class User:
 
     ################################################################
     def show(self):
-        filter = { 'time_create', 'time_update', 'community_manager_id', 'agent_id', 'agent_name', 'login', 'email', 'phone', 'roles', 'annual', 'annual_privacy', 'employees', 'employees_privacy', 'birthdate', 'birthdate_privacy' }
+        filter = { 'time_create', 'time_update', 'community_manager_id', 'agent_id', 'agent_name', 'login', 'email', 'phone', 'inn', 'roles', 'annual', 'annual_privacy', 'employees', 'employees_privacy', 'birthdate', 'birthdate_privacy' }
         data = { k: v for k, v in self.__dict__.items() if not k.startswith('_') and k not in filter }
         # annual
         if self.annual_privacy == 'показывать':
@@ -564,7 +568,7 @@ class User:
 
     ################################################################
     def dshow(self):
-        filter = { 'time_create', 'time_update', 'login', 'email', 'phone', 'roles', 'id_telegram' }
+        filter = { 'time_create', 'time_update', 'login', 'email', 'phone', 'inn', 'roles', 'id_telegram' }
         data = { k: v for k, v in self.__dict__.items() if not k.startswith('_') and k not in filter }
         return data
 
@@ -591,7 +595,7 @@ class User:
                         t1.community_manager_id,
                         t1.agent_id,
                         coalesce(t9.name, '') AS agent_name,
-                        t3.company, t3.position, t3.detail,
+                        t3.company, t3.position, t3.inn, t3.detail,
                         t3.status,
                         t3.annual, t3.annual_privacy,
                         t3.employees, t3.employees_privacy,
@@ -684,7 +688,8 @@ class User:
                     birthdate = $13,
                     birthdate_privacy = $14,
                     experience = $15,
-                    link_telegram = $16
+                    link_telegram = $16,
+                    inn = $17
                 WHERE
                     user_id = $1""",
             self.id, kwargs['company'], kwargs['position'], kwargs['detail'], kwargs['status'] if 'status' in kwargs else self.status,
@@ -698,7 +703,8 @@ class User:
             kwargs['birthdate'] if 'birthdate' in kwargs else None,
             kwargs['birthdate_privacy'] if 'birthdate_privacy' in kwargs else '',
             kwargs['experience'] if 'experience' in kwargs else None,
-            kwargs['link_telegram'] if 'link_telegram' in kwargs else ''
+            kwargs['link_telegram'] if 'link_telegram' in kwargs else '',
+            kwargs['inn'],
         )
                 
         tags_old = set(sorted(re.split(r'\s*,\s*', self.tags)))
@@ -797,7 +803,7 @@ class User:
                             t1.community_manager_id,
                             t1.agent_id,
                             coalesce(t9.name, '') AS agent_name,
-                            t3.company, t3.position, t3.detail,
+                            t3.company, t3.position, t3.inn, t3.detail,
                             t3.status,
                             t3.annual, t3.annual_privacy,
                             t3.employees, t3.employees_privacy,
@@ -860,7 +866,7 @@ class User:
                         t1.community_manager_id,
                         t1.agent_id,
                         coalesce(t9.name, '') AS agent_name,
-                        t3.company, t3.position, t3.detail,
+                        t3.company, t3.position, t3.inn, t3.detail,
                         t3.status,
                         t3.annual, t3.annual_privacy,
                         t3.employees, t3.employees_privacy,
@@ -1434,6 +1440,13 @@ class User:
     ################################################################
     async def get_events_archive(self):
         api = get_api_context()
+        dt_now = datetime.now(tz = pytz.utc)
+        if dt_now.month == 1:
+            dt_control = datetime(dt_now.year - 1, 11, 1, tzinfo = pytz.utc)
+        elif dt_now.month == 2:
+            dt_control = datetime(dt_now.year - 1, 12, 1, tzinfo = pytz.utc)
+        else:
+            dt_control = datetime(dt_now.year, dt_now.month - 2, 1, tzinfo = pytz.utc)
         data = await api.pg.club.fetch(
             """SELECT
                     t1.id, t1.name, t1.format, t1.place, t1.time_event, t1.detail,
@@ -1445,10 +1458,11 @@ class User:
                 WHERE
                     t1.active IS TRUE AND
                     t1.time_event < (now() at time zone 'utc')::date AND
+                    t1.time_event >= $2 AND
                     t2.confirmation IS TRUE
                 ORDER BY
                     t1.time_event DESC""",
-            self.id
+            self.id, dt_control.timestamp() * 1000
         )
         return [ dict(item) for item in data ]
 
@@ -1596,7 +1610,8 @@ class User:
                     birthdate = $13,
                     birthdate_privacy = $14,
                     experience = $15,
-                    link_telegram = $16
+                    link_telegram = $16,
+                    inn = $17
                 WHERE
                     user_id = $1""",
             id,
@@ -1614,7 +1629,8 @@ class User:
             kwargs['birthdate'] if 'birthdate' in kwargs else None,
             kwargs['birthdate_privacy'] if 'birthdate_privacy' in kwargs else '',
             kwargs['experience'] if 'experience' in kwargs else None,
-            kwargs['link_telegram'] if 'link_telegram' in kwargs else ''
+            kwargs['link_telegram'] if 'link_telegram' in kwargs else '',
+            kwargs['inn'],
         )
         roles = await get_roles()
         if kwargs['roles']:
@@ -1870,7 +1886,7 @@ async def get_residents(users_ids = None):
                 t1.id, t1.time_create, t1.time_update,
                 t1.name, t1.login, t1.email, t1.phone,
                 t1.active,
-                t3.company, t3.position, t3.detail,
+                t3.company, t3.position, t3.inn, t3.detail,
                 t3.status,
                 t3.link_telegram,
                 t8.hash AS avatar_hash,
@@ -2035,7 +2051,7 @@ async def get_users_memberships(users_ids):
     data = await api.pg.club.fetch(
         """SELECT
                 t1.id,
-                t4.vote AS vote,
+                t4.votes AS votes,
                 COALESCE(t5.events_count, 0) AS events_count,
                 t2.review, t3.name AS review_author, round(extract(epoch FROM t2.review_time) * 1000)::bigint AS review_time, t2.rating_id,
                 round(extract(epoch FROM t2.time_control) * 1000)::bigint AS time_control,
@@ -2082,7 +2098,12 @@ async def get_users_memberships(users_ids):
             LEFT JOIN
                 (
                     SELECT
-                        v1.user_id, v2.answers[v1.answer] AS vote
+                        v1.user_id,
+                        jsonb_agg(
+                            jsonb_build_object(
+                                'poll_id', v2.id, 'text', v2.text, 'time_vote', round(extract(epoch FROM v1.time_create) * 1000)::bigint, 'answer', v2.answers[v1.answer]
+                            )
+                        ) AS votes
                     FROM
                         polls_votes v1
                     INNER JOIN
@@ -2091,9 +2112,8 @@ async def get_users_memberships(users_ids):
                         v2.active IS TRUE AND
                         v2.rating IS TRUE AND
                         v1.time_create >= $2
-                    ORDER BY
-                        v1.time_create DESC
-                    LIMIT 1
+                    GROUP BY
+                        v1.user_id
                 ) t4 ON t4.user_id = t1.id
             LEFT JOIN
                 (
@@ -2120,6 +2140,20 @@ async def get_users_memberships(users_ids):
     memberships = {}
     for item in data:
         k = str(item['id'])
+        # rating polls
+        votes_rating = 3
+        votes_answer = None
+        if item['votes']:
+            temp = None
+            for vote in item['votes']:
+                if temp is None or temp < vote['time_vote']:
+                    temp = vote['time_vote']
+                    votes_answer = vote['answer']
+        if votes_answer:
+            if votes_answer.startswith('{g}'):
+                votes_rating = 1
+            elif votes_answer.startswith('{y}'):
+                votes_rating = 2
         memberships[k] = {
             'rating': 1,
             'semaphore': [
@@ -2139,9 +2173,9 @@ async def get_users_memberships(users_ids):
                 {
                     'id': 2,
                     'name': 'Участие в опросах',
-                    'rating': 1 if item['vote'] and item['vote'].startswith('{g}') else 2 if item['vote'] and item['vote'].startswith('{y}') else 3,
+                    'rating': votes_rating,
                     'data': {
-                        'value': item['vote'][3:] if item['vote'] else None,
+                        'value': item['votes'] if item['votes'] else None,
                     }
                 },
                 {

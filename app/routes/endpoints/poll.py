@@ -176,7 +176,7 @@ async def poll_rating_list(request):
     if request.user.id:
         result = {
             'polls': [],
-            'choice': '',
+            'votes': [],
         }
         if request.user.check_roles({ 'client' }):
             result = await get_user_rating_polls(request.user)

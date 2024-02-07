@@ -776,6 +776,11 @@ MODELS = {
 			'type': 'str',
             'processing': lambda x: x.strip(),
 		},
+		'inn': {
+			'required': True,
+			'type': 'str',
+            'processing': lambda x: x.strip(),
+		},
 		'catalog': {
 			'required': True,
 			'type': 'str',
@@ -924,6 +929,11 @@ MODELS = {
             'processing': lambda x: x.strip(),
 		},
 		'position': {
+			'required': True,
+			'type': 'str',
+            'processing': lambda x: x.strip(),
+		},
+		'inn': {
 			'required': True,
 			'type': 'str',
             'processing': lambda x: x.strip(),
@@ -1829,6 +1839,7 @@ async def manager_user_search(request):
                 offset = (request.params['page'] - 1) * 15 if request.params['page'] else None,
                 limit = 15 if request.params['page'] else None,
                 count = True,
+                inn = True,
             )
             community_managers = await get_community_managers()
             users_ids = [ user.id for user in result ]
@@ -1999,6 +2010,7 @@ async def manager_user_create(request):
                 phone = request.params['phone'],
                 company = request.params['company'],
                 position = request.params['position'],
+                inn = request.params['inn'],
                 catalog = request.params['catalog'],
                 password = request.params['password'],
                 roles = [ 'client' ],
