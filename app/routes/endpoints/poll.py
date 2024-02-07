@@ -4,7 +4,7 @@ from app.core.request import err
 from app.core.response import OrjsonResponse
 from app.core.event import dispatch
 from app.utils.validate import validate
-from app.models.poll import Poll
+from app.models.poll import Poll, get_user_rating_polls
 from app.models.community import Community, get_data_for_select
 from app.models.notification import create_notifications
 
@@ -13,6 +13,7 @@ from app.models.notification import create_notifications
 def routes():
     return [
         Route('/poll/add/vote', poll_add_vote, methods = [ 'POST' ]),
+        Route('/poll/rating/list', poll_rating_list, methods = [ 'POST' ]),
 
         Route('/m/poll/list', moderator_poll_list, methods = [ 'POST' ]),
         Route('/m/poll/update', moderator_poll_update, methods = [ 'POST' ]),
@@ -158,11 +159,25 @@ async def poll_add_vote(request):
             if poll.id and request.params['answer'] <= len(poll.answers) and poll.closed is False and poll.active is True:
                 await poll.add_vote(request.user.id, request.params['answer'])
                 dispatch('poll_update', request)
-                return OrjsonResponse({})
+                return OrjsonResponse({
+                    '_notification': 'Спасибо за Ваш голос!'
+                })
             else:
                 return err(404, 'Опрос не найден')
         else:
             return err(400, 'Неверный запрос')
+    else:
+        return err(403, 'Нет доступа')
+
+
+
+################################################################
+async def poll_rating_list(request):
+    if request.user.id:
+        polls = []
+        if request.user.check_roles({ 'client' }):
+            polls = await get_user_rating_polls(request.user)
+        return OrjsonResponse({ 'polls': polls })
     else:
         return err(403, 'Нет доступа')
 

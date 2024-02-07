@@ -1,4 +1,6 @@
 import re
+from datetime import datetime
+import pytz
 
 from app.core.context import get_api_context
 
@@ -255,11 +257,7 @@ class Poll:
         await api.pg.club.execute( 
             """INSERT INTO
                     polls_votes (poll_id, user_id, answer)
-                VALUES ($1, $2, $3)
-                ON CONFLICT (poll_id, user_id)
-                DO UPDATE SET
-                    answer = EXCLUDED.answer,
-                    time_update = now() at time zone 'utc'""",
+                VALUES ($1, $2, $3)""",
             self.id, user_id, vote
         )
 
@@ -357,40 +355,76 @@ async def get_user_polls_recommendations(user):
 async def get_user_rating_polls(user):
     result = []
     api = get_api_context()
-    data = await api.pg.club.fetch(
-        """SELECT
-                t1.id, t1.time_create, t1.time_update, t1.text, t1.answers
-            FROM
-                polls t1
-            WHERE
-                t1.active IS TRUE AND
-                t1.closed IS FALSE AND
-                t1.rating IS TRUE AND
-                (
+
+    # Раз в месяц
+    dt = datetime.fromtimestamp(round(user.time_create / 1000), pytz.utc)
+    dt_now = datetime.now(tz = pytz.utc)
+    if dt_now.year > dt.year or dt_now.month > dt.month:
+        day = 5
+        if dt.day >= 6 and dt.day <= 10:
+            day = 10
+        elif dt.day >= 11 and dt.day <= 15:
+            day = 15
+        elif dt.day >= 16 and dt.day <= 20:
+            day = 20
+        elif dt.day >= 21:
+            day = 25
+        dt_control1 = datetime(dt_now.year, dt_now.month, 1, tzinfo = pytz.utc)
+        if dt_now.month == 1:
+            dt_control2_1 = datetime(dt_now.year - 1, 12, 1, tzinfo = pytz.utc)
+        else:
+            dt_control2_1 = datetime(dt_now.year, dt_now.month - 1, 1, tzinfo = pytz.utc)
+        dt_control2_2 = datetime(dt_now.year, dt_now.month, day, tzinfo = pytz.utc)
+
+        # datetime(2010, 9, 12
+        # datetime.datetime.now(tz = pytz.utc)
+        # print(dt.strftime('%Y-%m-%d %H:%M:%S'))
+        # a = '2010-01-31'
+        # datee = datetime.datetime.strptime(a, "%Y-%m-%d")
+
+        data = await api.pg.club.fetch(
+            """SELECT
+                    t1.id, t1.time_create, t1.time_update, t1.text, t1.answers
+                FROM
+                    polls t1
+                WHERE
+                    t1.active IS TRUE AND
+                    t1.closed IS FALSE AND
+                    t1.rating IS TRUE AND
                     (
-                        t1.rating_format = 'Один раз' AND
-                        t1.id NOT IN (
-                            SELECT
-                                s1.poll_id
-                            FROM
-                                polls_votes s1
-                            WHERE
-                                s1.user_id = $1
+                        (
+                            t1.rating_format = 'Один раз' AND
+                            t1.id NOT IN (
+                                SELECT
+                                    s1.poll_id
+                                FROM
+                                    polls_votes s1
+                                WHERE
+                                    s1.user_id = $1
+                            )
+                        ) OR
+                        (
+                            t1.rating_format = 'Каждый месяц' AND
+                            t1.id NOT IN (
+                                SELECT
+                                    s2.poll_id
+                                FROM
+                                    polls_votes s2
+                                WHERE
+                                    s2.user_id = $1 AND
+                                    (
+                                        s2.time_create >= $2 OR
+                                        (
+                                            s2.time_create >= $3 AND
+                                            now() at time zone 'utc' < $4
+                                        )
+                                    )
+                            )
                         )
-                    ) OR
-                    (
-                        t1.rating_format = 'Каждый месяц' AND
-                        t1.id NOT IN (
-                            SELECT
-                                s1.poll_id
-                            FROM
-                                polls_votes s1
-                            WHERE
-                                s1.user_id = $1 AND
-                                
-                        )
-                    ) OR
-                }
-            ORDER BY t1.id DESC""",
-        user.id
-    )
+                    )
+                ORDER BY t1.id DESC""",
+            user.id, dt_control1.timestamp() * 1000, dt_control2_1.timestamp() * 1000, dt_control2_2.timestamp() * 1000
+        )
+        if data:
+            result = [ dict(item) for item in data ]
+    return result

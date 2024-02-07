@@ -3,6 +3,8 @@ import math
 from random import randint, choice
 import string
 import os.path
+from datetime import datetime
+import pytz
 
 from app.core.context import get_api_context
 from app.utils.packager import pack as data_pack, unpack as data_unpack
@@ -2023,10 +2025,17 @@ async def get_last_activity(users_ids):
 ################################################################
 async def get_users_memberships(users_ids):
     api = get_api_context()
+    dt_now = datetime.now(tz = pytz.utc)
+    if dt_now.month == 1:
+        dt_control = datetime(dt_now.year - 1, 11, 1, tzinfo = pytz.utc)
+    elif dt_now.month == 2:
+        dt_control = datetime(dt_now.year - 1, 12, 1, tzinfo = pytz.utc)
+    else:
+        dt_control = datetime(dt_now.year, dt_now.month - 2, 1, tzinfo = pytz.utc)
     data = await api.pg.club.fetch(
         """SELECT
                 t1.id,
-                COALESCE(t4.polls_count, 0) AS polls_count,
+                t4.vote AS vote,
                 COALESCE(t5.events_count, 0) AS events_count,
                 t2.review, t3.name AS review_author, round(extract(epoch FROM t2.review_time) * 1000)::bigint AS review_time, t2.rating_id,
                 round(extract(epoch FROM t2.time_control) * 1000)::bigint AS time_control,
@@ -2072,7 +2081,19 @@ async def get_users_memberships(users_ids):
                 ) t6 ON t6.user_id = t1.id
             LEFT JOIN
                 (
-                    SELECT user_id, count(poll_id) AS polls_count FROM polls_votes GROUP BY user_id
+                    SELECT
+                        v1.user_id, v2.answers[v1.answer] AS vote
+                    FROM
+                        polls_votes v1
+                    INNER JOIN
+                        polls v2 ON v2.id = v1.poll_id
+                    WHERE
+                        v2.active IS TRUE AND
+                        v2.rating IS TRUE AND
+                        v1.time_create >= $2
+                    ORDER BY
+                        v1.time_create DESC
+                    LIMIT 1
                 ) t4 ON t4.user_id = t1.id
             LEFT JOIN
                 (
@@ -2084,7 +2105,8 @@ async def get_users_memberships(users_ids):
                         events t2 ON t2.id = t1.event_id
                     WHERE
                         t1.audit IS TRUE AND
-                        t2.active IS TRUE
+                        t2.active IS TRUE AND
+                        t2.time_event >= $2
                     GROUP BY t1.user_id
                 ) t5 ON t5.user_id = t1.id
             LEFT JOIN
@@ -2093,7 +2115,7 @@ async def get_users_memberships(users_ids):
                 users t3 ON t3.id = t2.review_author_id
             WHERE
                 t1.id = ANY($1)""",
-        users_ids
+        users_ids, dt_control.timestamp() * 1000
     )
     memberships = {}
     for item in data:
@@ -2117,9 +2139,9 @@ async def get_users_memberships(users_ids):
                 {
                     'id': 2,
                     'name': 'Участие в опросах',
-                    'rating': 1 if item['polls_count'] >= 4 else 2 if item['polls_count'] >= 2 else 3,
+                    'rating': 1 if item['vote'] and item['vote'].startswith('{g}') else 2 if item['vote'] and item['vote'].startswith('{y}') else 3,
                     'data': {
-                        'value': item['polls_count'],
+                        'value': item['vote'][3:] if item['vote'] else None,
                     }
                 },
                 {
@@ -2144,10 +2166,40 @@ async def get_users_memberships(users_ids):
                 } for i in range(6)
             ],
         }
-        if memberships[k]['semaphore'][0]['rating']:
-            memberships[k]['rating'] = math.floor((memberships[k]['semaphore'][0]['rating'] + memberships[k]['semaphore'][1]['rating'] + memberships[k]['semaphore'][2]['rating']) / 3)
+        matrix = {
+            '111': 1,
+            '112': 1,
+            '113': 2,
+            '121': 3,
+            '122': 2,
+            '123': 3,
+            '131': 3,
+            '132': 3,
+            '133': 3,
+            '211': 1,
+            '212': 2,
+            '213': 3,
+            '221': 3,
+            '222': 2,
+            '223': 3,
+            '231': 3,
+            '232': 3,
+            '233': 3,
+            '311': 2,
+            '312': 3,
+            '313': 3,
+            '321': 3,
+            '322': 3,
+            '323': 3,
+            '331': 3,
+            '332': 3,
+            '333': 3,
+        }
+        semaphore = memberships[k]['semaphore']
+        if semaphore[0]['rating']:
+            memberships[k]['rating'] = matrix[str(semaphore[0]['rating']) + str(semaphore[1]['rating']) + str(semaphore[2]['rating'])]
         else:
-            memberships[k]['rating'] = math.floor((memberships[k]['semaphore'][1]['rating'] + memberships[k]['semaphore'][2]['rating']) / 2)
+            memberships[k]['rating'] = matrix['3' + str(semaphore[1]['rating']) + str(semaphore[2]['rating'])]
         if item['stages']:
             for stage in item['stages']:
                 for sk in { 'time', 'data', 'rejection', 'active' }:
