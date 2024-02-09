@@ -11,6 +11,7 @@ from app.utils.validate import validate
 from app.models.user import User, get_residents, get_residents_contacts, get_community_managers, get_telegram_pin, get_last_activity, get_users_memberships, get_agents_list
 from app.models.event import Event, get_events_confirmations_pendings
 from app.models.item import Item
+from app.models.note import get_last_notes_times
 from app.helpers.mobile import send_mobile_message
 
 
@@ -253,6 +254,11 @@ MODELS = {
 			'type': 'str',
             'processing': lambda x: x.strip(),
 		},
+        'inn': {
+			'required': True,
+			'type': 'str',
+            'processing': lambda x: x.strip(),
+		},
 		'password': {
 			'required': True,
 			'type': 'str',
@@ -312,6 +318,11 @@ MODELS = {
             'processing': lambda x: x.strip(),
 		},
 		'position': {
+			'required': True,
+			'type': 'str',
+            'processing': lambda x: x.strip(),
+		},
+        'inn': {
 			'required': True,
 			'type': 'str',
             'processing': lambda x: x.strip(),
@@ -490,6 +501,11 @@ MODELS = {
 			'type': 'str',
             'processing': lambda x: x.strip(),
 		},
+        'inn': {
+			'required': True,
+			'type': 'str',
+            'processing': lambda x: x.strip(),
+		},
 		'catalog': {
 			'required': True,
 			'type': 'str',
@@ -600,6 +616,11 @@ MODELS = {
             'processing': lambda x: x.strip(),
 		},
 		'position': {
+			'required': True,
+			'type': 'str',
+            'processing': lambda x: x.strip(),
+		},
+        'inn': {
 			'required': True,
 			'type': 'str',
             'processing': lambda x: x.strip(),
@@ -733,6 +754,11 @@ MODELS = {
             'default': False,
         },
         'show_events_confirmations_pendings': {
+            'required': True,
+            'type': 'bool',
+            'default': False,
+        },
+        'show_notes_times': {
             'required': True,
             'type': 'bool',
             'default': False,
@@ -1723,6 +1749,7 @@ async def new_moderator_user_create(request):
                 phone = request.params['phone'],
                 company = request.params['company'],
                 position = request.params['position'],
+                inn = request.params['inn'],
                 catalog = request.params['catalog'],
                 password = request.params['password'],
                 roles = request.params['roles'],
@@ -1882,16 +1909,27 @@ async def manager_user_search(request):
             events_pendings = {}
             if request.params['show_events_confirmations_pendings']:
                 events_pendings = await get_events_confirmations_pendings()
+            notes_times = {}
+            if request.params['show_notes_times']:
+                notes_times = await get_last_notes_times(users_ids = users_ids)
             for item in result:
                 k = str(item.id)
                 user_activity = { 'time_last_activity': activity[k] if k in activity else None }
                 temp = {}
                 if k in events_pendings:
-                    temp = { 'events_confirmations_pendings': events_pendings[k] }
+                    temp.update({ 'events_confirmations_pendings': events_pendings[k] })
+                if k in notes_times:
+                    temp.update({ 'notes_last_time': notes_times[k] })
                 hide_password = { '_password': '' }
                 if access or item.community_manager_id == request.user.id:
                     hide_password = {}
-                users.append(item.dump() | user_activity | { 'membership': memberships[k] if k in memberships else membership_template } | temp | hide_password)
+                users.append(
+                    item.dump() |
+                    user_activity |
+                    { 'membership': memberships[k] if k in memberships else membership_template } |
+                    temp |
+                    hide_password
+                )
             if request.params['filter']:
                 users = [ { k: user[k] if k in user else None for k in request.params['filter'] } for user in users ]
             return OrjsonResponse({

@@ -704,7 +704,7 @@ class User:
             kwargs['birthdate_privacy'] if 'birthdate_privacy' in kwargs else '',
             kwargs['experience'] if 'experience' in kwargs else None,
             kwargs['link_telegram'] if 'link_telegram' in kwargs else '',
-            kwargs['inn'],
+            kwargs['inn'] if 'inn' in kwargs else '',
         )
                 
         tags_old = set(sorted(re.split(r'\s*,\s*', self.tags)))
@@ -1630,7 +1630,7 @@ class User:
             kwargs['birthdate_privacy'] if 'birthdate_privacy' in kwargs else '',
             kwargs['experience'] if 'experience' in kwargs else None,
             kwargs['link_telegram'] if 'link_telegram' in kwargs else '',
-            kwargs['inn'],
+            kwargs['inn'] if 'inn' in kwargs else '',
         )
         roles = await get_roles()
         if kwargs['roles']:

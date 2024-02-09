@@ -117,3 +117,23 @@ class Note:
                 self.id, note
             )
             await self.set(id = self.id)
+
+
+
+################################################################
+async def get_last_notes_times(users_ids):
+    api = get_api_context()
+    data = await api.pg.club.fetch(
+        """SELECT
+                user_id, max(greatest(time_create, time_update)) AS time_last_note
+            FROM
+                notes
+            WHERE
+                user_id = ANY($1)
+            GROUP BY
+                user_id""",
+        users_ids
+    )
+    return {
+        str(item['user_id']): item['time_last_note'] for item in data
+    }
