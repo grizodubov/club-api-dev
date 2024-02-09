@@ -901,7 +901,7 @@ MODELS = {
         'field': {
             'required': True,
 			'type': 'str',
-            'values': [ 'comment', 'time_control', 'rejection', 'active' ],
+            'values': [ 'comment', 'time_control', 'rejection', 'postopen', 'active' ],
         },
         'value': {
             'required': True,

@@ -1723,6 +1723,16 @@ class User:
             v = False
             if value == 'true':
                 v = True
+                await api.pg.club.execute(
+                    """UPDATE
+                            users_memberships
+                        SET
+                            rejection = FALSE,
+                            postopen = FALSE
+                        WHERE
+                            user_id = $1""",
+                    self.id
+                )
             await api.pg.club.execute(
                 """INSERT INTO
                         users_memberships (user_id, stage_id, rejection)
@@ -1734,6 +1744,31 @@ class User:
                         rejection = EXCLUDED.rejection""",
                 self.id, stage_id, v
             )
+        if field == 'postopen':
+            v = False
+            if value == 'true':
+                v = True
+                await api.pg.club.execute(
+                    """UPDATE
+                            users_memberships
+                        SET
+                            rejection = FALSE,
+                            postopen = FALSE
+                        WHERE
+                            user_id = $1""",
+                    self.id
+                )
+            await api.pg.club.execute(
+                """INSERT INTO
+                        users_memberships (user_id, stage_id, postopen)
+                    VALUES
+                        ($1, $2, $3)
+                    ON CONFLICT
+                        (user_id, stage_id)
+                    DO UPDATE SET
+                        postopen = EXCLUDED.postopen""",
+                self.id, stage_id, v
+            )
         if field == 'active':
             v = False
             if value == 'true':
@@ -1742,7 +1777,9 @@ class User:
                 """UPDATE
                         users_memberships
                     SET
-                        active = FALSE
+                        active = FALSE,
+                        rejection = FALSE,
+                        postopen = FALSE
                     WHERE
                         user_id = $1 AND stage_id <> $2""",
                 self.id, stage_id
@@ -2069,6 +2106,7 @@ async def get_users_memberships(users_ids):
                                     'id', s1.id,
                                     'time', round(extract(epoch FROM s2.time_control) * 1000)::bigint,
                                     'rejection', coalesce(s2.rejection, FALSE),
+                                    'postopen', coalesce(s2.postopen, FALSE),
                                     'active', coalesce(s2.active, FALSE),
                                     'data', jsonb_build_object(
                                         'comment',
@@ -2196,6 +2234,7 @@ async def get_users_memberships(users_ids):
                         'comment': None,
                     },
                     'rejection': False,
+                    'postopen': False,
                     'active': False,
                 } for i in range(6)
             ],
@@ -2236,7 +2275,7 @@ async def get_users_memberships(users_ids):
             memberships[k]['rating'] = matrix['3' + str(semaphore[1]['rating']) + str(semaphore[2]['rating'])]
         if item['stages']:
             for stage in item['stages']:
-                for sk in { 'time', 'data', 'rejection', 'active' }:
+                for sk in { 'time', 'data', 'rejection', 'postopen', 'active' }:
                     memberships[k]['stages'][stage['id'] - 1][sk] = stage[sk]
                 if stage['active']:
                     memberships[k]['stage'] = stage['id']
