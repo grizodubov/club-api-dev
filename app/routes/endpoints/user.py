@@ -895,7 +895,7 @@ MODELS = {
         'stage_id': {
             'required': True,
 			'type': 'int',
-            'value_min': 1,
+            'value_min': 0,
             'value_max': 6,
         },
         'field': {

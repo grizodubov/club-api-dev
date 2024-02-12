@@ -1721,7 +1721,7 @@ class User:
         api = get_api_context()
         if field == 'rejection':
             v = False
-            if value == 'true':
+            if value == 'true' and stage_id != 0:
                 v = True
                 await api.pg.club.execute(
                     """UPDATE
@@ -1746,7 +1746,7 @@ class User:
             )
         if field == 'postopen':
             v = False
-            if value == 'true':
+            if value == 'true' and stage_id != 0:
                 v = True
                 await api.pg.club.execute(
                     """UPDATE
@@ -1781,8 +1781,8 @@ class User:
                         rejection = FALSE,
                         postopen = FALSE
                     WHERE
-                        user_id = $1 AND stage_id <> $2""",
-                self.id, stage_id
+                        user_id = $1""",
+                self.id
             )
             await api.pg.club.execute(
                 """INSERT INTO
@@ -2228,7 +2228,7 @@ async def get_users_memberships(users_ids):
             'stage': 1,
             'stages': [
                 {
-                    'id': i + 1,
+                    'id': i,
                     'time': None,
                     'data': {
                         'comment': None,
@@ -2236,7 +2236,7 @@ async def get_users_memberships(users_ids):
                     'rejection': False,
                     'postopen': False,
                     'active': False,
-                } for i in range(6)
+                } for i in range(7)
             ],
         }
         matrix = {
@@ -2276,7 +2276,7 @@ async def get_users_memberships(users_ids):
         if item['stages']:
             for stage in item['stages']:
                 for sk in { 'time', 'data', 'rejection', 'postopen', 'active' }:
-                    memberships[k]['stages'][stage['id'] - 1][sk] = stage[sk]
+                    memberships[k]['stages'][stage['id']][sk] = stage[sk]
                 if stage['active']:
                     memberships[k]['stage'] = stage['id']
     return memberships
