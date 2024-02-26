@@ -437,7 +437,7 @@ async def process_return_to_manager(api, user_id, item_id, params):
             client_name = data['client_name']
         )
         if data['community_manager_phone']:
-            send_mobile_message(api.stream_mobile, data['community_manager_phone'], message + ' ' + link_html, {})
+            send_mobile_message(api.stream_mobile, data['community_manager_phone'], message + ' ' + link, {})
 
         body = Template(TEMPLATES['manager_email'])
         message  = body.render(
@@ -445,3 +445,41 @@ async def process_return_to_manager(api, user_id, item_id, params):
         )
         if data['community_manager_email']:
             send_email(api.stream_email, data['community_manager_email'], 'Гермес: возвращен соискатель ' + data['client_name'], message + '<br />' + link_html, {})
+
+
+
+####################################################################
+async def process_rating_poll_create(api, user_id, item_id, params):
+    TEMPLATES = {
+        'sms': 'Примите участие в жизни клуба и пройдите опрос: "{{ question }}". Ваше мнение поможет нам стать лучше! Подробности в личном кабинете.',
+        'email': 'Примите участие в жизни клуба и пройдите опрос: "{{ question }}". Ваше мнение поможет нам стать лучше! Подробности в личном кабинете.',
+    }
+    data = await api.pg.club.fetchrow(
+        """SELECT
+                array_agg(t1.phone) AS phones, array_agg(t1.email) AS emails
+            FROM
+                users t1
+            INNER JOIN
+                users_roles t2 ON t2.user_id = t1.id
+            INNER JOIN
+                roles t3 ON t3.id = t2.role_id
+            WHERE
+                t3.alias = 'client'"""
+    )
+
+    link = 'https://social.clubgermes.ru/'
+    link_html = '<a href="' + link + '">Перейти в клуб</a>'
+    if data['phones']:
+        body = Template(TEMPLATES['sms'])
+        message  = body.render(
+            question = params['text']
+        )
+        for t in data['phones']:
+            send_mobile_message(api.stream_mobile, t, message + ' ' + link, {})
+    if data['emails']:
+        body = Template(TEMPLATES['email'])
+        message  = body.render(
+            question = params['text']
+        )
+        for t in data['emails']:
+            send_email(api.stream_email, t, 'Клуб Гермес: Новый опрос', message + '<br />' + link_html, {})

@@ -305,6 +305,12 @@ async def moderator_poll_create(request):
                     'text': poll.text,
                     'answers': poll.answers,
                 })
+            if rating and \
+                    'active' in request.params and 'closed' in request.params and \
+                    request.params['active'] is True and request.params['closed'] is False:
+                create_notifications('rating_poll_create', request.user.id, poll.id, {
+                    'text': poll.text,
+                })
             return OrjsonResponse({})
         else:
             return err(400, 'Неверный запрос')
