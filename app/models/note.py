@@ -16,6 +16,7 @@ class Note:
         self.author_id_deleted = None
         self.author_name = ''
         self.note = ''
+        self.title = 'default'
     
 
     ################################################################
@@ -29,14 +30,14 @@ class Note:
                     round(extract(epoch FROM t1.time_create) * 1000)::bigint AS time_create,
                     round(extract(epoch FROM t1.time_update) * 1000)::bigint AS time_update,
                     t1.author_id, t1.author_id_deleted, t2.name AS author_name,
-                    t1.note, t1.user_id
+                    t1.note, t1.user_id, t1.title
                 FROM
                     notes t1
                 INNER JOIN
                     users t2 ON t2.id = t1.author_id OR t2.id = t1.author_id_deleted
                 WHERE
                     t1.user_id = $1
-                ORDER BY t1.time_create""",
+                ORDER BY coalesce(t1.time_update, t1.time_create)""",
             user_id
         )
         for row in data:
@@ -66,7 +67,7 @@ class Note:
                         round(extract(epoch FROM t1.time_create) * 1000)::bigint AS time_create,
                         round(extract(epoch FROM t1.time_update) * 1000)::bigint AS time_update,
                         t1.author_id, t1.author_id_deleted, t2.name AS author_name,
-                        t1.note, t1.user_id
+                        t1.note, t1.user_id, t1.title
                     FROM
                         notes t1
                     INNER JOIN
@@ -79,16 +80,16 @@ class Note:
     
 
     ################################################################
-    async def create(self, note, user_id, author_id):
+    async def create(self, note, title, user_id, author_id):
         api = get_api_context()
         id = await api.pg.club.fetchval(
             """INSERT INTO
-                    notes (note, user_id, author_id)
+                    notes (note, title, user_id, author_id)
                 VALUES
-                    ($1, $2, $3)
+                    ($1, $2, $3, $4)
                 RETURNING
                     id""",
-            note, user_id, author_id
+            note, title, user_id, author_id
         )
         await self.set(id = id)
 

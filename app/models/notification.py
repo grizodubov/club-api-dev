@@ -8,6 +8,8 @@ from app.core.context import get_api_context
 from app.models.community import Community
 from app.models.user import User
 from app.helpers.telegram import send_telegram_message
+from app.helpers.email import send_email
+from app.helpers.mobile import send_mobile_message
 
 
 
@@ -315,3 +317,131 @@ async def process_poll_create(api, user_id, item_id, params):
             link_html = link_html.replace('___SUBTOKEN___', subtoken)
             print(chat[0], chat[1], message + ' ' + link_html)
             send_telegram_message(api.stream_telegram, chat[1], message + ' ' + link_html)
+
+
+
+####################################################################
+async def process_return_to_agent(api, user_id, item_id, params):
+    TEMPLATES = {
+        'agent_notification': 'Соискатель {{ client_name }} возвращён Вам на уточнение данных',
+        'agent_sms': 'Клуб Гермес. Соискатель {{ client_name }} возвращён Вам на уточнение данных. Подробности в личном кабинете агента.',
+        'agent_email': 'Клуб Гермес. Работа по соискателю {{ client_name }} приостановлена. Соискатель {{ client_name }} возвращён Вам на уточнение данных. Информация о причине приостановки и порядок возобновления работы доступны в личном кабинете агента.',
+    }
+    data = await api.pg.club.fetchrow(
+        """SELECT
+                t1.id AS client_id, t1.name AS client_name,
+                t2.id AS community_manager_id, t2.name AS community_manager_name, t2.email AS community_manager_email,
+                t2.phone AS community_manager_phone, t2.phone AS community_manager_phone, t2_i.id_telegram AS community_manager_telegram_id,
+                t3.id AS agent_id, t3.name AS agent_name, t3.email AS agent_email,
+                t3.phone AS agent_phone, t3_i.id_telegram AS agent_telegram_id
+            FROM
+                users t1
+            LEFT JOIN
+                users t2 ON t2.id = t1.community_manager_id
+            LEFT JOIN
+                users_info t2_i ON t2_i.user_id = t2.id
+            LEFT JOIN
+                users t3 ON t3.id = t1.agent_id
+            LEFT JOIN
+                users_info t3_i ON t3_i.user_id = t3.id
+            WHERE
+                t1.id = $1""",
+        item_id
+    )
+    if data and data['agent_id']:
+        link = 'https://manager.clubgermes.ru/users/' + str(item_id)
+        body = Template(TEMPLATES['agent_notification'])
+        message  = body.render(
+            client_name = data['client_name']
+        )
+        await api.pg.club.execute(
+            """INSERT INTO notifications (message, link, item_id, recepients) VALUES ($1, $2, $3, $4)""",
+            message, link, item_id, [ data['agent_id'] ]
+        )
+        send_notifications([ data['agent_id'] ])
+        link = link + '?sbt=___SUBTOKEN___'
+        link_html = '<a href="' + link + '">Перейти в клуб</a>'
+
+        subtoken = await set_subtoken(api, data['agent_id'])
+        link_html = link_html.replace('___SUBTOKEN___', subtoken)
+
+        if data['agent_telegram_id']:
+            send_telegram_message(api.stream_telegram, data['agent_telegram_id'], message + ' ' + link_html)
+
+        body = Template(TEMPLATES['agent_sms'])
+        message  = body.render(
+            client_name = data['client_name']
+        )
+        if data['agent_phone']:
+            send_mobile_message(api.stream_mobile, data['agent_phone'], message + ' ' + link_html, {})
+
+        body = Template(TEMPLATES['agent_email'])
+        message  = body.render(
+            client_name = data['client_name']
+        )
+        if data['agent_email']:
+            send_email(api.stream_email, data['agent_email'], 'Гермес: возвращен соискатель ' + data['client_name'], message + '<br />' + link_html, {})
+
+
+
+####################################################################
+async def process_return_to_manager(api, user_id, item_id, params):
+    TEMPLATES = {
+        'manager_notification': 'Агент {{ agent_name }} запрашивает возврат в работу соискателя {{ client_name }}',
+        'manager_sms': 'Клуб Гермес. Агент {{ agent_name }} запрашивает возврат в работу соискателя {{ client_name }}. Подробности в Личном кабинете КМ.',
+        'manager_email': 'Клуб Гермес. Агент {{ agent_name }} запрашивает возврат в работу соискателя {{ client_name }}. Подробности в Личном кабинете КМ.',
+    }
+    data = await api.pg.club.fetchrow(
+        """SELECT
+                t1.id AS client_id, t1.name AS client_name,
+                t2.id AS community_manager_id, t2.name AS community_manager_name, t2.email AS community_manager_email,
+                t2.phone AS community_manager_phone, t2.phone AS community_manager_phone, t2_i.id_telegram AS community_manager_telegram_id,
+                t3.id AS agent_id, t3.name AS agent_name, t3.email AS agent_email,
+                t3.phone AS agent_phone, t3_i.id_telegram AS agent_telegram_id
+            FROM
+                users t1
+            LEFT JOIN
+                users t2 ON t2.id = t1.community_manager_id
+            LEFT JOIN
+                users_info t2_i ON t2_i.user_id = t2.id
+            LEFT JOIN
+                users t3 ON t3.id = t1.agent_id
+            LEFT JOIN
+                users_info t3_i ON t3_i.user_id = t3.id
+            WHERE
+                t1.id = $1""",
+        item_id
+    )
+    if data and data['community_manager_id']:
+        link = 'https://manager.clubgermes.ru/users/' + str(item_id)
+        body = Template(TEMPLATES['manager_notification'])
+        message  = body.render(
+            client_name = data['client_name']
+        )
+        await api.pg.club.execute(
+            """INSERT INTO notifications (message, link, item_id, recepients) VALUES ($1, $2, $3, $4)""",
+            message, link, item_id, [ data['community_manager_id'] ]
+        )
+        send_notifications([ data['community_manager_id'] ])
+        link = link + '?sbt=___SUBTOKEN___'
+        link_html = '<a href="' + link + '">Перейти в клуб</a>'
+
+        subtoken = await set_subtoken(api, data['community_manager_id'])
+        link_html = link_html.replace('___SUBTOKEN___', subtoken)
+
+        if data['community_manager_telegram_id']:
+            send_telegram_message(api.stream_telegram, data['community_manager_telegram_id'], message + ' ' + link_html)
+
+        body = Template(TEMPLATES['manager_sms'])
+        message  = body.render(
+            client_name = data['client_name']
+        )
+        if data['community_manager_phone']:
+            send_mobile_message(api.stream_mobile, data['community_manager_phone'], message + ' ' + link_html, {})
+
+        body = Template(TEMPLATES['manager_email'])
+        message  = body.render(
+            client_name = data['client_name']
+        )
+        if data['community_manager_email']:
+            send_email(api.stream_email, data['community_manager_email'], 'Гермес: возвращен соискатель ' + data['client_name'], message + '<br />' + link_html, {})

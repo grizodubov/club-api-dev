@@ -6,7 +6,8 @@ from app.core.response import OrjsonResponse
 from app.core.event import dispatch
 from app.utils.validate import validate
 from app.models.note import Note
-from app.models.user import User
+from app.models.user import User, get_users_memberships
+from app.models.notification import create_notifications
 
 
 
@@ -52,6 +53,10 @@ MODELS = {
             'type': 'int',
             'value_min': 1,
         },
+        'title': {
+            'required': True,
+            'type': 'str',
+        }
 	},
 }
 
@@ -62,7 +67,7 @@ async def manager_notes_list(request):
     if request.user.id and request.user.check_roles({ 'admin', 'editor', 'manager', 'chief', 'community manager', 'agent' }):
         if validate(request.params, MODELS['manager_notes_list']):
             user = User()
-            await user.set(id = request.params['user_id'])
+            await user.set(id = request.params['user_id'], active = None)
             if user.id:
                 result = await Note.list(user_id = user.id)
                 return OrjsonResponse({
@@ -79,7 +84,7 @@ async def manager_notes_list(request):
 
 ################################################################
 async def manager_notes_update(request):
-    if request.user.id and request.user.check_roles({ 'admin', 'editor', 'manager', 'chief', 'community manager' }):
+    if request.user.id and request.user.check_roles({ 'admin', 'editor', 'manager', 'chief', 'community manager', 'agent' }):
         if validate(request.params, MODELS['manager_notes_update']):
             note = Note()
             await note.set(id = request.params['id'])
@@ -101,15 +106,26 @@ async def manager_notes_update(request):
 
 ################################################################
 async def manager_notes_create(request):
-    if request.user.id and request.user.check_roles({ 'admin', 'editor', 'manager', 'chief', 'community manager' }):
+    if request.user.id and request.user.check_roles({ 'admin', 'editor', 'manager', 'chief', 'community manager', 'agent' }):
         if validate(request.params, MODELS['manager_notes_create']):
             user = User()
-            await user.set(id = request.params['user_id'])
+            await user.set(id = request.params['user_id'], active = None)
             if user.id:
+                membership = await get_users_memberships(users_ids = [ user.id ])
                 if request.user.check_roles({ 'admin', 'editor', 'manager', 'chief' }) or \
-                        user.community_manager_id == request.user.id:
+                        user.community_manager_id == request.user.id or \
+                        (user.agent_id == request.user.id and membership[str(user.id)]['stage'] == 0):
+                    if (user.agent_id == request.user.id and membership[str(user.id)]['stage'] == 0):
+                        current_stage_id = await user.get_membership_stage()
+                        if current_stage_id == 0:
+                            create_notifications('return_to_manager', request.user.id, user.id, {})
                     note = Note()
-                    await note.create(note = request.params['note'], user_id = user.id, author_id = request.user.id)
+                    await note.create(
+                        note = request.params['note'],
+                        title = request.params['title'] if 'title' in request.params and request.params['title'] else 'default',
+                        user_id = user.id,
+                        author_id = request.user.id
+                    )
                     dispatch('note_create', request)
                     return OrjsonResponse({})
                 else:

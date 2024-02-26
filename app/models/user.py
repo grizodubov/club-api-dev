@@ -583,9 +583,9 @@ class User:
         api = get_api_context()
         if id:
             query = ''
-            if active is True:
+            if active is not None and active is True:
                 query = ' AND t1.active IS TRUE'
-            if active is False:
+            if active is not None and active is False:
                 query = ' AND t1.active IS FALSE'
             data = await api.pg.club.fetchrow(
                 """SELECT
@@ -1871,6 +1871,22 @@ class User:
                         rating_id = EXCLUDED.rating_id""",
                 self.id, int(value)
             )
+
+
+    ################################################################
+    async def get_membership_stage(self):
+        api = get_api_context()
+        stage = await api.pg.club.fetchval(
+            """SELECT
+                    stage_id
+                FROM
+                    users_memberships
+                WHERE
+                    user_id = $1 AND
+                    active IS TRUE""",
+            self.id
+        )
+        return stage
 
 
 

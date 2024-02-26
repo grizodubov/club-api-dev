@@ -34,6 +34,7 @@ MODELS = {
             'required': True,
 			'type': 'int',
             'value_min': 1,
+            'list': True,
         },
     },
     'moderator_poll_update': {
@@ -92,6 +93,10 @@ MODELS = {
 			'type': 'str',
             'null': True,
 		},
+        'many': {
+			'required': True,
+			'type': 'bool',
+		},
 	},
     'moderator_poll_create': {
         'active': {
@@ -138,6 +143,10 @@ MODELS = {
 			'type': 'str',
             'null': True,
 		},
+        'many': {
+			'required': True,
+			'type': 'bool',
+		},
 	},
     'moderator_poll_log': {
 		'id': {
@@ -156,7 +165,12 @@ async def poll_add_vote(request):
         if validate(request.params, MODELS['poll_add_vote']):
             poll = Poll()
             await poll.set(id = request.params['poll_id'])
-            if poll.id and request.params['answer'] <= len(poll.answers) and poll.closed is False and poll.active is True:
+            check = True
+            for answer in request.params['answer']:
+                if answer > len(poll.answers):
+                    check = False
+                    break
+            if poll.id and check and poll.closed is False and poll.active is True:
                 await poll.add_vote(request.user.id, request.params['answer'])
                 dispatch('poll_update', request)
                 return OrjsonResponse({
@@ -273,6 +287,7 @@ async def moderator_poll_create(request):
                 active = request.params['active'],
                 closed = request.params['closed'],
                 wide = request.params['wide'],
+                many = request.params['many'],
             )
             dispatch('poll_create', request)
             # notify

@@ -13,6 +13,7 @@ from app.models.event import Event, get_events_confirmations_pendings
 from app.models.item import Item
 from app.models.note import get_last_notes_times
 from app.helpers.mobile import send_mobile_message
+from app.models.notification import create_notifications
 
 
 
@@ -1983,6 +1984,11 @@ async def manager_user_membership_stage_update(request):
             await user.set(id = request.params['user_id'], active = None)
             if user.id:
                 if request.user.check_roles({ 'admin', 'moderator', 'manager', 'chief' }) or user.community_manager_id == request.user.id:
+                    # notify
+                    if request.params['stage_id'] == 0 and request.path_params['field'] == 'active' and request.params['value'] == 'true':
+                        current_stage_id = await user.get_membership_stage()
+                        if current_stage_id != 0:
+                            create_notifications('return_to_agent', request.user.id, user.id, {})
                     await user.membership_stage_update(
                         stage_id = request.params['stage_id'],
                         field = request.path_params['field'], 
