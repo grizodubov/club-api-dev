@@ -902,7 +902,7 @@ MODELS = {
         'field': {
             'required': True,
 			'type': 'str',
-            'values': [ 'comment', 'time_control', 'rejection', 'postopen', 'active' ],
+            'values': [ 'comment', 'time_control', 'rejection', 'postopen', 'repeat', 'active' ],
         },
         'value': {
             'required': True,
@@ -1978,15 +1978,17 @@ async def manager_user_update(request):
 
 ################################################################
 async def manager_user_membership_stage_update(request):
-    if request.user.id and request.user.check_roles({ 'admin', 'moderator', 'manager', 'chief', 'community manager' }):
+    if request.user.id and request.user.check_roles({ 'admin', 'moderator', 'manager', 'chief', 'community manager', 'agent' }):
         if validate(request.params | request.path_params, MODELS['manager_user_membership_stage_update']):
             user = User()
             await user.set(id = request.params['user_id'], active = None)
             if user.id:
-                if request.user.check_roles({ 'admin', 'moderator', 'manager', 'chief' }) or user.community_manager_id == request.user.id:
+                current_stage_id = await user.get_membership_stage()
+                if request.user.check_roles({ 'admin', 'moderator', 'manager', 'chief' }) or \
+                        user.community_manager_id == request.user.id or \
+                        (user.agent_id == request.user.id and current_stage_id == 0 and request.params['stage_id'] == 0 and request.path_params['field'] == 'repeat'):
                     # notify
                     if request.params['stage_id'] == 0 and request.path_params['field'] == 'active' and request.params['value'] == 'true':
-                        current_stage_id = await user.get_membership_stage()
                         if current_stage_id != 0:
                             create_notifications('return_to_agent', request.user.id, user.id, {})
                     await user.membership_stage_update(

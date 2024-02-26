@@ -1769,6 +1769,21 @@ class User:
                         postopen = EXCLUDED.postopen""",
                 self.id, stage_id, v
             )
+        if field == 'repeat':
+            v = False
+            if value == 'true' and stage_id == 0:
+                v = True
+            await api.pg.club.execute(
+                """INSERT INTO
+                        users_memberships (user_id, stage_id, repeat)
+                    VALUES
+                        ($1, $2, $3)
+                    ON CONFLICT
+                        (user_id, stage_id)
+                    DO UPDATE SET
+                        repeat = EXCLUDED.repeat""",
+                self.id, stage_id, v
+            )
         if field == 'active':
             v = False
             if value == 'true':
@@ -1779,7 +1794,8 @@ class User:
                     SET
                         active = FALSE,
                         rejection = FALSE,
-                        postopen = FALSE
+                        postopen = FALSE,
+                        repeat = FALSE
                     WHERE
                         user_id = $1""",
                 self.id
@@ -2123,6 +2139,7 @@ async def get_users_memberships(users_ids):
                                     'time', round(extract(epoch FROM s2.time_control) * 1000)::bigint,
                                     'rejection', coalesce(s2.rejection, FALSE),
                                     'postopen', coalesce(s2.postopen, FALSE),
+                                    'repeat', coalesce(s2.repeat, FALSE),
                                     'active', coalesce(s2.active, FALSE),
                                     'data', jsonb_build_object(
                                         'comment',
@@ -2251,6 +2268,7 @@ async def get_users_memberships(users_ids):
                     },
                     'rejection': False,
                     'postopen': False,
+                    'repeat': False,
                     'active': False,
                 } for i in range(7)
             ],
@@ -2291,7 +2309,7 @@ async def get_users_memberships(users_ids):
             memberships[k]['rating'] = matrix['3' + str(semaphore[1]['rating']) + str(semaphore[2]['rating'])]
         if item['stages']:
             for stage in item['stages']:
-                for sk in { 'time', 'data', 'rejection', 'postopen', 'active' }:
+                for sk in { 'time', 'data', 'rejection', 'postopen', 'repeat', 'active' }:
                     memberships[k]['stages'][stage['id']][sk] = stage[sk]
                 if stage['active']:
                     memberships[k]['stage'] = stage['id']
