@@ -579,13 +579,17 @@ MODELS = {
 			'type': 'int',
             'null': True,
 		},
+		'link_telegram': {
+			'required': True,
+			'type': 'str',
+		},
 		'community_manager_id': {
 			'type': 'int',
             'null': True,
 		},
-		'link_telegram': {
-			'required': True,
-			'type': 'str',
+		'agent_id': {
+			'type': 'int',
+            'null': True,
 		},
         'curator_id': {
 			'type': 'int',
@@ -702,13 +706,17 @@ MODELS = {
 			'type': 'int',
             'null': True,
 		},
+		'link_telegram': {
+			'required': True,
+			'type': 'str',
+		},
 		'community_manager_id': {
 			'type': 'int',
             'null': True,
 		},
-		'link_telegram': {
-			'required': True,
-			'type': 'str',
+		'agent_id': {
+			'type': 'int',
+            'null': True,
 		},
         'curator_id': {
 			'type': 'int',
@@ -1779,6 +1787,7 @@ async def new_moderator_user_create(request):
                 birthdate_privacy = request.params['birthdate_privacy'],
                 experience = request.params['experience'],
                 community_manager_id = request.params['community_manager_id'],
+                agent_id = request.params['agent_id'],
                 curator_id = request.params['curator_id'],
             )
             dispatch('user_create', request)
