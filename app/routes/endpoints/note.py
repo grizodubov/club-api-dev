@@ -114,8 +114,8 @@ async def manager_notes_create(request):
                 membership = await get_users_memberships(users_ids = [ user.id ])
                 if request.user.check_roles({ 'admin', 'editor', 'manager', 'chief' }) or \
                         user.community_manager_id == request.user.id or \
-                        ((user.agent_id == request.user.id or request.user.id in user.curators) and membership[str(user.id)]['stage'] == 0):
-                    if ((user.agent_id == request.user.id or request.user.id in user.curators) and membership[str(user.id)]['stage'] == 0):
+                        ((user.agent_id == request.user.id or (user.curators and request.user.id in user.curators)) and membership[str(user.id)]['stage'] == 0):
+                    if ((user.agent_id == request.user.id or (user.curators and request.user.id in user.curators)) and membership[str(user.id)]['stage'] == 0):
                         current_stage_id = await user.get_membership_stage()
                         if current_stage_id == 0:
                             create_notifications('return_to_manager', request.user.id, user.id, {})
