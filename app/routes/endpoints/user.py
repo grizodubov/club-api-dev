@@ -8,7 +8,7 @@ from app.core.request import err
 from app.core.response import OrjsonResponse
 from app.core.event import dispatch
 from app.utils.validate import validate
-from app.models.user import User, get_residents, get_residents_contacts, get_community_managers, get_telegram_pin, get_last_activity, get_users_memberships, get_agents_list
+from app.models.user import User, get_residents, get_residents_contacts, get_community_managers, get_telegram_pin, get_last_activity, get_users_memberships, get_agents_list, get_agents
 from app.models.event import Event, get_events_confirmations_pendings
 from app.models.item import Item
 from app.models.note import get_last_notes_times
@@ -347,7 +347,7 @@ MODELS = {
 			'required': True,
 			'type': 'str',
             'list': True,
-            'values': [ 'admin', 'client', 'guest', 'manager', 'moderator', 'editor', 'chief', 'community manager', 'tester', 'speaker', 'agent' ],
+            'values': [ 'admin', 'client', 'guest', 'manager', 'moderator', 'editor', 'chief', 'community manager', 'tester', 'speaker', 'agent', 'curator' ],
 		},
 		'tags': {
 			'required': True,
@@ -554,7 +554,7 @@ MODELS = {
 			'required': True,
 			'type': 'str',
             'list': True,
-            'values': [ 'admin', 'client', 'guest', 'manager', 'moderator', 'editor', 'chief', 'community manager', 'tester', 'speaker', 'agent' ],
+            'values': [ 'admin', 'client', 'guest', 'manager', 'moderator', 'editor', 'chief', 'community manager', 'tester', 'speaker', 'agent', 'curator' ],
 		},
 		'tags': {
 			'required': True,
@@ -579,13 +579,21 @@ MODELS = {
 			'type': 'int',
             'null': True,
 		},
+		'link_telegram': {
+			'required': True,
+			'type': 'str',
+		},
 		'community_manager_id': {
 			'type': 'int',
             'null': True,
 		},
-		'link_telegram': {
-			'required': True,
-			'type': 'str',
+		'agent_id': {
+			'type': 'int',
+            'null': True,
+		},
+        'curator_id': {
+			'type': 'int',
+            'null': True,
 		},
 	},
 	'new_moderator_user_create': {
@@ -673,7 +681,7 @@ MODELS = {
 			'required': True,
 			'type': 'str',
             'list': True,
-            'values': [ 'client', 'guest', 'manager', 'chief', 'community manager', 'agent' ],
+            'values': [ 'client', 'guest', 'manager', 'chief', 'community manager', 'agent', 'curator' ],
 		},
 		'tags': {
 			'required': True,
@@ -698,13 +706,21 @@ MODELS = {
 			'type': 'int',
             'null': True,
 		},
+		'link_telegram': {
+			'required': True,
+			'type': 'str',
+		},
 		'community_manager_id': {
 			'type': 'int',
             'null': True,
 		},
-		'link_telegram': {
-			'required': True,
-			'type': 'str',
+		'agent_id': {
+			'type': 'int',
+            'null': True,
+		},
+        'curator_id': {
+			'type': 'int',
+            'null': True,
 		},
 	},
     'user_suggestions_stats': {
@@ -1499,6 +1515,7 @@ async def moderator_user_search(request):
                 applicant = request.params['applicant'] if request.params['applicant'] is not None else False,
             )
             community_managers = await get_community_managers()
+            agents = await get_agents()
             users_ids = [ user.id for user in result ]
             activity = await get_last_activity(users_ids = users_ids)
             users = []
@@ -1509,6 +1526,7 @@ async def moderator_user_search(request):
                 'users': users,
                 'amount': amount,
                 'community_managers': community_managers,
+                'agents': agents,
             })
         else:
             return err(400, 'Неверный поиск')
@@ -1769,6 +1787,8 @@ async def new_moderator_user_create(request):
                 birthdate_privacy = request.params['birthdate_privacy'],
                 experience = request.params['experience'],
                 community_manager_id = request.params['community_manager_id'],
+                agent_id = request.params['agent_id'],
+                curator_id = request.params['curator_id'],
             )
             dispatch('user_create', request)
             return OrjsonResponse({})
@@ -1857,7 +1877,7 @@ async def manager_user_search(request):
                 if not request.params['ignore_community_manager']:
                     community_manager_id = request.user.id
                 if not request.user.check_roles({ 'community manager' }):
-                    agent_id = request.user.id
+                    agent_id = await request.user.get_agent_subs_tree()
             (result, amount) = await User.client_search(
                 text = request.params['text'],
                 ids = request.params['ids'],
@@ -2075,6 +2095,7 @@ async def manager_user_create(request):
                 birthdate_privacy = request.params['birthdate_privacy'],
                 experience = request.params['experience'],
                 community_manager_id = community_manager_id,
+                curator_id = None,
             )
             dispatch('user_create', request)
             return OrjsonResponse({})
@@ -2287,6 +2308,7 @@ async def manager_agent_create(request):
                 roles = [ 'agent' ],
                 active = True,
                 community_manager_id = None,
+                curator_id = None,
             )
             dispatch('user_create', request)
             return OrjsonResponse({
