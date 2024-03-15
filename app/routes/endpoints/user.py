@@ -1868,7 +1868,7 @@ async def save_telegram_pin(request):
 
 ################################################################
 async def manager_user_search(request):
-    if request.user.id and request.user.check_roles({ 'admin', 'moderator', 'manager', 'chief', 'community manager', 'agent' }):
+    if request.user.id and request.user.check_roles({ 'admin', 'moderator', 'manager', 'chief', 'community manager', 'agent', 'curator' }):
         if validate(request.params, MODELS['manager_user_search']):
             community_manager_id = None
             agent_id = None
@@ -1878,6 +1878,8 @@ async def manager_user_search(request):
                     community_manager_id = request.user.id
                 if not request.user.check_roles({ 'community manager' }):
                     agent_id = await request.user.get_agent_subs_tree()
+                    if request.user.check_roles({ 'agent' }):
+                        agent_id.append(request.user.id)
             (result, amount) = await User.client_search(
                 text = request.params['text'],
                 ids = request.params['ids'],
