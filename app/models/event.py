@@ -410,6 +410,42 @@ async def get_participants(events_ids):
 
 
 ################################################################
+async def get_participants_with_avatars(events_ids):
+    api = get_api_context()
+    data = await api.pg.club.fetch(
+        """SELECT
+                t1.event_id,
+                array_agg(jsonb_build_object(
+                    'id', t1.user_id,
+                    'name', t2.name,
+                    'confirmation', t1.confirmation,
+                    'avatar_hash', t5.hash,
+                    'tags', coalesce(t3.tags, ''),
+                    'interests', coalesce(t3.interests, ''),
+                    'community_manager_id', t2.community_manager_id,
+                    'community_manager', coalesce(t4.name, '')
+                )) AS participants
+            FROM
+                events_users t1
+            INNER JOIN
+                users t2 ON t2.id = t1.user_id
+            INNER JOIN
+                users_tags t3 ON t3.user_id = t2.id
+            LEFT JOIN
+                users t4 ON t4.id = t2.community_manager_id
+            LEFT JOIN
+                avatars t5 ON t5.owner_id = t2.id AND t5.active IS TRUE
+            WHERE
+                t1.event_id = ANY($1)
+            GROUP BY
+                t1.event_id""",
+        events_ids
+    )
+    return { str(item['event_id']): item['participants'] for item in data }
+
+
+
+################################################################
 async def get_all_speakers():
     api = get_api_context()
     data = await api.pg.club.fetch(
@@ -462,3 +498,21 @@ async def get_events_confirmations_pendings(users_ids = None):
     return {
         str(item['user_id']): item['amount'] for item in result
     }
+
+
+
+################################################################
+async def get_future_events():
+    api = get_api_context()
+    data = await api.pg.club.fetch(
+        """SELECT
+                t1.id, t1.name, t1.format, t1.place, t1.time_event, t1.detail, FALSE AS archive
+            FROM
+                events t1
+            WHERE
+                t1.active IS TRUE AND
+                t1.time_event >= (now() at time zone 'utc')::date
+            ORDER BY
+                t1.time_event"""
+    )
+    return [ dict(item) for item in data ]

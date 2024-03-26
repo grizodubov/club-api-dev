@@ -1835,9 +1835,47 @@ class User:
                     ON CONFLICT
                         (user_id, stage_id)
                     DO UPDATE SET
-                        active = EXCLUDED.active""",
+                        active = EXCLUDED.active
+                    """,
                 self.id, stage_id, v
             )
+            if v and (stage_id == 4 or stage_id == 5):
+                tc = await api.pg.club.fetchval(
+                    """SELECT
+                            coalesce(t2.time_control, t3.time_control, now() at time zone 'utc' + INTERVAL '2 MONTH')
+                        FROM
+                            users t1
+                        LEFT JOIN
+                            users_memberships t2 ON t2.user_id = t1.id AND t2.stage_id = 4
+                        LEFT JOIN
+                            users_memberships t3 ON t3.user_id = t1.id AND t3.stage_id = 5
+                        WHERE
+                            t1.id = $1""",
+                    self.id
+                )
+                if tc:
+                    await api.pg.club.execute(
+                        """INSERT INTO
+                                users_memberships (user_id, stage_id, time_control)
+                            VALUES
+                                ($1, $2, $3)
+                            ON CONFLICT
+                                (user_id, stage_id)
+                            DO UPDATE SET
+                                time_control = EXCLUDED.time_control""",
+                        self.id, 4, tc
+                    )
+                    await api.pg.club.execute(
+                        """INSERT INTO
+                                users_memberships (user_id, stage_id, time_control)
+                            VALUES
+                                ($1, $2, $3)
+                            ON CONFLICT
+                                (user_id, stage_id)
+                            DO UPDATE SET
+                                time_control = EXCLUDED.time_control""",
+                        self.id, 5, tc
+                    )
         if field == 'comment':
             await api.pg.club.execute(
                 """INSERT INTO
@@ -1852,7 +1890,7 @@ class User:
                         comment_time = EXCLUDED.comment_time""",
                 self.id, stage_id, value, author_id
             )
-        if field == 'time_control':
+        if field == 'time_control' and stage_id != 4 and stage_id != 5:
             await api.pg.club.execute(
                 """INSERT INTO
                         users_memberships (user_id, stage_id, time_control)
@@ -1948,6 +1986,51 @@ class User:
             str(self.id)
         )
         return [ item['id'] for item in data ]
+
+
+    ################################################################
+    async def get_allowed_clients_ids(self):
+        api = get_api_context()
+        if not self.check_roles({ 'admin', 'moderator', 'manager', 'chief', 'community manager', 'agent', 'curator' }):
+            return []
+        clients_ids = None
+        if not self.check_roles({ 'admin', 'moderator', 'manager', 'chief' }):
+            clients_ids = []
+            query = []
+            args = []
+            i = 1
+            if self.check_roles({ 'community manager' }):
+                query.append('t1.community_manager_id = $' + str(i))
+                args.append(self.id)
+                i += 1
+            if self.check_roles({ 'agent' }):
+                query.append('t1.agent_id = $' + str(i))
+                args.append(self.id)
+                i += 1
+            if self.check_roles({ 'curator' }):
+                agents_ids = await self.get_agent_subs_tree()
+                if agents_ids:
+                    query.append('t1.agent_id = ANY($' + str(i) + ')')
+                    args.append(agents_ids)
+                    i += 1
+            if query:
+                query.append("""t3.alias = 'client'""")
+                data = await api.pg.club.fetchval(
+                    """SELECT
+                            array_agg(t1.id)
+                        FROM
+                            users t1
+                        INNER JOIN
+                            users_roles t2 ON t2.user_id = t1.id
+                        INNER JOIN
+                            roles t3 ON t3.id = t2.role_id
+                        WHERE
+                            """ + ' AND '.join(query),
+                    *args
+                )
+                if data:
+                    clients_ids.extend(data)
+        return clients_ids
 
 
 
