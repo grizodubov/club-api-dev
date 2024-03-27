@@ -304,6 +304,8 @@ async def process_poll_create(api, user_id, item_id, params):
         link = '/' + str(community.id)
         if community.parent_id:
             link = '/' + str(community.parent_id) + link
+        else:
+            link = '/0' + link
         link = '/communities' + link# + '?sbt=___SUBTOKEN___'
         link_html = '<a href="https://social.clubgermes.ru' + link + '">Перейти в клуб</a>'
 
