@@ -1377,6 +1377,140 @@ class User:
         return [ dict(item) | { 'online': check_online_by_id(item['id']) } for item in data ]
 
 
+    ################################################################
+    async def get_event_suggestions(self, event_id, users_ids):
+        api = get_api_context()
+        if users_ids:
+            self_tags = await api.pg.club.fetchrow(
+                """SELECT coalesce(tags, '') AS tags, coalesce(interests, '') AS interests FROM users_events_tags WHERE user_id = $1 AND event_id = $2""",
+                self.id, event_id
+            )
+            if not self_tags:
+                self_tags = { 'tags': '', 'interests': '' }
+            query_tags = """SELECT
+                                    t1.id, t1.name,
+                                    t3.company, t3.position, t3.status,
+                                    t3.link_telegram,
+                                    ts_headline(t2.tags, to_tsquery($1), 'HighlightAll=true, StartSel=~, StopSel=~') AS tags,
+                                    $1 AS search,
+                                    'bid' AS offer,
+                                    t8.hash AS avatar_hash,
+                                    ts_rank_cd(to_tsvector(t2.tags), to_tsquery($1), 32) AS __rank
+                                FROM
+                                    users t1
+                                INNER JOIN
+                                    (
+                                        SELECT
+                                            s1.user_id, (coalesce(s1.tags, '') || ',' || coalesce(s2.tags, '')) AS tags
+                                        FROM
+                                            users_tags s1
+                                        LEFT JOIN
+                                            users_events_tags s2 ON s2.user_id = s1.user_id AND s2.event_id = $4
+                                    ) t2 ON t2.user_id = t1.id
+                                INNER JOIN
+                                    users_info t3 ON t3.user_id = t1.id
+                                LEFT JOIN
+                                    (
+                                        SELECT
+                                            r3.user_id, array_agg(r3.alias) AS roles
+                                        FROM
+                                            (
+                                                SELECT
+                                                    r1.user_id, r2.alias
+                                                FROM
+                                                    users_roles r1
+                                                INNER JOIN
+                                                    roles r2 ON r2.id = r1.role_id
+                                            ) r3
+                                        GROUP BY
+                                            r3.user_id
+                                    ) t4 ON t4.user_id = t1.id
+                                LEFT JOIN
+                                    avatars t8 ON t8.owner_id = t1.id AND t8.active IS TRUE
+                                WHERE
+                                    t1.id = ANY($3) AND
+                                    t1.active IS TRUE AND
+                                    to_tsvector(t2.tags) @@ to_tsquery($1)"""
+            query_interests = """SELECT
+                                        t1.id, t1.name,
+                                        t3.company, t3.position, t3.status,
+                                        t3.link_telegram,
+                                        ts_headline(t2.interests, to_tsquery($2), 'HighlightAll=true, StartSel=~, StopSel=~') AS tags,
+                                        $2 AS search,
+                                        'ask' AS offer,
+                                        t8.hash AS avatar_hash,
+                                        ts_rank_cd(to_tsvector(t2.interests), to_tsquery($2), 32) AS __rank
+                                    FROM
+                                        users t1
+                                    INNER JOIN
+                                        (
+                                            SELECT
+                                                s1.user_id, (coalesce(s1.interests, '') || ',' || coalesce(s2.interests, '')) AS interests
+                                            FROM
+                                                users_tags s1
+                                            LEFT JOIN
+                                                users_events_tags s2 ON s2.user_id = s1.user_id AND s2.event_id = $4
+                                        ) t2 ON t2.user_id = t1.id
+                                    INNER JOIN
+                                        users_info t3 ON t3.user_id = t1.id
+                                    LEFT JOIN
+                                        (
+                                            SELECT
+                                                r3.user_id, array_agg(r3.alias) AS roles
+                                            FROM
+                                                (
+                                                    SELECT
+                                                        r1.user_id, r2.alias
+                                                    FROM
+                                                        users_roles r1
+                                                    INNER JOIN
+                                                        roles r2 ON r2.id = r1.role_id
+                                                ) r3
+                                            GROUP BY
+                                                r3.user_id
+                                        ) t4 ON t4.user_id = t1.id
+                                    LEFT JOIN
+                                        avatars t8 ON t8.owner_id = t1.id AND t8.active IS TRUE
+                                    WHERE
+                                        t1.id = ANY($3) AND
+                                        t1.active IS TRUE AND
+                                        to_tsvector(t2.interests) @@ to_tsquery(${i})"""
+            i = 1
+            query_parts = []
+            args = []
+            query1 = ' | '.join([ re.sub(r'\s+', ' & ', t.strip()) for t in (self.interests + ',' + self_tags['interests']).split(',') if t ])
+            #print(query1)
+            query2 = ' | '.join([ re.sub(r'\s+', ' & ', t.strip()) for t in (self.tags + ',' + self_tags['tags']).split(',') if t ])
+            #print(query2)
+            query_parts.extend([ query_tags.format(i = 1), query_interests.format(i = 2) ])
+            args.extend([ query1, query2, users_ids, event_id ])
+            i = 5
+            query_condition = """u.id <> ${i} AND
+                        u.id NOT IN (
+                            SELECT contact_id FROM users_contacts WHERE user_id = ${i}
+                        )"""
+            query_condition = query_condition.format(i = i)
+            args.append(self.id)
+            i += 1
+            data = await api.pg.club.fetch(
+                """SELECT
+                        id, name, company, position, status, link_telegram, tags, search, offer, avatar_hash, t5.amount AS helpful, count(*) OVER() AS amount
+                    FROM
+                        (
+                            SELECT * FROM
+                                (""" + ' UNION ALL '.join(query_parts) + """
+                                ) d
+                        ) u
+                    LEFT JOIN
+                    (
+                        SELECT author_id, count(id) AS amount FROM posts WHERE helpful IS TRUE GROUP BY author_id
+                    ) t5 ON t5.author_id = u.id
+                    WHERE """ + query_condition,
+                *args
+            )
+            return [ dict(item) | { 'online': check_online_by_id(item['id']) } for item in data ]
+        return []
+
 
     ################################################################
     async def add_contact(self, contact_id):
@@ -1890,7 +2024,7 @@ class User:
                         comment_time = EXCLUDED.comment_time""",
                 self.id, stage_id, value, author_id
             )
-        if field == 'time_control' and stage_id != 4 and stage_id != 5:
+        if field == 'time_control':
             await api.pg.club.execute(
                 """INSERT INTO
                         users_memberships (user_id, stage_id, time_control)
@@ -2031,6 +2165,25 @@ class User:
                 if data:
                     clients_ids.extend(data)
         return clients_ids
+
+
+    ################################################################
+    async def update_event_tags(self, event_id, tags, interests):
+        api = get_api_context()
+        tags_new = ','.join(list(set([ t for t in re.split(r'\s*,\s*', tags.strip()) if t ])))
+        interests_new = ','.join(list(set([ t for t in re.split(r'\s*,\s*', interests.strip()) if t ])))
+        await api.pg.club.execute(
+            """INSERT INTO
+                    users_events_tags (user_id, event_id, tags, interests)
+                VALUES
+                    ($1, $2, $3, $4)
+                ON CONFLICT
+                    (user_id, event_id)
+                DO UPDATE SET
+                    tags = EXCLUDED.tags,
+                    interests = EXCLUDED.interests""",
+            self.id, event_id, tags_new, interests_new
+        )
 
 
 

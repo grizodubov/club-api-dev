@@ -422,6 +422,8 @@ async def get_participants_with_avatars(events_ids):
                     'avatar_hash', t5.hash,
                     'tags', coalesce(t3.tags, ''),
                     'interests', coalesce(t3.interests, ''),
+                    'tags_event', coalesce(t6.tags, ''),
+                    'interests_event', coalesce(t6.interests, ''),
                     'community_manager_id', t2.community_manager_id,
                     'community_manager', coalesce(t4.name, '')
                 )) AS participants
@@ -431,6 +433,8 @@ async def get_participants_with_avatars(events_ids):
                 users t2 ON t2.id = t1.user_id
             INNER JOIN
                 users_tags t3 ON t3.user_id = t2.id
+            LEFT JOIN
+                users_events_tags t6 ON t6.user_id = t2.id AND t6.event_id = t1.event_id
             LEFT JOIN
                 users t4 ON t4.id = t2.community_manager_id
             LEFT JOIN

@@ -2013,14 +2013,17 @@ async def manager_user_membership_stage_update(request):
                     if request.params['stage_id'] == 0 and request.path_params['field'] == 'active' and request.params['value'] == 'true':
                         if current_stage_id != 0:
                             create_notifications('return_to_agent', request.user.id, user.id, {})
-                    await user.membership_stage_update(
-                        stage_id = request.params['stage_id'],
-                        field = request.path_params['field'], 
-                        value = request.params['value'],
-                        author_id = request.user.id,
-                    )
-                    dispatch('user_update', request)
-                    return OrjsonResponse({})
+                    if (request.path_params['field'] != 'time_control' or (request.params['stage_id'] != 4 and request.params['stage_id'] != 5) or request.user.check_roles({ 'admin', 'chief' })):
+                        await user.membership_stage_update(
+                            stage_id = request.params['stage_id'],
+                            field = request.path_params['field'], 
+                            value = request.params['value'],
+                            author_id = request.user.id,
+                        )
+                        dispatch('user_update', request)
+                        return OrjsonResponse({})
+                    else:
+                        return err(403, 'Нет доступа')
                 else:
                     return err(403, 'Нет доступа')
             else:

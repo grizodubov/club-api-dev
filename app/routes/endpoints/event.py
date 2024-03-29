@@ -28,8 +28,8 @@ def routes():
         Route('/m/event/user/del', moderator_event_user_del, methods = [ 'POST' ]),
 
         Route('/ma/event/user/list', manager_event_user_list, methods = [ 'POST' ]),
-        Route('/ma/event/user/suggestions', manager_event_user_suggestions, methods = [ 'POST' ]),
         Route('/ma/event/list', manager_event_list, methods = [ 'POST' ]),
+        Route('/ma/event/user/tags/update', manager_event_user_tags_update, methods = [ 'POST' ]),
     ]
 
 
@@ -255,17 +255,25 @@ MODELS = {
             'type': 'bool',
         },
     },
-    'manager_event_user_suggestions': {
-        'event_id': {
-            'required': True,
-            'type': 'int',
-            'value_min': 1,
-        },
+    'manager_event_user_tags_update': {
         'user_id': {
             'required': True,
             'type': 'int',
             'value_min': 1,
         },
+        'event_id': {
+            'required': True,
+            'type': 'int',
+            'value_min': 1,
+        },
+        'tags': {
+			'required': True,
+			'type': 'str',
+		},
+        'interests': {
+			'required': True,
+			'type': 'str',
+		},
     },
 }
 
@@ -333,15 +341,12 @@ async def event_info(request):
                             temp['position'] = ''
                             temp['link_telegram'] = ''
                         residents.append(temp)
-                suggestions = await request.user.get_suggestions(
-                    id = None,
-                    filter = None,
-                    today_offset = None,
-                    from_id = None,
+                suggestions = await request.user.get_event_suggestions(
+                    event_id = event.id,
+                    users_ids = [ p['id'] for p in event_participants ],
                 )
-                participants_ids = [ p['id'] for p in event_participants ]
                 return OrjsonResponse({
-                    'event': info | { 'participants': event_participants, 'suggestions': [ s for s in suggestions if s['id'] in participants_ids ] },
+                    'event': info | { 'participants': event_participants, 'suggestions': suggestions },
                     'residents': residents,
                 })
             else:
@@ -582,45 +587,6 @@ async def manager_event_user_list(request):
 
 
 ################################################################
-async def manager_event_user_suggestions(request):
-    if request.user.id and request.user.check_roles({ 'admin', 'moderator', 'manager', 'chief', 'community manager' }):
-        if validate(request.params, MODELS['manager_event_user_suggestions']):
-            clients_ids = await request.user.get_allowed_clients_ids()
-            if clients_ids is None or request.params['user_id'] in clients_ids:
-                user = User()
-                await user.set(id = request.params['user_id'], active = None)
-                if user.id:
-                    event = Event()
-                    await event.set(id = request.params['event_id'])
-                    if event.id:
-                        participants = await get_participants_with_avatars([ event.id ])
-                        result = []
-                        if participants and participants[str(event.id)]:
-                            suggestions = await user.get_suggestions(
-                                id = None,
-                                filter = None,
-                                today_offset = None,
-                                from_id = None,
-                            )
-                            participants_ids = [ p['id'] for p in participants[str(event.id)] ]
-                            result = [ s for s in suggestions if s['id'] in participants_ids ]
-                        return OrjsonResponse({
-                            'suggestions': result,
-                        })
-                    else:
-                        return err(404, 'Событие не найдено')
-                else:
-                    return err(404, 'Пользователь не найден')
-            else:
-                return err(403, 'Нет доступа')
-        else:
-            return err(400, 'Неверный запрос')
-    else:
-        return err(403, 'Нет доступа')
-
-
-
-################################################################
 async def manager_event_list(request):
     if request.user.id and request.user.check_roles({ 'admin', 'moderator', 'manager', 'chief', 'community manager' }):
         events = await get_future_events()
@@ -643,5 +609,32 @@ async def manager_event_list(request):
             'events': events,
             'participants': participants_filtered,
         })
+    else:
+        return err(403, 'Нет доступа')
+
+
+
+################################################################
+async def manager_event_user_tags_update(request):
+    if request.user.id and request.user.check_roles({ 'admin', 'moderator', 'manager', 'chief', 'community manager' }):
+        if validate(request.params, MODELS['manager_event_user_tags_update']):
+            user = User()
+            await user.set(id = request.params['user_id'], active = None)
+            if user.id:
+                if request.user.check_roles({ 'admin', 'moderator', 'manager', 'chief' }) or user.community_manager_id == request.user.id:
+                    event = Event()
+                    await event.set(id = request.params['event_id'])
+                    if event.id:
+                        await user.update_event_tags(event_id = event.id, tags = request.params['tags'], interests = request.params['interests'])
+                        dispatch('event_update', request)
+                        return OrjsonResponse({})
+                    else:
+                        return err(404, 'Событие не найдено')
+                else:
+                    return err(403, 'Нет доступа')
+            else:
+                return err(404, 'Пользователь не найден')
+        else:
+            return err(400, 'Неверный запрос')
     else:
         return err(403, 'Нет доступа')
