@@ -2148,7 +2148,9 @@ class User:
                     args.append(agents_ids)
                     i += 1
             if query:
-                query.append("""t3.alias = 'client'""")
+                query_text = ' OR '.join(query)
+                if query_text:
+                    query_text = ' AND (' + query_text + ')'
                 data = await api.pg.club.fetchval(
                     """SELECT
                             array_agg(t1.id)
@@ -2159,7 +2161,7 @@ class User:
                         INNER JOIN
                             roles t3 ON t3.id = t2.role_id
                         WHERE
-                            """ + ' AND '.join(query),
+                            t3.alias = 'client'""" + query_text,
                     *args
                 )
                 if data:

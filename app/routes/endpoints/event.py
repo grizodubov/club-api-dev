@@ -596,15 +596,13 @@ async def manager_event_list(request):
         if ids:
             participants = await get_participants_with_avatars(ids)
         participants_filtered = {}
-        if clients_ids is None:
-            participants_filtered = participants
-        else:
-            if participants:
-                for k, v in participants.items():
-                    if v:
-                        temp = [ u['id'] for u in v if u['id'] in clients_ids ]
-                        if temp:
-                            participants_filtered[k] = temp
+        if participants:
+            for k, v in participants.items():
+                participants_filtered[k] = []
+                for u in v:
+                    temp = { 'if_allowed_client': True if clients_ids is None or u['id'] in clients_ids else False }
+                    participants_filtered[k].append(u | temp)
+                participants_filtered[k].sort(key = lambda x: x['name'])
         return OrjsonResponse({
             'events': events,
             'participants': participants_filtered,
