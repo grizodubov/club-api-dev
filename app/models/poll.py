@@ -115,6 +115,12 @@ class Poll:
 
 
     ################################################################
+    def show_with_score(self):
+        filter = { 'time_create', 'time_update' }
+        return { k: v for k, v in self.__dict__.items() if not k.startswith('_') and k not in filter }
+
+
+    ################################################################
     def dump(self):
         return { k: v for k, v in self.__dict__.items() }
 
@@ -270,6 +276,11 @@ class Poll:
                 VALUES """ + ', '.join(query),
             *args
         )
+        if self.score:
+            await api.pg.club.execute( 
+                """UPDATE users SET score = score + $1 WHERE id = $2""",
+                self.score, user_id
+            )
 
 
     ################################################################

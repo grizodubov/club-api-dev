@@ -97,6 +97,10 @@ MODELS = {
 			'required': True,
 			'type': 'bool',
 		},
+        'score': {
+			'required': True,
+			'type': 'int',
+		},
 	},
     'moderator_poll_create': {
         'active': {
@@ -146,6 +150,10 @@ MODELS = {
         'many': {
 			'required': True,
 			'type': 'bool',
+		},
+        'score': {
+			'required': True,
+			'type': 'int',
 		},
 	},
     'moderator_poll_log': {
@@ -206,7 +214,7 @@ async def moderator_poll_list(request):
         polls = await Poll.search()   
         result = []
         for poll in polls:
-            result.append(poll.show())
+            result.append(poll.show_with_score())
         select = await get_data_for_select()
         return OrjsonResponse({
             'polls': result,
@@ -328,7 +336,7 @@ async def moderator_poll_log(request):
             if poll.id:
                 log = await poll.get_votes_log()
                 return OrjsonResponse({
-                    'poll': poll.show(),
+                    'poll': poll.show_with_score(),
                     'log': log,
                 })
             else:
