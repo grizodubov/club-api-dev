@@ -45,6 +45,7 @@ class User:
         self.tags = ''
         self.interests = ''
         self.rating = 0
+        self.score = 0
         self.roles = []
         self._password = ''
         self.avatar_hash = None
@@ -103,6 +104,7 @@ class User:
                     t1.active,
                     t1.community_manager_id,
                     t1.agent_id,
+                    t1.score,
                     t1.curator_id,
                     cu.curators,
                     coalesce(t9.name, '') AS agent_name,
@@ -251,6 +253,7 @@ class User:
                     t1.active,
                     t1.community_manager_id,
                     t1.agent_id,
+                    t1.score,
                     t1.curator_id,
                     cu.curators,
                     coalesce(t9.name, '') AS agent_name,
@@ -388,6 +391,7 @@ class User:
                     t1.active,
                     t1.community_manager_id,
                     t1.agent_id,
+                    t1.score,
                     t1.curator_id,
                     cu.curators,
                     coalesce(t9.name, '') AS agent_name,
@@ -518,7 +522,7 @@ class User:
 
     ################################################################
     def show(self):
-        filter = { 'time_create', 'time_update', 'community_manager_id', 'agent_id', 'curator_id', 'curators', 'agent_name', 'login', 'email', 'phone', 'inn', 'roles', 'annual', 'annual_privacy', 'employees', 'employees_privacy', 'birthdate', 'birthdate_privacy' }
+        filter = { 'time_create', 'time_update', 'community_manager_id', 'agent_id', 'score', 'curator_id', 'curators', 'agent_name', 'login', 'email', 'phone', 'inn', 'roles', 'annual', 'annual_privacy', 'employees', 'employees_privacy', 'birthdate', 'birthdate_privacy' }
         data = { k: v for k, v in self.__dict__.items() if not k.startswith('_') and k not in filter }
         # annual
         if self.annual_privacy == 'показывать':
@@ -608,6 +612,7 @@ class User:
                         t1.active,
                         t1.community_manager_id,
                         t1.agent_id,
+                        t1.score,
                         t1.curator_id,
                         cu.curators,
                         coalesce(t9.name, '') AS agent_name,
@@ -820,6 +825,7 @@ class User:
                             t1.active,
                             t1.community_manager_id,
                             t1.agent_id,
+                            t1.score,
                             t1.curator_id,
                             cu.curators,
                             coalesce(t9.name, '') AS agent_name,
@@ -887,6 +893,7 @@ class User:
                         t1.active,
                         t1.community_manager_id,
                         t1.agent_id,
+                        t1.score,
                         t1.curator_id,
                         cu.curators,
                         coalesce(t9.name, '') AS agent_name,
