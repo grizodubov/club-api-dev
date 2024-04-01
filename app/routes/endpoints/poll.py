@@ -160,7 +160,7 @@ MODELS = {
 		'id': {
 			'required': True,
 			'type': 'int',
-            'value_min': 1,
+            'value_min': 0,
 		},
 	},
 }
@@ -296,6 +296,7 @@ async def moderator_poll_create(request):
                 closed = request.params['closed'],
                 wide = request.params['wide'],
                 many = request.params['many'],
+                score = request.params['score'],
             )
             dispatch('poll_create', request)
             # notify
