@@ -285,7 +285,7 @@ async def community_list(request):
             for k, v in temp['votes'].items():
                 if request.user.id in v:
                     temp['answered'] = True
-                votes[k] = len(v)
+                votes[k] = len(v) if temp['show_results'] else 0
                 if votes[k] > temp['votes_max']:
                     temp['votes_max'] = votes[k]
             temp['votes'] = votes

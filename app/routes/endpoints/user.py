@@ -8,7 +8,7 @@ from app.core.request import err
 from app.core.response import OrjsonResponse
 from app.core.event import dispatch
 from app.utils.validate import validate
-from app.models.user import User, get_residents, get_residents_contacts, get_community_managers, get_telegram_pin, get_last_activity, get_users_memberships, get_agents_list, get_agents
+from app.models.user import User, get_residents, get_speakers, get_residents_contacts, get_community_managers, get_telegram_pin, get_last_activity, get_users_memberships, get_agents_list, get_agents
 from app.models.event import Event, get_events_confirmations_pendings
 from app.models.item import Item
 from app.models.note import get_last_notes_times
@@ -44,6 +44,7 @@ def routes():
         Route('/m/user/create', moderator_user_create, methods = [ 'POST' ]),
 
         Route('/new/user/residents', user_residents, methods = [ 'POST' ]),
+        Route('/new/user/resident/{id:int}', new_user_resident, methods = [ 'POST' ]),
         Route('/new/user/{id:int}/info', new_user_info, methods = [ 'POST' ]),
         Route('/new/user/update', new_user_update, methods = [ 'POST' ]),
 
@@ -365,6 +366,13 @@ MODELS = {
             'list': True,
             'null': True,
             'default': None,
+        },
+    },
+    #
+    'new_user_resident': {
+        'id': {
+            'required': False,
+			'type': 'int',
         },
     },
     # new
@@ -1266,7 +1274,7 @@ async def user_contacts(request):
 ################################################################
 async def user_recommendations(request):
     if request.user.id:
-        result = await request.user.get_recommendations()
+        result = await request.user.get_recommendations(amount = 3)
         ### remove data for roles
         roles = set(request.user.roles)
         roles.discard('applicant')
@@ -1282,7 +1290,7 @@ async def user_recommendations(request):
                     item['company'] = ''
                     item['position'] = ''
                     item['link_telegram'] = ''
-        return OrjsonResponse(result)
+        return OrjsonResponse(result | { 'self_tags': request.user.tags, 'self_interests': request.user.interests })
     else:
         return err(403, 'Нет доступа')
 
@@ -1613,6 +1621,50 @@ async def user_residents(request):
     if request.user.id:
         if validate(request.path_params, MODELS['user_residents']):
             result = await get_residents(users_ids = request.params['users_ids'] if 'users_ids' in request.params and request.params['users_ids'] else None)
+            # result2 = await get_speakers(None)
+            contacts = await get_residents_contacts(
+                user_id = request.user.id,
+                user_status = request.user.status,
+                contacts_ids = [ item.id for item in result ]
+            )
+            ### remove data for roles
+            roles = set(request.user.roles)
+            roles.discard('applicant')
+            roles.discard('guest')
+            residents = []
+            for item in result:
+                temp = item.show()
+                if not roles and request.user.id != temp['id']:
+                    temp['company'] = ''
+                    temp['position'] = ''
+                    temp['link_telegram'] = ''
+                residents.append(temp)
+            # speakers = []
+            # for item in result2:
+            #     temp = item.show()
+            #     if not roles and request.user.id != temp['id']:
+            #         temp['company'] = ''
+            #         temp['position'] = ''
+            #         temp['link_telegram'] = ''
+            #     speakers.append(temp)
+            return OrjsonResponse({
+                'residents': residents,
+                'contacts': contacts,
+                # 'speakers': speakers,
+            })
+        else:
+            return err(400, 'Неверный запрос')
+    else:
+        return err(403, 'Нет доступа')
+
+
+
+################################################################
+async def new_user_resident(request):
+    if request.user.id:
+        if validate(request.path_params, MODELS['new_user_resident']):
+            result = await get_residents(users_ids = [ request.path_params['id'], request.user.id ])
+            result.extend(await get_speakers(users_ids = [ request.path_params['id'], request.user.id ]))
             contacts = await get_residents_contacts(
                 user_id = request.user.id,
                 user_status = request.user.status,

@@ -970,6 +970,52 @@ class User:
 
 
     ################################################################
+    async def set_change_code(self, type, code):
+        api = get_api_context()
+        k = '_AUTH_' + type + '_' + str(self.id) + '_' + code
+        await api.redis.data.exec('SET', k, 1, ex = 300)
+
+
+    ################################################################
+    async def check_change_code(self, type, code):
+        api = get_api_context()
+        k = '_AUTH_' + type + '_' + str(self.id) + '_' + code
+        check = await api.redis.data.exec('GET', k)
+        # print('CHECK', check)
+        if check:
+            await api.redis.data.exec('DELETE', k)
+            return True
+        return False
+
+
+    ################################################################
+    async def update_email(self, email):
+        api = get_api_context()
+        await api.pg.club.execute(
+            """UPDATE users SET email = $1 WHERE id = $2""",
+            email, self.id
+        )
+
+
+    ################################################################
+    async def update_phone(self, phone):
+        api = get_api_context()
+        await api.pg.club.execute(
+            """UPDATE users SET phone = $1 WHERE id = $2""",
+            phone, self.id
+        )
+
+
+    ################################################################
+    async def update_password(self, password):
+        api = get_api_context()
+        await api.pg.club.execute(
+            """UPDATE users SET password = $1 WHERE id = $2""",
+            password, self.id
+        )
+
+
+    ################################################################
     async def get_unread_messages_amount(self):
         api = get_api_context()
         amount = await api.pg.club.fetchval(
@@ -2238,6 +2284,78 @@ async def get_residents(users_ids = None):
     query = ''
     args = []
     if users_ids:
+        query = """t1.id = ANY($1)"""
+        args.append(users_ids)
+    else:
+        query = """('client' = ANY(t4.roles) OR t1.id = 10004) AND t1.active IS TRUE"""
+    data = await api.pg.club.fetch(
+        """SELECT
+                t1.id, t1.time_create, t1.time_update,
+                t1.name, t1.login, t1.email, t1.phone,
+                t1.active,
+                t3.company, t3.position, t3.inn, t3.detail,
+                t3.status,
+                t3.link_telegram,
+                t8.hash AS avatar_hash,
+                t3.annual, t3.annual_privacy,
+                t3.employees, t3.employees_privacy,
+                t3.catalog, t3.city, t3.hobby,
+                to_char(t3.birthdate, 'DD/MM/YYYY') AS birthdate, t3.birthdate_privacy,
+                t3.experience,
+                coalesce(t2.tags, '') AS tags,
+                coalesce(t2.interests, '') AS interests,
+                coalesce(t4.roles, '{}'::text[]) AS roles,
+                coalesce(t5.amount, 0) AS rating,
+                t1.password AS _password
+            FROM
+                users t1
+            INNER JOIN
+                users_tags t2 ON t2.user_id = t1.id
+            INNER JOIN
+                users_info t3 ON t3.user_id = t1.id
+            LEFT JOIN
+                (
+                    SELECT
+                        r3.user_id, array_agg(r3.alias) AS roles
+                    FROM
+                        (
+                            SELECT
+                                r1.user_id, r2.alias
+                            FROM
+                                users_roles r1
+                            INNER JOIN
+                                roles r2 ON r2.id = r1.role_id
+                        ) r3
+                    GROUP BY
+                        r3.user_id
+                ) t4 ON t4.user_id = t1.id
+            LEFT JOIN
+                (
+                    SELECT author_id, count(id) AS amount FROM posts WHERE helpful IS TRUE GROUP BY author_id
+                ) t5 ON t5.author_id = t1.id
+            LEFT JOIN
+                avatars t8 ON t8.owner_id = t1.id AND t8.active IS TRUE
+            WHERE
+                """ + query + """
+            ORDER BY t1.name""",
+        *args
+    )
+    for row in data:
+        item = User()
+        item.__dict__ = dict(row)
+        item.check_online()
+        result.append(item)
+    return result
+
+
+
+################################################################
+async def get_speakers(users_ids = None):
+    api = get_api_context()
+    result = []
+    query = ''
+    args = []
+    if users_ids:
         query = ' AND t1.id = ANY($1)'
         args.append(users_ids)
     data = await api.pg.club.fetch(
@@ -2288,7 +2406,7 @@ async def get_residents(users_ids = None):
             LEFT JOIN
                 avatars t8 ON t8.owner_id = t1.id AND t8.active IS TRUE
             WHERE
-                ('client' = ANY(t4.roles) OR t1.id = 10004)""" + query + """
+                ('speaker' = ANY(t4.roles) OR t1.id = 10004)""" + query + """
             ORDER BY t1.name""",
         *args
     )

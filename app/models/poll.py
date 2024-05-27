@@ -29,6 +29,7 @@ class Poll:
         self.tags = ''
         self.score = 0
         self.votes = {}
+        self.show_results = False
 
 
     ################################################################
@@ -58,7 +59,7 @@ class Poll:
             query = ' WHERE ' + ' AND '.join(conditions)
         data = await api.pg.club.fetch(
             """SELECT
-                    t1.id, t1.time_create, t1.time_update, t1.many,
+                    t1.id, t1.time_create, t1.time_update, t1.many, t1.show_results,
                     t1.community_id, t1.community_id_deleted, t4.name AS community_name,
                     t1.text, t1.answers, t1.active, t1.closed, t1.wide, t1.rating, t1.rating_format, t1.score,
                     t1.tags, coalesce(t2.votes, '{}'::jsonb)::jsonb || coalesce(t3.votes, '{}'::jsonb)::jsonb AS votes
@@ -131,7 +132,7 @@ class Poll:
         if id:
             data = await api.pg.club.fetchrow(
                 """SELECT
-                    t1.id, t1.time_create, t1.time_update, t1.many,
+                    t1.id, t1.time_create, t1.time_update, t1.many, t1.show_results,
                     t1.community_id, t1.community_id_deleted, t4.name AS community_name,
                     t1.text, t1.answers, t1.active, t1.closed, t1.wide, t1.rating, t1.rating_format, t1.score,
                     t1.tags, coalesce(t2.votes, '{}'::jsonb)::jsonb || coalesce(t3.votes, '{}'::jsonb)::jsonb AS votes
@@ -182,9 +183,9 @@ class Poll:
             temp = ','.join([ t for t in re.split(r'\s*,\s*', kwargs['tags'].strip()) if t ])
         id = await api.pg.club.fetchval(
             """INSERT INTO
-                    polls (community_id, text, answers, active, closed, tags, wide, rating, rating_format, many, score)
+                    polls (community_id, text, answers, active, closed, tags, wide, rating, rating_format, many, score, show_results)
                 VALUES
-                    ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+                    ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
                 RETURNING
                     id""",
             kwargs['community_id'] if not kwargs['rating'] else None,
@@ -198,6 +199,7 @@ class Poll:
             kwargs['rating_format'] if kwargs['rating'] else None,
             kwargs['many'],
             kwargs['score'],
+            kwargs['show_results'],
         )
         await self.set(id = id)
 
@@ -209,7 +211,7 @@ class Poll:
         cursor = 2
         query = []
         args = []
-        for k in { 'active', 'closed', 'text', 'tags', 'answers', 'community_id', 'wide', 'rating', 'rating_format', 'many', 'score' }:
+        for k in { 'active', 'closed', 'text', 'tags', 'answers', 'community_id', 'wide', 'rating', 'rating_format', 'many', 'score', 'show_results' }:
             if k in kwargs:
                 query.append(k + ' = $' + str(cursor))
                 if k == 'tags':
@@ -317,7 +319,7 @@ async def get_user_polls_recommendations(user):
     api = get_api_context()
     data = await api.pg.club.fetch(
         """SELECT
-                    t1.id, t1.time_create, t1.time_update, t1.many,
+                    t1.id, t1.time_create, t1.time_update, t1.many, t1.show_results,
                     t1.community_id, t1.community_id_deleted, t4.name AS community_name,
                     t1.text, t1.answers, t1.active, t1.closed, t1.wide, t1.rating, t1.rating_format, t1.score,
                     t1.tags, coalesce(t2.votes, '{}'::jsonb)::jsonb || coalesce(t3.votes, '{}'::jsonb)::jsonb AS votes

@@ -10,6 +10,7 @@ from app.models.user import User
 from app.helpers.telegram import send_telegram_message
 from app.helpers.email import send_email
 from app.helpers.mobile import send_mobile_message
+from app.helpers.push import send_push_message
 
 
 
@@ -263,6 +264,7 @@ async def process_poll_create(api, user_id, item_id, params):
         'poll': 'Добавлен новый опрос в сообщество «{{ community.name }}»',
         'sms': 'Примите участие в жизни клуба и пройдите опрос: "{{ question }}". Ваше мнение поможет нам стать лучше! Подробности в личном кабинете.',
         'email': 'Примите участие в жизни клуба и пройдите опрос: "{{ question }}". Ваше мнение поможет нам стать лучше! Подробности в личном кабинете.',
+        'push': 'Примите участие в жизни клуба и пройдите опрос: "{{ question }}".',
     }
     community = Community()
     await community.set(id = params['community_id'])
@@ -276,7 +278,7 @@ async def process_poll_create(api, user_id, item_id, params):
                 INNER JOIN
                     users_info t3 ON t3.user_id = t1.id
                 WHERE
-                    t1.id >= 10000"""
+                    t1.active IS TRUE AND t1.id >= 10000"""
         )
     elif params['tags']:
         query = ' | '.join([ re.sub(r'\s+', ' & ', t.strip()) for t in tags.split(',') ])
@@ -290,57 +292,48 @@ async def process_poll_create(api, user_id, item_id, params):
                 INNER JOIN
                     users_info t3 ON t3.user_id = t1.id
                 WHERE
-                    to_tsvector(t2.tags) @@ to_tsquery($1) OR
-                    to_tsvector(t2.interests) @@ to_tsquery($1)""",
+                    (
+                        (
+                            to_tsvector(t2.tags) @@ to_tsquery($1) OR
+                            to_tsvector(t2.interests) @@ to_tsquery($1)
+                        ) OR TRUE
+                    )""",
             query
         )
     recepients_ids = [ item['id'] for item in result ]
     telegram_chats = [ (item['id'], item['id_telegram']) for item in result if item['id_telegram'] ]
     emails = [ item['email'] for item in result ]
     phones = [ item['phone'] for item in result ]
+    print(recepients_ids)
     #emails = [ 'lebedev@trade.su' ]
     #phones = [ '+79036162847' ]
     if recepients_ids:
         link = '/' + str(community.id)
-        if community.parent_id:
-            link = '/' + str(community.parent_id) + link
-        else:
-            link = '/0' + link
+        # if community.parent_id:
+        #     link = '/' + str(community.parent_id) + link
+        # else:
+        #     link = '/0' + link
         link = '/communities' + link# + '?sbt=___SUBTOKEN___'
         link_html = '<a href="https://social.clubgermes.ru' + link + '">Перейти в клуб</a>'
-
-        if phones:
-            body = Template(TEMPLATES['sms'])
-            message  = body.render(
-                question = params['text']
-            )
-            for t in phones:
-                send_mobile_message(api.stream_mobile, t, message + ' https://social.clubgermes.ru' + link, {})
-        if emails:
-            body = Template(TEMPLATES['email'])
-            message  = body.render(
-                question = params['text']
-            )
-            for t in emails:
-                send_email(api.stream_email, t, 'Клуб Гермес: Новый опрос', message + '<br />' + link_html, {})
-
-        # body = Template(TEMPLATES['poll'])
-        # message  = body.render(
-        #     community = {
-        #         'name': community.name,
-        #     },
-        # )
-        # #print(message)
-        # await api.pg.club.execute(
-        #     """INSERT INTO notifications (message, link, item_id, recepients) VALUES ($1, $2, $3, $4)""",
-        #     message, link, item_id, recepients_ids
-        # )
-        # send_notifications(recepients_ids)
-        # for chat in telegram_chats:
-        #     subtoken = await set_subtoken(api, chat[0])
-        #     link_html = link_html.replace('___SUBTOKEN___', subtoken)
-        #     print(chat[0], chat[1], message + ' ' + link_html)
-        #     send_telegram_message(api.stream_telegram, chat[1], message + ' ' + link_html)
+        # if phones:
+        #     body = Template(TEMPLATES['sms'])
+        #     message  = body.render(
+        #         question = params['text']
+        #     )
+        #     for t in phones:
+        #         send_mobile_message(api.stream_mobile, t, message + ' https://social.clubgermes.ru' + link, {})
+        # if emails:
+        #     body = Template(TEMPLATES['email'])
+        #     message  = body.render(
+        #         question = params['text']
+        #     )
+        #     for t in emails:
+        #         send_email(api.stream_email, t, 'Клуб Гермес: Новый опрос', message + '<br />' + link_html, {})
+        body = Template(TEMPLATES['push'])
+        message = body.render(
+            question = params['text'][0:30] + '...'
+        )
+        send_push_message(api, recepients_ids, 'Новый опрос', message, link)
 
 
 

@@ -1,3 +1,6 @@
+from datetime import datetime
+import pytz
+
 from starlette.routing import Route
 
 from app.core.request import err
@@ -101,6 +104,10 @@ MODELS = {
 			'required': True,
 			'type': 'int',
 		},
+        'show_results': {
+			'required': True,
+			'type': 'bool',
+		},
 	},
     'moderator_poll_create': {
         'active': {
@@ -155,6 +162,10 @@ MODELS = {
 			'required': True,
 			'type': 'int',
 		},
+        'show_results': {
+			'required': True,
+			'type': 'bool',
+		},
 	},
     'moderator_poll_log': {
 		'id': {
@@ -179,6 +190,20 @@ async def poll_add_vote(request):
                     check = False
                     break
             if poll.id and check and poll.closed is False and poll.active is True:
+                votes = await poll.get_votes_log()
+                user_vote_time = None
+                for vote in votes:
+                    if vote['user_id'] == request.user.id:
+                        if user_vote_time is None or vote['time'] > user_vote_time:
+                            user_vote_time = vote['time']
+                if user_vote_time:
+                    if poll.rating_format == 'Каждый месяц':
+                        dt_now = datetime.now(tz = pytz.utc)
+                        dt = dt_now.timestamp() * 1000 - user_vote_time
+                        if dt < 1728000000:
+                            return err(404, 'Голос уже принят')
+                    else:
+                        return err(404, 'Голос уже принят')
                 await poll.add_vote(request.user.id, request.params['answer'])
                 dispatch('poll_update', request)
                 return OrjsonResponse({
@@ -257,6 +282,7 @@ async def moderator_poll_update(request):
                         'active': poll.active,
                         'closed': poll.closed,
                         'wide': poll.wide,
+                        'show_results': poll.show_results,
                         'tags': poll.tags,
                         'community_id': poll.community_id,
                         'community_name': poll.community_name,
@@ -296,7 +322,6 @@ async def moderator_poll_create(request):
                 closed = request.params['closed'],
                 wide = request.params['wide'],
                 many = request.params['many'],
-                score = request.params['score'],
             )
             dispatch('poll_create', request)
             # notify
@@ -311,6 +336,7 @@ async def moderator_poll_create(request):
                     'tags': poll.tags,
                     'community_id': poll.community_id,
                     'community_name': poll.community_name,
+                    'show_results': poll.show_results,
                     'text': poll.text,
                     'answers': poll.answers,
                 })

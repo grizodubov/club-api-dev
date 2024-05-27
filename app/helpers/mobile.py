@@ -29,10 +29,10 @@ async def send(phone, message):
             async with session.post('https://a2p-sms-https.beeline.ru/proto/http/',
                 data = {
                     'user': '1684151',
-                    'pass': '@H6HLSO4m',
+                    'pass': 'D9ndf@Cad',
                     'gzip': 'none',
                     'action': 'post_sms',
-                    'sender': 'digitender',
+                    'sender': 'clubgermes',
                     'message': message,
                     'target': phone,
                 },

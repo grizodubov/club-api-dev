@@ -209,6 +209,22 @@ class Session:
         self.user_id = user_id
 
 
+    ################################################################
+    async def register_device(self, device_id, device_info, device_token):
+        api = get_api_context()
+        await api.pg.club.execute(
+            """UPDATE
+                    sessions
+                SET
+                   device_id = $2,
+                   device_info = $3,
+                   device_token = $4 
+                WHERE
+                    id = $1""",
+            self.id, device_id, device_info, device_token
+        )
+
+
 
 ####################################################################
 async def check_by_token(token):

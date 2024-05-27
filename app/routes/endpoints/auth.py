@@ -1,4 +1,5 @@
 import asyncio
+import orjson
 from datetime import datetime
 from random import randint
 from starlette.routing import Route
@@ -11,7 +12,7 @@ from app.models.user import User, validate_registration, validate_registration_n
 from app.models.session import check_by_token
 from app.helpers.email import send_email
 from app.helpers.mobile import send_mobile_message
-from app.helpers.templates import VERIFICATION_CODE
+from app.helpers.templates import VERIFICATION_CODE, CHANGE_EMAIL_CODE, CHANGE_MOBILE_CODE
 from app.models.item import Item
 from app.models.event import Event
 
@@ -39,9 +40,17 @@ def routes():
         Route('/new/validate', new_validate, methods = [ 'POST' ]),
         Route('/new/register', new_register, methods = [ 'POST' ]),
 
+        Route('/change/email', change_email, methods = [ 'POST' ]),
+        Route('/change/email/validate', change_email_validate, methods = [ 'POST' ]),
+        Route('/change/mobile', change_mobile, methods = [ 'POST' ]),
+        Route('/change/mobile/validate', change_mobile_validate, methods = [ 'POST' ]),
+        Route('/change/credentials', change_credentials, methods = [ 'POST' ]),
+
         Route('/man/login/mobile/validate', manager_login_mobile_validate, methods = [ 'POST' ]),
         Route('/man/login/email/validate', manager_login_email_validate, methods = [ 'POST' ]),
         Route('/man/login', manager_login, methods = [ 'POST' ]),
+
+        Route('/register/device', register_device, methods = [ 'POST' ]),
     ]
 
 
@@ -194,6 +203,58 @@ MODELS = {
 			'type': 'str',
             'length': 4,
             'pattern': r'^\d{4}$',
+		},
+	},
+	'change_email': {
+		'account': {
+			'required': True,
+			'type': 'str',
+            'length_min': 4,
+            'processing': lambda x: x.strip().lower(),
+		},
+	},
+	'change_email_validate': {
+		'account': {
+			'required': True,
+			'type': 'str',
+            'length_min': 4,
+            'processing': lambda x: x.strip().lower(),
+		},
+		'code': {
+			'required': True,
+			'type': 'str',
+            'length': 4,
+            'pattern': r'^\d{4}$',
+		},
+	},
+	'change_mobile': {
+		'account': {
+			'required': True,
+			'type': 'str',
+            'length_min': 4,
+            'processing': lambda x: x.strip().lower(),
+		},
+	},
+	'change_mobile_validate': {
+		'account': {
+			'required': True,
+			'type': 'str',
+            'length_min': 4,
+            'processing': lambda x: x.strip().lower(),
+		},
+		'code': {
+			'required': True,
+			'type': 'str',
+            'length': 4,
+            'pattern': r'^\d{4}$',
+		},
+	},
+	'change_credentials': {
+		'code': {
+			'required': True,
+			'type': 'str',
+            'length_min': 4,
+            'processing': lambda x: x.strip(),
 		},
 	},
     # moderator
@@ -363,6 +424,23 @@ MODELS = {
             'null': True,
 		},
 	},
+    'register_device': {
+		'device_id': {
+			'required': True,
+			'type': 'str',
+            'null': True,
+		},
+		'device_info': {
+			'required': True,
+			'type': 'str',
+            'null': True,
+		},
+		'device_token': {
+			'required': True,
+			'type': 'str',
+            'null': True,
+		},
+    },
 }
 
 
@@ -744,6 +822,7 @@ async def new_validate(request):
             email_code = email_code,
             phone_code = phone_code,
         )
+        print(email_code, phone_code)
         send_email(request.api.stream_email, request.params['email'], VERIFICATION_CODE['subject'], VERIFICATION_CODE['body'], { 'code': email_code })
         send_mobile_message(request.api.stream_mobile, request.params['phone'], VERIFICATION_CODE['message'], { 'code': phone_code })
         return OrjsonResponse({})
@@ -797,6 +876,104 @@ async def new_register(request):
             return err(403, 'Проверочный код не верен')
     else:
         return err(400, 'Не указан email')
+
+
+
+################################################################
+async def change_email(request):
+    await asyncio.sleep(.25)
+    if request.user.id:
+        if validate(request.params, MODELS['change_email']):
+            user_check = User()
+            if not await user_check.find(email = request.params['account']):
+                code = str(randint(1000, 9999))
+                await request.user.set_change_code(code = code, type = 'EMAIL')
+                #print(code)
+                send_email(request.api.stream_email, request.params['account'], CHANGE_EMAIL_CODE['subject'], CHANGE_EMAIL_CODE['body'], { 'code': code })
+                return OrjsonResponse({})
+            else:
+                return err(400, 'Email уже зарегистрирован')
+        else:
+            return err(400, 'Не указан email')
+    else:
+        return err(403, 'Нет доступа')
+
+
+
+################################################################
+async def change_email_validate(request):
+    await asyncio.sleep(.5)
+    if request.user.id:
+        if validate(request.params, MODELS['change_email_validate']):
+            user_check = User()
+            if not await user_check.find(email = request.params['account']):
+                if await request.user.check_change_code(code = request.params['code'], type = 'EMAIL'):
+                    await request.user.update_email(request.params['account'])
+                    return OrjsonResponse({})
+                else:
+                    return err(403, 'Код не верен')
+            else:
+                return err(400, 'Email уже зарегистрирован')
+        else:
+            return err(400, 'Не указан email')
+    else:
+        return err(403, 'Нет доступа')
+
+
+
+################################################################
+async def change_mobile(request):
+    await asyncio.sleep(.25)
+    if request.user.id:
+        if validate(request.params, MODELS['change_mobile']):
+            user_check = User()
+            if not await user_check.find(phone = request.params['account']):
+                code = str(randint(1000, 9999))
+                await request.user.set_change_code(code = code, type = 'MOBILE')
+                #print(code)
+                send_mobile_message(request.api.stream_mobile, request.params['account'], CHANGE_MOBILE_CODE['message'], { 'code': code })
+                return OrjsonResponse({})
+            else:
+                return err(400, 'Телефон уже зарегистрирован')
+        else:
+            return err(400, 'Не указан email')
+    else:
+        return err(403, 'Нет доступа')
+
+
+
+################################################################
+async def change_mobile_validate(request):
+    await asyncio.sleep(.5)
+    if request.user.id:
+        if validate(request.params, MODELS['change_mobile_validate']):
+            user_check = User()
+            if not await user_check.find(email = request.params['account']):
+                if await request.user.check_change_code(code = request.params['code'], type = 'MOBILE'):
+                    await request.user.update_phone(request.params['account'])
+                    return OrjsonResponse({})
+                else:
+                    return err(403, 'Код не верен')
+            else:
+                return err(400, 'Телефон уже зарегистрирован')
+        else:
+            return err(400, 'Не указан email')
+    else:
+        return err(403, 'Нет доступа')
+
+
+
+################################################################
+async def change_credentials(request):
+    await asyncio.sleep(.5)
+    if request.user.id:
+        if validate(request.params, MODELS['change_credentials']):
+            await request.user.update_password(request.params['code'])
+            return OrjsonResponse({})
+        else:
+            return err(400, 'Неверные данные')
+    else:
+        return err(403, 'Нет доступа')
 
 
 
@@ -863,4 +1040,21 @@ async def manager_login_mobile_validate(request):
         else:
             return err(404, 'Пользователь не найден')
     else:
-        return err(400, 'Не указан email')
+        return err(400, 'Не указан телефон')
+
+
+
+################################################################
+async def register_device(request):
+    if validate(request.params, MODELS['register_device']):
+        device_info = None
+        if request.params['device_info']:
+            try:
+                device_info = orjson.loads(request.params['device_info'])
+            except JSONDecodeError as e:
+                device_info = None
+                print('Device info parsing error:', e)
+        await request.session.register_device(request.params['device_id'], device_info, request.params['device_token'])
+        return OrjsonResponse({})
+    else:
+        return err(400, 'Неверные данные')
