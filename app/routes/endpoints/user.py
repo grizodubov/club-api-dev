@@ -603,6 +603,30 @@ MODELS = {
 			'type': 'int',
             'null': True,
 		},
+        'tags_1_company_scope': {
+			'required': True,
+			'type': 'str',
+		},
+        'tags_1_company_needs': {
+			'required': True,
+			'type': 'str',
+		},
+        'tags_1_personal_expertise': {
+			'required': True,
+			'type': 'str',
+		},
+        'tags_1_personal_needs': {
+			'required': True,
+			'type': 'str',
+		},
+        'tags_1_licenses': {
+			'required': True,
+			'type': 'str',
+		},
+        'tags_1_hobbies': {
+			'required': True,
+			'type': 'str',
+		},
 	},
 	'new_moderator_user_create': {
 		'active': {
@@ -729,6 +753,30 @@ MODELS = {
         'curator_id': {
 			'type': 'int',
             'null': True,
+		},
+        'tags_1_company_scope': {
+			'required': True,
+			'type': 'str',
+		},
+        'tags_1_company_needs': {
+			'required': True,
+			'type': 'str',
+		},
+        'tags_1_personal_expertise': {
+			'required': True,
+			'type': 'str',
+		},
+        'tags_1_personal_needs': {
+			'required': True,
+			'type': 'str',
+		},
+        'tags_1_licenses': {
+			'required': True,
+			'type': 'str',
+		},
+        'tags_1_hobbies': {
+			'required': True,
+			'type': 'str',
 		},
 	},
     'user_suggestions_stats': {
@@ -1841,6 +1889,12 @@ async def new_moderator_user_create(request):
                 community_manager_id = request.params['community_manager_id'],
                 agent_id = request.params['agent_id'],
                 curator_id = request.params['curator_id'],
+                tags_1_company_scope = request.params['tags_1_company_scope'],
+                tags_1_company_needs = request.params['tags_1_company_needs'],
+                tags_1_personal_expertise = request.params['tags_1_personal_expertise'],
+                tags_1_personal_needs = request.params['tags_1_personal_needs'],
+                tags_1_licenses = request.params['tags_1_licenses'],
+                tags_1_hobbies = request.params['tags_1_hobbies'],
             )
             dispatch('user_create', request)
             return OrjsonResponse({})

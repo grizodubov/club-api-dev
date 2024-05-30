@@ -5,6 +5,7 @@ import string
 import os.path
 from datetime import datetime
 import pytz
+import asyncio
 
 from app.core.context import get_api_context
 from app.utils.packager import pack as data_pack, unpack as data_unpack
@@ -57,6 +58,12 @@ class User:
         self.agent_name = ''
         self.link_telegram = ''
         self.id_telegram = None
+        self.tags_1_company_scope = ''
+        self.tags_1_company_needs = ''
+        self.tags_1_personal_expertise = ''
+        self.tags_1_personal_needs = ''
+        self.tags_1_licenses = ''
+        self.tags_1_hobbies = ''
 
 
     ################################################################
@@ -120,7 +127,13 @@ class User:
                     coalesce(t2.interests, '') AS interests,
                     t5.hash AS avatar_hash,
                     coalesce(t4.roles, '{}'::text[]) AS roles,
-                    t1.password AS _password
+                    t1.password AS _password,
+                    coalesce(ut1.tags, '') AS tags_1_company_scope,
+                    coalesce(ut2.tags, '') AS tags_1_company_needs,
+                    coalesce(ut3.tags, '') AS tags_1_personal_expertise,
+                    coalesce(ut4.tags, '') AS tags_1_personal_needs,
+                    coalesce(ut5.tags, '') AS tags_1_licenses,
+                    coalesce(ut6.tags, '') AS tags_1_hobbies
                 FROM
                     users t1
                 INNER JOIN
@@ -131,6 +144,18 @@ class User:
                     curators cu ON cu.id = t1.agent_id
                 LEFT JOIN
                     users t9 ON t9.id = t1.agent_id
+                LEFT JOIN
+                    users_tags_1 ut1 ON ut1.user_id = t1.id AND ut1.category = 'company scope'
+                LEFT JOIN
+                    users_tags_1 ut2 ON ut2.user_id = t1.id AND ut2.category = 'company needs'
+                LEFT JOIN
+                    users_tags_1 ut3 ON ut3.user_id = t1.id AND ut3.category = 'personal expertise'
+                LEFT JOIN
+                    users_tags_1 ut4 ON ut4.user_id = t1.id AND ut4.category = 'personal needs'
+                LEFT JOIN
+                    users_tags_1 ut5 ON ut5.user_id = t1.id AND ut5.category = 'licenses'
+                LEFT JOIN
+                    users_tags_1 ut6 ON ut6.user_id = t1.id AND ut6.category = 'hobbies'
                 LEFT JOIN
                     avatars t5 ON t5.owner_id = t1.id AND t5.active IS TRUE
                 LEFT JOIN
@@ -269,7 +294,13 @@ class User:
                     coalesce(t2.interests, '') AS interests,
                     t5.hash AS avatar_hash,
                     coalesce(t4.roles, '{}'::text[]) AS roles,
-                    t1.password AS _password
+                    t1.password AS _password,
+                    coalesce(ut1.tags, '') AS tags_1_company_scope,
+                    coalesce(ut2.tags, '') AS tags_1_company_needs,
+                    coalesce(ut3.tags, '') AS tags_1_personal_expertise,
+                    coalesce(ut4.tags, '') AS tags_1_personal_needs,
+                    coalesce(ut5.tags, '') AS tags_1_licenses,
+                    coalesce(ut6.tags, '') AS tags_1_hobbies
                 FROM
                     users t1
                 INNER JOIN
@@ -296,6 +327,18 @@ class User:
                     curators cu ON cu.id = t1.agent_id
                 LEFT JOIN
                     users t9 ON t9.id = t1.agent_id
+                LEFT JOIN
+                    users_tags_1 ut1 ON ut1.user_id = t1.id AND ut1.category = 'company scope'
+                LEFT JOIN
+                    users_tags_1 ut2 ON ut2.user_id = t1.id AND ut2.category = 'company needs'
+                LEFT JOIN
+                    users_tags_1 ut3 ON ut3.user_id = t1.id AND ut3.category = 'personal expertise'
+                LEFT JOIN
+                    users_tags_1 ut4 ON ut4.user_id = t1.id AND ut4.category = 'personal needs'
+                LEFT JOIN
+                    users_tags_1 ut5 ON ut5.user_id = t1.id AND ut5.category = 'licenses'
+                LEFT JOIN
+                    users_tags_1 ut6 ON ut6.user_id = t1.id AND ut6.category = 'hobbies'
                 LEFT JOIN
                     avatars t5 ON t5.owner_id = t1.id AND t5.active IS TRUE""" + conditions_query + ' ORDER BY t1.name' + slice_query,
             *args
@@ -407,7 +450,13 @@ class User:
                     coalesce(t2.interests, '') AS interests,
                     t5.hash AS avatar_hash,
                     coalesce(t4.roles, '{}'::text[]) AS roles,
-                    t1.password AS _password
+                    t1.password AS _password,
+                    coalesce(ut1.tags, '') AS tags_1_company_scope,
+                    coalesce(ut2.tags, '') AS tags_1_company_needs,
+                    coalesce(ut3.tags, '') AS tags_1_personal_expertise,
+                    coalesce(ut4.tags, '') AS tags_1_personal_needs,
+                    coalesce(ut5.tags, '') AS tags_1_licenses,
+                    coalesce(ut6.tags, '') AS tags_1_hobbies
                 FROM
                     users t1
                 INNER JOIN
@@ -434,6 +483,18 @@ class User:
                     curators cu ON cu.id = t1.agent_id
                 LEFT JOIN
                     users t9 ON t9.id = t1.agent_id
+                LEFT JOIN
+                    users_tags_1 ut1 ON ut1.user_id = t1.id AND ut1.category = 'company scope'
+                LEFT JOIN
+                    users_tags_1 ut2 ON ut2.user_id = t1.id AND ut2.category = 'company needs'
+                LEFT JOIN
+                    users_tags_1 ut3 ON ut3.user_id = t1.id AND ut3.category = 'personal expertise'
+                LEFT JOIN
+                    users_tags_1 ut4 ON ut4.user_id = t1.id AND ut4.category = 'personal needs'
+                LEFT JOIN
+                    users_tags_1 ut5 ON ut5.user_id = t1.id AND ut5.category = 'licenses'
+                LEFT JOIN
+                    users_tags_1 ut6 ON ut6.user_id = t1.id AND ut6.category = 'hobbies'
                 LEFT JOIN
                     avatars t5 ON t5.owner_id = t1.id AND t5.active IS TRUE""" + conditions_query + ' ORDER BY t1.name' + slice_query,
             *args
@@ -628,7 +689,13 @@ class User:
                         coalesce(t2.interests, '') AS interests,
                         t5.hash AS avatar_hash,
                         coalesce(t4.roles, '{}'::text[]) AS roles,
-                        t1.password AS _password
+                        t1.password AS _password,
+                        coalesce(ut1.tags, '') AS tags_1_company_scope,
+                        coalesce(ut2.tags, '') AS tags_1_company_needs,
+                        coalesce(ut3.tags, '') AS tags_1_personal_expertise,
+                        coalesce(ut4.tags, '') AS tags_1_personal_needs,
+                        coalesce(ut5.tags, '') AS tags_1_licenses,
+                        coalesce(ut6.tags, '') AS tags_1_hobbies
                     FROM
                         users t1
                     INNER JOIN
@@ -639,6 +706,18 @@ class User:
                         curators cu ON cu.id = t1.agent_id
                     LEFT JOIN
                         users t9 ON t9.id = t1.agent_id
+                    LEFT JOIN
+                        users_tags_1 ut1 ON ut1.user_id = t1.id AND ut1.category = 'company scope'
+                    LEFT JOIN
+                        users_tags_1 ut2 ON ut2.user_id = t1.id AND ut2.category = 'company needs'
+                    LEFT JOIN
+                        users_tags_1 ut3 ON ut3.user_id = t1.id AND ut3.category = 'personal expertise'
+                    LEFT JOIN
+                        users_tags_1 ut4 ON ut4.user_id = t1.id AND ut4.category = 'personal needs'
+                    LEFT JOIN
+                        users_tags_1 ut5 ON ut5.user_id = t1.id AND ut5.category = 'licenses'
+                    LEFT JOIN
+                        users_tags_1 ut6 ON ut6.user_id = t1.id AND ut6.category = 'hobbies'
                     LEFT JOIN
                         avatars t5 ON t5.owner_id = t1.id AND t5.active IS TRUE
                     LEFT JOIN
@@ -790,6 +869,27 @@ class User:
                         VALUES """ + ', '.join(query),
                     self.id, *args
                 )
+        for tk in { 'company scope', 'company needs', 'personal expertise', 'personal needs', 'licenses', 'hobbies' }:
+            ktk = 'tags_1_' + tk.replace(' ', '_')
+            calls = []
+            calls_data = {}
+            if ktk in kwargs:
+                call_data = ' + '.join([ t for t in re.split(r'\s*\+\s*', kwargs[ktk].strip()) if t ])
+                calls.append(
+                    api.pg.club.execute(
+                        """INSERT INTO
+                                users_tags_1 (user_id, category, tags)
+                            VALUES
+                                ($1, $2, $3)
+                            ON CONFLICT
+                                (user_id, category)
+                            DO UPDATE SET
+                                tags = EXCLUDED.tags""",
+                        self.id, tk, call_data
+                    )
+                )
+            if calls:
+                await asyncio.gather(*calls)
 
 
     ################################################################
@@ -841,7 +941,13 @@ class User:
                             coalesce(t2.interests, '') AS interests,
                             t5.hash AS avatar_hash,
                             coalesce(t4.roles, '{}'::text[]) AS roles,
-                            t1.password AS _password
+                            t1.password AS _password,
+                            coalesce(ut1.tags, '') AS tags_1_company_scope,
+                            coalesce(ut2.tags, '') AS tags_1_company_needs,
+                            coalesce(ut3.tags, '') AS tags_1_personal_expertise,
+                            coalesce(ut4.tags, '') AS tags_1_personal_needs,
+                            coalesce(ut5.tags, '') AS tags_1_licenses,
+                            coalesce(ut6.tags, '') AS tags_1_hobbies
                         FROM
                             users t1
                         INNER JOIN
@@ -852,6 +958,18 @@ class User:
                             curators cu ON cu.id = t1.agent_id
                         LEFT JOIN
                             users t9 ON t9.id = t1.agent_id
+                        LEFT JOIN
+                            users_tags_1 ut1 ON ut1.user_id = t1.id AND ut1.category = 'company scope'
+                        LEFT JOIN
+                            users_tags_1 ut2 ON ut2.user_id = t1.id AND ut2.category = 'company needs'
+                        LEFT JOIN
+                            users_tags_1 ut3 ON ut3.user_id = t1.id AND ut3.category = 'personal expertise'
+                        LEFT JOIN
+                            users_tags_1 ut4 ON ut4.user_id = t1.id AND ut4.category = 'personal needs'
+                        LEFT JOIN
+                            users_tags_1 ut5 ON ut5.user_id = t1.id AND ut5.category = 'licenses'
+                        LEFT JOIN
+                            users_tags_1 ut6 ON ut6.user_id = t1.id AND ut6.category = 'hobbies'
                         LEFT JOIN
                             avatars t5 ON t5.owner_id = t1.id AND t5.active IS TRUE
                         LEFT JOIN
@@ -909,7 +1027,13 @@ class User:
                         coalesce(t2.interests, '') AS interests,
                         t5.hash AS avatar_hash,
                         coalesce(t4.roles, '{}'::text[]) AS roles,
-                        t1.password AS _password
+                        t1.password AS _password,
+                        coalesce(ut1.tags, '') AS tags_1_company_scope,
+                        coalesce(ut2.tags, '') AS tags_1_company_needs,
+                        coalesce(ut3.tags, '') AS tags_1_personal_expertise,
+                        coalesce(ut4.tags, '') AS tags_1_personal_needs,
+                        coalesce(ut5.tags, '') AS tags_1_licenses,
+                        coalesce(ut6.tags, '') AS tags_1_hobbies
                     FROM
                         users t1
                     INNER JOIN
@@ -920,6 +1044,18 @@ class User:
                         curators cu ON cu.id = t1.agent_id
                     LEFT JOIN
                         users t9 ON t9.id = t1.agent_id
+                    LEFT JOIN
+                        users_tags_1 ut1 ON ut1.user_id = t1.id AND ut1.category = 'company scope'
+                    LEFT JOIN
+                        users_tags_1 ut2 ON ut2.user_id = t1.id AND ut2.category = 'company needs'
+                    LEFT JOIN
+                        users_tags_1 ut3 ON ut3.user_id = t1.id AND ut3.category = 'personal expertise'
+                    LEFT JOIN
+                        users_tags_1 ut4 ON ut4.user_id = t1.id AND ut4.category = 'personal needs'
+                    LEFT JOIN
+                        users_tags_1 ut5 ON ut5.user_id = t1.id AND ut5.category = 'licenses'
+                    LEFT JOIN
+                        users_tags_1 ut6 ON ut6.user_id = t1.id AND ut6.category = 'hobbies'
                     LEFT JOIN
                         avatars t5 ON t5.owner_id = t1.id AND t5.active IS TRUE
                     LEFT JOIN
@@ -1873,6 +2009,27 @@ class User:
             temp_interests,
             id
         )
+        for tk in { 'company scope', 'company needs', 'personal expertise', 'personal needs', 'licenses', 'hobbies' }:
+            ktk = 'tags_1_' + tk.replace(' ', '_')
+            calls = []
+            calls_data = {}
+            if ktk in kwargs and kwargs[ktk] and kwargs[ktk].strip():
+                call_data = ' + '.join([ t for t in re.split(r'\s*\+\s*', kwargs[ktk].strip()) if t ])
+                calls.append(
+                    api.pg.club.execute(
+                        """INSERT INTO
+                                users_tags_1 (user_id, category, tags)
+                            VALUES
+                                ($1, $2, $3)
+                            ON CONFLICT
+                                (user_id, category)
+                            DO UPDATE SET
+                                tags = EXCLUDED.tags""",
+                        id, tk, call_data
+                    )
+                )
+            if calls:
+                await asyncio.gather(*calls)
         await self.set(id = id, active = kwargs['active'] if 'active' in kwargs else True)
 
 
