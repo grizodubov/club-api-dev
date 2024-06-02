@@ -150,11 +150,12 @@ async def update_tag(tag_from, tag_to):
 def parse_tags_1(field):
     result = {}
     for part in re.split(r'\s*\+\s*', field):
-        k = part.lower()
-        if k in result:
-            result[k].add(part)
-        else:
-            result[k] = { part }
+        if part:
+            k = part.lower()
+            if k in result:
+                result[k].add(part)
+            else:
+                result[k] = { part }
     return result
 
 

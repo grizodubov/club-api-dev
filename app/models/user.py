@@ -869,27 +869,31 @@ class User:
                         VALUES """ + ', '.join(query),
                     self.id, *args
                 )
+        calls = []
         for tk in { 'company scope', 'company needs', 'personal expertise', 'personal needs', 'licenses', 'hobbies' }:
             ktk = 'tags_1_' + tk.replace(' ', '_')
-            calls = []
-            calls_data = {}
             if ktk in kwargs:
-                call_data = ' + '.join([ t for t in re.split(r'\s*\+\s*', kwargs[ktk].strip()) if t ])
-                calls.append(
-                    api.pg.club.execute(
-                        """INSERT INTO
-                                users_tags_1 (user_id, category, tags)
-                            VALUES
-                                ($1, $2, $3)
-                            ON CONFLICT
-                                (user_id, category)
-                            DO UPDATE SET
-                                tags = EXCLUDED.tags""",
-                        self.id, tk, call_data
+                tags_old = set(sorted(re.split(r'\s*\+\s*', getattr(self, ktk))))
+                tags_new = set(sorted(re.split(r'\s*\+\s*', kwargs[ktk].strip())))
+                if tags_old != tags_new:
+                    calls_data = {}
+                    call_data = ' + '.join([ t for t in re.split(r'\s*\+\s*', kwargs[ktk].strip()) if t ])
+                    calls.append(
+                        api.pg.club.execute(
+                            """INSERT INTO
+                                    users_tags_1 (user_id, category, tags)
+                                VALUES
+                                    ($1, $2, $3)
+                                ON CONFLICT
+                                    (user_id, category)
+                                DO UPDATE SET
+                                    tags = EXCLUDED.tags,
+                                    time_update = now() at time zone 'utc'""",
+                            self.id, tk, call_data
+                        )
                     )
-                )
-            if calls:
-                await asyncio.gather(*calls)
+        if calls:
+            await asyncio.gather(*calls)
 
 
     ################################################################
