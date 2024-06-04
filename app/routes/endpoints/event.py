@@ -6,7 +6,7 @@ from app.core.request import err
 from app.core.response import OrjsonResponse
 from app.core.event import dispatch
 from app.utils.validate import validate
-from app.models.event import Event, find_closest_event, get_participants, get_participants_with_avatars, get_all_speakers, get_future_events
+from app.models.event import Event, find_closest_event, get_participants, get_participants_with_avatars, get_all_speakers, get_future_events, get_speakers
 from app.models.user import User, get_connections
 
 
@@ -610,10 +610,14 @@ async def manager_event_list(request):
                 connections[str(connection['event_id'])].append(connection)
             else:
                 connections[str(connection['event_id'])] = [ connection ]
+        speakers = {}
+        if ids:
+            speakers = await get_speakers(events_ids = ids)
         return OrjsonResponse({
             'events': events,
             'participants': participants_filtered,
             'connections': connections,
+            'speakers': speakers,
         })
     else:
         return err(403, 'Нет доступа')

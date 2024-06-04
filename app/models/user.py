@@ -2983,33 +2983,48 @@ async def create_connection(event_id, user_1_id, user_2_id):
 
 
 ################################################################
-async def confirm_connection(id, confirm):
+async def drop_connection(event_id, user_1_id, user_2_id):
     api = get_api_context()
-    await api.pg.club.execute(
-        """UPDATE
+    await api.pg.club.fetchval(
+        """DELETE FROM
                 users_connections
-            SET
-                confirm = $2
             WHERE
-                id = $1""",
-        id, confirm
+                event_id = $1 AND user_1_id = $2 AND user_2_id = $3""",
+        event_id,
+        user_1_id if user_1_id < user_2_id else user_2_id,
+        user_2_id if user_1_id < user_2_id else user_1_id,
     )
 
 
 
 ################################################################
-async def add_connection_comment(connection_id, comment):
+async def update_connection_state(connection_id, state):
     api = get_api_context()
-    id = await api.pg.club.fetchval(
-        """INSERT INTO 
-                connections_comments (connection_id, comment)
-            VALUES
-                ($1, $2)
-            RETURNING
-                id""",
+    await api.pg.club.execute(
+        """UPDATE
+                users_connections
+            SET
+                state = $2
+            WHERE
+                id = $1""",
+        connection_id, state
+    )
+
+
+
+################################################################
+async def update_connection_comment(connection_id, comment):
+    api = get_api_context()
+    await api.pg.club.execute(
+        """UPDATE
+                users_connections
+            SET
+                comment = $2
+            WHERE
+                id = $1""",
         connection_id, comment
     )
-    return id
+
 
 
 ################################################################
@@ -3020,34 +3035,25 @@ async def get_connections(ids = None, events_ids = None, users_ids = None):
     args = []
     i = 1
     if ids:
-        query.append('t1.id = ANY($' + str(i) + ')')
+        query.append('id = ANY($' + str(i) + ')')
         args.append(ids)
         i += 1
     if events_ids:
-        query.append('t1.event_id = ANY($' + str(i) + ')')
+        query.append('event_id = ANY($' + str(i) + ')')
         args.append(events_ids)
         i += 1
     if users_ids:
-        query.append('(t1.user_1_id = ANY($' + str(i) + ') OR t1.user_2_id = ANY($' + str(i) + '))')
+        query.append('(user_1_id = ANY($' + str(i) + ') OR user_2_id = ANY($' + str(i) + '))')
         args.append(users_ids)
         i += 1
     if query:
         query_string = ' WHERE ' + ' AND '.join(query)
     data = await api.pg.club.fetch(
         """SELECT
-                t1.id, t1.event_id, t1.user_1_id, t1.user_2_id, t1.state, array_agg(
-                    jsonb_build_object(
-                        'time_comment', round(extract(epoch FROM t2.time_comment) * 1000)::bigint,
-                        'comment', t2.comment
-                    )
-                ) AS comments
+                id, event_id, user_1_id, user_2_id, state, comment
             FROM
                 users_connections t1
-            LEFT JOIN
-                connections_comments t2 ON t2.connection_id = t1.id
-            """ + query_string + """
-            GROUP BY
-                t1.id""",
+            """ + query_string,
         *args
     )
     if data:

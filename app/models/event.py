@@ -473,6 +473,43 @@ async def get_all_speakers():
 
 
 ################################################################
+async def get_speakers(events_ids):
+    api = get_api_context()
+    data = await api.pg.club.fetch(
+        """SELECT
+                t1.event_id,
+                array_agg(jsonb_build_object(
+                    'id', t1.user_id,
+                    'name', t2.name,
+                    'confirmation', true,
+                    'audit', 2,
+                    'avatar_hash', t5.hash,
+                    'tags', '',
+                    'interests', '',
+                    'tags_event','',
+                    'interests_event', '',
+                    'community_manager_id', t2.community_manager_id,
+                    'community_manager', coalesce(t4.name, '')
+                )) AS speakers
+            FROM
+                events_speakers t1
+            INNER JOIN
+                users t2 ON t2.id = t1.user_id
+            LEFT JOIN
+                users t4 ON t4.id = t2.community_manager_id
+            LEFT JOIN
+                avatars t5 ON t5.owner_id = t2.id AND t5.active IS TRUE
+            WHERE
+                t1.event_id = ANY($1)
+            GROUP BY
+                t1.event_id""",
+        events_ids
+    )
+    return { str(item['event_id']): item['speakers'] for item in data }
+
+
+
+################################################################
 async def get_events_confirmations_pendings(users_ids = None):
     api = get_api_context()
     query = ''
