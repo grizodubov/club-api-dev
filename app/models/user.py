@@ -2787,7 +2787,7 @@ async def get_users_memberships(users_ids):
                     INNER JOIN
                         events t2 ON t2.id = t1.event_id
                     WHERE
-                        t1.audit IS TRUE AND
+                        t1.audit = 2 AND
                         t2.active IS TRUE AND
                         t2.time_event >= $2
                     GROUP BY t1.user_id
@@ -2956,3 +2956,100 @@ async def get_agents_list(community_manager_id, active_only = True):
         }
         for item in data
     ]
+
+
+
+################################################################
+async def create_connection(event_id, user_1_id, user_2_id):
+    api = get_api_context()
+    if user_1_id != user_2_id:
+        id = await api.pg.club.fetchval(
+            """INSERT INTO 
+                    users_connections (event_id, user_1_id, user_2_id)
+                VALUES
+                    ($1, $2, $3)
+                ON CONFLICT
+                    (event_id, user_1_id, user_2_id)
+                DO NOTHING
+                RETURNING
+                    id""",
+            event_id,
+            user_1_id if user_1_id < user_2_id else user_2_id,
+            user_2_id if user_1_id < user_2_id else user_1_id,
+        )
+        return id
+    return None
+
+
+
+################################################################
+async def confirm_connection(id, confirm):
+    api = get_api_context()
+    await api.pg.club.execute(
+        """UPDATE
+                users_connections
+            SET
+                confirm = $2
+            WHERE
+                id = $1""",
+        id, confirm
+    )
+
+
+
+################################################################
+async def add_connection_comment(connection_id, comment):
+    api = get_api_context()
+    id = await api.pg.club.fetchval(
+        """INSERT INTO 
+                connections_comments (connection_id, comment)
+            VALUES
+                ($1, $2)
+            RETURNING
+                id""",
+        connection_id, comment
+    )
+    return id
+
+
+################################################################
+async def get_connections(ids = None, events_ids = None, users_ids = None):
+    api = get_api_context()
+    query_string = ''
+    query = []
+    args = []
+    i = 1
+    if ids:
+        query.append('t1.id = ANY($' + str(i) + ')')
+        args.append(ids)
+        i += 1
+    if events_ids:
+        query.append('t1.event_id = ANY($' + str(i) + ')')
+        args.append(events_ids)
+        i += 1
+    if users_ids:
+        query.append('(t1.user_1_id = ANY($' + str(i) + ') OR t1.user_2_id = ANY($' + str(i) + '))')
+        args.append(users_ids)
+        i += 1
+    if query:
+        query_string = ' WHERE ' + ' AND '.join(query)
+    data = await api.pg.club.fetch(
+        """SELECT
+                t1.id, t1.event_id, t1.user_1_id, t1.user_2_id, t1.state, array_agg(
+                    jsonb_build_object(
+                        'time_comment', round(extract(epoch FROM t2.time_comment) * 1000)::bigint,
+                        'comment', t2.comment
+                    )
+                ) AS comments
+            FROM
+                users_connections t1
+            LEFT JOIN
+                connections_comments t2 ON t2.connection_id = t1.id
+            """ + query_string + """
+            GROUP BY
+                t1.id""",
+        *args
+    )
+    if data:
+        return [ dict(item) for item in data ]
+    return []

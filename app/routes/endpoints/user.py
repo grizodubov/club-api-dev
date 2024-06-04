@@ -8,7 +8,7 @@ from app.core.request import err
 from app.core.response import OrjsonResponse
 from app.core.event import dispatch
 from app.utils.validate import validate
-from app.models.user import User, get_residents, get_speakers, get_residents_contacts, get_community_managers, get_telegram_pin, get_last_activity, get_users_memberships, get_agents_list, get_agents
+from app.models.user import User, get_residents, get_speakers, get_residents_contacts, get_community_managers, get_telegram_pin, get_last_activity, get_users_memberships, get_agents_list, get_agents, create_connection, confirm_connection, add_connection_comment, get_connections
 from app.models.event import Event, get_events_confirmations_pendings
 from app.models.item import Item
 from app.models.note import get_last_notes_times
@@ -69,6 +69,10 @@ def routes():
         Route('/ma/user/agent/create', manager_agent_create, methods = [ 'POST' ]),
 
         Route('/ma/user/agent/list', manager_agent_list, methods = [ 'POST' ]),
+
+        Route('/ma/user/connection', manager_user_connection, methods = [ 'POST' ]),
+        Route('/ma/user/connection/confirm', manager_user_connection_confirm, methods = [ 'POST' ]),
+        Route('/ma/user/connection/comment', manager_user_connection_comment, methods = [ 'POST' ]),
     ]
 
 
@@ -1165,7 +1169,8 @@ MODELS = {
 		},
         'audit': {
 			'required': True,
-			'type': 'bool',
+			'type': 'int',
+            'values': [ 0, 1, 2 ]
 		},
     },
     'manager_user_control_update': {
@@ -1234,6 +1239,46 @@ MODELS = {
             'processing': lambda x: x.strip().lower(),
 		},
 	},
+    'manager_user_connection': {
+        'event_id': {
+			'required': True,
+			'type': 'int',
+            'value_min': 1,
+		},
+        'user_1_id': {
+			'required': True,
+			'type': 'int',
+            'value_min': 1,
+		},
+        'user_2_id': {
+			'required': True,
+			'type': 'int',
+            'value_min': 1,
+		},
+    },
+    'manager_user_connect_confirm': {
+        'id': {
+			'required': True,
+			'type': 'int',
+            'value_min': 1,
+		},
+        'confirm': {
+            'required': True,
+			'type': 'bool',
+        }
+    },
+    'manager_user_connect_comment': {
+        'connection_id': {
+			'required': True,
+			'type': 'int',
+            'value_min': 1,
+		},
+        'comment': {
+            'required': True,
+			'type': 'str',
+            'length_min': 1,
+        }
+    },
 }
 
 
@@ -2316,7 +2361,7 @@ async def manager_user_audit_event(request):
                 user = User()
                 await user.set(id = request.params['user_id'])
                 if user.id:
-                    if request.user.check_roles({ 'admin', 'moderator', 'manager', 'chief' }) or \
+                    if request.user.check_roles({ 'admin', 'moderator', 'chief' }) or \
                             user.community_manager_id == request.user.id:
                         await user.audit_event(event_id = event.id, audit = request.params['audit'])
                         dispatch('user_update', request)
@@ -2446,5 +2491,92 @@ async def manager_agent_list(request):
             'amount': len(agents),
             'community_managers': community_managers,
         })
+    else:
+        return err(403, 'Нет доступа')
+
+
+
+################################################################
+async def manager_user_connection(request):
+    if request.user.id and request.user.check_roles({ 'admin', 'moderator', 'chief', 'community manager' }):
+        if validate(request.params, MODELS['manager_user_connection']):
+            event = Event()
+            await event.set(id = request.params['event_id'])
+            if event.id:
+                user1 = User()
+                await user1.set(id = request.params['user_1_id'])
+                user2 = User()
+                await user2.set(id = request.params['user_2_id'])
+                if user1.id and user2.id:
+                    if request.user.check_roles({ 'admin', 'moderator', 'chief' }) or \
+                            user1.community_manager_id == request.user.id or \
+                            user2.community_manager_id == request.user.id:
+                        await create_connection(event_id = event.id, user_1_id = user1.id, user_2_id = user2.id)
+                        dispatch('user_update', request)
+                        return OrjsonResponse({})
+                    else:
+                        return err(403, 'Нет доступа')
+                else:
+                    return err(404, 'Пользователь не найден')
+            else:
+                return err(404, 'Событие не найдено')
+        else:
+            return err(400, 'Неверный запрос')
+    else:
+        return err(403, 'Нет доступа')
+
+
+
+################################################################
+async def manager_user_connection_confirm(request):
+    if request.user.id and request.user.check_roles({ 'admin', 'moderator', 'chief', 'community manager' }):
+        if validate(request.params, MODELS['manager_user_connection_confirm']):
+            connections = await get_connections(ids = [ request.params['id'] ])
+            if connections:
+                connection = connections[0]
+                user1 = User()
+                await user1.set(id = connection['user_1_id'])
+                user2 = User()
+                await user2.set(id = connection['user_2_id'])
+                if request.user.check_roles({ 'admin', 'moderator', 'chief' }) or \
+                        user1.community_manager_id == request.user.id or \
+                        user2.community_manager_id == request.user.id:
+                    await confirm_connection(connection['id'], request.params['confirm'])
+                    dispatch('user_update', request)
+                    return OrjsonResponse({})
+                else:
+                    return err(403, 'Нет доступа')
+            else:
+                return err(404, 'Стыковка не найдена')
+        else:
+            return err(400, 'Неверный запрос')
+    else:
+        return err(403, 'Нет доступа')
+
+
+
+################################################################
+async def manager_user_connection_comment(request):
+    if request.user.id and request.user.check_roles({ 'admin', 'moderator', 'chief', 'community manager' }):
+        if validate(request.params, MODELS['manager_user_connection_comment']):
+            connections = await get_connections(ids = [ request.params['connection_id'] ])
+            if connections:
+                connection = connections[0]
+                user1 = User()
+                await user1.set(id = connection['user_1_id'])
+                user2 = User()
+                await user2.set(id = connection['user_2_id'])
+                if request.user.check_roles({ 'admin', 'moderator', 'chief' }) or \
+                        user1.community_manager_id == request.user.id or \
+                        user2.community_manager_id == request.user.id:
+                    await add_connection_comment(connection['id'], request.params['comment'])
+                    dispatch('user_update', request)
+                    return OrjsonResponse({})
+                else:
+                    return err(403, 'Нет доступа')
+            else:
+                return err(404, 'Стыковка не найдена')
+        else:
+            return err(400, 'Неверный запрос')
     else:
         return err(403, 'Нет доступа')

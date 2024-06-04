@@ -170,7 +170,7 @@ async def moderator_delete_tag(request):
 
 ################################################################
 async def moderator_tag1_categories(request):
-    if request.user.id and request.user.check_roles({ 'admin', 'moderator' }):
+    if request.user.id and request.user.check_roles({ 'admin', 'moderator', 'manager', 'community manager' }):
         categories = await tag_1_get_categories()
         return OrjsonResponse({
             'categories': categories,
@@ -182,7 +182,7 @@ async def moderator_tag1_categories(request):
 
 ################################################################
 async def moderator_tag1_tags(request):
-    if request.user.id and request.user.check_roles({ 'admin', 'moderator' }):
+    if request.user.id and request.user.check_roles({ 'admin', 'moderator', 'manager', 'community manager' }):
         if validate(request.params, MODELS['moderator_tag1_tags']):
             category = await tag_1_get_category(request.params['category'])
             if category:

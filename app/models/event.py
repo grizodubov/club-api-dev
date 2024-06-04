@@ -394,7 +394,7 @@ async def get_participants(events_ids):
     data = await api.pg.club.fetch(
         """SELECT
                 t1.event_id,
-                array_agg(jsonb_build_object('id', t1.user_id, 'name', t2.name, 'confirmation', t1.confirmation)) AS participants
+                array_agg(jsonb_build_object('id', t1.user_id, 'name', t2.name, 'confirmation', t1.confirmation, 'audit', t1.audit)) AS participants
             FROM
                 events_users t1
             INNER JOIN
@@ -419,6 +419,7 @@ async def get_participants_with_avatars(events_ids):
                     'id', t1.user_id,
                     'name', t2.name,
                     'confirmation', t1.confirmation,
+                    'audit', t1.audit,
                     'avatar_hash', t5.hash,
                     'tags', coalesce(t3.tags, ''),
                     'interests', coalesce(t3.interests, ''),
