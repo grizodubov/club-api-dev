@@ -3016,14 +3016,10 @@ async def update_connection_state(connection_id, state):
 async def update_connection_comment(connection_id, comment, author_id):
     api = get_api_context()
     await api.pg.club.execute(
-        """UPDATE
-                users_connections
-            SET
-                comment = $2, 
-                comment_author_id = $3,
-                time_comment = now() at time zone 'utc'
-            WHERE
-                id = $1""",
+        """INSERT INTO
+                connections_comments (connection_id, comment, author_id)
+            VALUES
+                ($1, $2, $3)""",
         connection_id, comment, author_id
     )
 
@@ -3089,12 +3085,11 @@ async def get_connections(ids = None, events_ids = None, users_ids = None):
         query_string = ' WHERE ' + ' AND '.join(query)
     data = await api.pg.club.fetch(
         """SELECT
-                t1.id, t1.event_id, t1.user_1_id, t1.user_2_id, t1.state, t1.comment, t1.rating_1, t1.rating_2,
+                t1.id, t1.event_id, t1.user_1_id, t1.user_2_id, t1.state, t1.rating_1, t1.rating_2,
                 t22.id AS community_manager_1_id, t33.id AS community_manager_2_id, 
                 coalesce(t22.name, '') AS community_manager_1,
                 coalesce(t33.name, '') AS community_manager_2,
-                t1.time_comment, t1.comment_author_id,
-                t4.name AS author
+                t8.comments
             FROM
                 users_connections t1
             LEFT JOIN
@@ -3106,7 +3101,26 @@ async def get_connections(ids = None, events_ids = None, users_ids = None):
             LEFT JOIN
                 users t33 ON t33.id = t3.community_manager_id
             LEFT JOIN
-                users t4 ON t4.id = t1.comment_author_id
+                (
+                    SELECT
+                        t7.connection_id, array_agg(comment) AS comments
+                    FROM (
+                        SELECT
+                            t5.connection_id, jsonb_build_object(
+                                'id', t5.id,
+                                'time_create', t5.time_create,
+                                'comment', t5.comment,
+                                'author_id', t5.author_id,
+                                'author_name', t6.name
+                            ) AS comment
+                        FROM
+                            connections_comments t5
+                        INNER JOIN
+                            users t6 ON t6.id = t5.author_id
+                        ORDER BY t5.id DESC
+                    ) t7
+                    GROUP BY t7.connection_id
+                ) t8 ON t8.connection_id = t1.id
             """ + query_string,
         *args
     )
