@@ -8,7 +8,7 @@ from app.core.request import err
 from app.core.response import OrjsonResponse
 from app.core.event import dispatch
 from app.utils.validate import validate
-from app.models.user import User, get_residents, get_speakers, get_residents_contacts, get_community_managers, get_telegram_pin, get_last_activity, get_users_memberships, get_agents_list, get_agents, create_connection, drop_connection, update_connection_state, update_connection_comment, get_connections
+from app.models.user import User, get_residents, get_speakers, get_residents_contacts, get_community_managers, get_telegram_pin, get_last_activity, get_users_memberships, get_agents_list, get_agents, create_connection, drop_connection, update_connection_state, update_connection_comment, get_connections, update_connection_rating
 from app.models.event import Event, get_events_confirmations_pendings
 from app.models.item import Item
 from app.models.note import get_last_notes_times
@@ -74,6 +74,7 @@ def routes():
         Route('/ma/user/connection/del', manager_user_connection_del, methods = [ 'POST' ]),
         Route('/ma/user/connection/state', manager_user_connection_state, methods = [ 'POST' ]),
         Route('/ma/user/connection/comment', manager_user_connection_comment, methods = [ 'POST' ]),
+        Route('/ma/user/connection/rating', manager_user_connection_rating, methods = [ 'POST' ]),
     ]
 
 
@@ -1295,6 +1296,23 @@ MODELS = {
             'required': True,
 			'type': 'str',
             'length_min': 1,
+        }
+    },
+    'manager_user_connection_rating': {
+        'connection_id': {
+			'required': True,
+			'type': 'int',
+            'value_min': 1,
+		},
+        'part': {
+            'required': True,
+			'type': 'int',
+            'values': [ 1, 2 ],
+        },
+        'rating': {
+            'required': True,
+			'type': 'int',
+            'values': [ 0, 1, 2 ],
         }
     },
 }
@@ -2618,7 +2636,42 @@ async def manager_user_connection_comment(request):
                 if request.user.check_roles({ 'admin', 'moderator', 'chief' }) or \
                         user1.community_manager_id == request.user.id or \
                         user2.community_manager_id == request.user.id:
-                    await update_connection_comment(connection['id'], request.params['comment'])
+                    await update_connection_comment(connection['id'], request.params['comment'], request.user.id)
+                    dispatch('user_update', request)
+                    return OrjsonResponse({})
+                else:
+                    return err(403, 'Нет доступа')
+            else:
+                return err(404, 'Стыковка не найдена')
+        else:
+            return err(400, 'Неверный запрос')
+    else:
+        return err(403, 'Нет доступа')
+
+
+
+################################################################
+async def manager_user_connection_rating(request):
+    if request.user.id and request.user.check_roles({ 'admin', 'moderator', 'chief', 'community manager' }):
+        if validate(request.params, MODELS['manager_user_connection_rating']):
+            connections = await get_connections(ids = [ request.params['connection_id'] ])
+            if connections:
+                connection = connections[0]
+                user1 = User()
+                await user1.set(id = connection['user_1_id'])
+                user2 = User()
+                await user2.set(id = connection['user_2_id'])
+                part = 0
+                if request.user.check_roles({ 'admin', 'moderator', 'chief' }):
+                    part = request.params['part']
+                if user1.community_manager_id == request.user.id:
+                    part = 1
+                if user2.community_manager_id == request.user.id:
+                    part = 2
+                if user1.community_manager_id == user2.community_manager_id and part:
+                    part = 3
+                if part:
+                    await update_connection_rating(connection['id'], part, request.params['rating'])
                     dispatch('user_update', request)
                     return OrjsonResponse({})
                 else:
