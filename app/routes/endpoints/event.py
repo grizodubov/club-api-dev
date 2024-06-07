@@ -6,7 +6,7 @@ from app.core.request import err
 from app.core.response import OrjsonResponse
 from app.core.event import dispatch
 from app.utils.validate import validate
-from app.models.event import Event, find_closest_event, get_participants, get_participants_with_avatars, get_all_speakers, get_future_events, get_speakers
+from app.models.event import Event, find_closest_event, get_participants, get_participants_with_avatars, get_all_speakers, get_future_events, get_speakers, get_events
 from app.models.user import User, get_connections
 
 
@@ -589,7 +589,7 @@ async def manager_event_user_list(request):
 ################################################################
 async def manager_event_list(request):
     if request.user.id and request.user.check_roles({ 'admin', 'moderator', 'manager', 'chief', 'community manager' }):
-        events = await get_future_events()
+        events = await get_events()
         ids = [ event['id'] for event in events ]
         clients_ids = await request.user.get_allowed_clients_ids()
         participants = {}

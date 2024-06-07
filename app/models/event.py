@@ -418,6 +418,7 @@ async def get_participants_with_avatars(events_ids):
                 array_agg(jsonb_build_object(
                     'id', t1.user_id,
                     'name', t2.name,
+                    'company', t22.company,
                     'confirmation', t1.confirmation,
                     'audit', t1.audit,
                     'avatar_hash', t5.hash,
@@ -432,6 +433,8 @@ async def get_participants_with_avatars(events_ids):
                 events_users t1
             INNER JOIN
                 users t2 ON t2.id = t1.user_id
+            INNER JOIN
+                users_info t22 ON t22.user_id = t2.id
             INNER JOIN
                 users_tags t3 ON t3.user_id = t2.id
             LEFT JOIN
@@ -481,6 +484,7 @@ async def get_speakers(events_ids):
                 array_agg(jsonb_build_object(
                     'id', t1.user_id,
                     'name', t2.name,
+                    'company', t22.company,
                     'confirmation', true,
                     'audit', 2,
                     'avatar_hash', t5.hash,
@@ -495,6 +499,8 @@ async def get_speakers(events_ids):
                 events_speakers t1
             INNER JOIN
                 users t2 ON t2.id = t1.user_id
+            INNER JOIN
+                users_info t22 ON t22.user_id = t2.id
             LEFT JOIN
                 users t4 ON t4.id = t2.community_manager_id
             LEFT JOIN
@@ -554,6 +560,24 @@ async def get_future_events():
             WHERE
                 t1.active IS TRUE AND
                 t1.time_event >= (now() at time zone 'utc')::date
+            ORDER BY
+                t1.time_event"""
+    )
+    return [ dict(item) for item in data ]
+
+
+
+################################################################
+async def get_events():
+    api = get_api_context()
+    data = await api.pg.club.fetch(
+        """SELECT
+                t1.id, t1.name, t1.format, t1.place, t1.time_event, t1.detail, FALSE AS archive
+            FROM
+                events t1
+            WHERE
+                t1.active IS TRUE AND
+                t1.time_event >= '2024-06-05'::date
             ORDER BY
                 t1.time_event"""
     )

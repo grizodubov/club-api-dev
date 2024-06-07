@@ -287,7 +287,9 @@ async def moderator_poll_update(request):
                         'community_id': poll.community_id,
                         'community_name': poll.community_name,
                         'text': poll.text,
+                        'score': poll.score,
                         'answers': poll.answers,
+                        'many': poll.many,
                     })
                 return OrjsonResponse({})
             else:
@@ -321,6 +323,8 @@ async def moderator_poll_create(request):
                 active = request.params['active'],
                 closed = request.params['closed'],
                 wide = request.params['wide'],
+                score = request.params['score'],
+                show_results = request.params['show_results'],
                 many = request.params['many'],
             )
             dispatch('poll_create', request)
@@ -333,12 +337,14 @@ async def moderator_poll_create(request):
                     'active': poll.active,
                     'closed': poll.closed,
                     'wide': poll.wide,
+                    'score': poll.score,
                     'tags': poll.tags,
                     'community_id': poll.community_id,
                     'community_name': poll.community_name,
                     'show_results': poll.show_results,
                     'text': poll.text,
                     'answers': poll.answers,
+                    'many': poll.many,
                 })
             if rating and \
                     'active' in request.params and 'closed' in request.params and \

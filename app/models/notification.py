@@ -264,7 +264,7 @@ async def process_poll_create(api, user_id, item_id, params):
         'poll': 'Добавлен новый опрос в сообщество «{{ community.name }}»',
         'sms': 'Примите участие в жизни клуба и пройдите опрос: "{{ question }}". Ваше мнение поможет нам стать лучше! Подробности в личном кабинете.',
         'email': 'Примите участие в жизни клуба и пройдите опрос: "{{ question }}". Ваше мнение поможет нам стать лучше! Подробности в личном кабинете.',
-        'push': 'Примите участие в жизни клуба и пройдите опрос: "{{ question }}".',
+        'push': '{{ question }}',
     }
     community = Community()
     await community.set(id = params['community_id'])
