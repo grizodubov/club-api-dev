@@ -7,6 +7,7 @@ from jinja2 import Template
 from app.core.context import get_api_context
 from app.models.community import Community
 from app.models.user import User
+from app.models.event import Event
 from app.helpers.telegram import send_telegram_message
 from app.helpers.email import send_email
 from app.helpers.mobile import send_mobile_message
@@ -503,3 +504,73 @@ async def process_rating_poll_create(api, user_id, item_id, params):
         for t in data['emails']:
         #for t in [ 'lebedev@trade.su' ]:
             send_email(api.stream_email, t, 'Клуб Гермес: Новый опрос', message + '<br />' + link_html, {})
+
+
+
+####################################################################
+async def process_connection_add(api, user_id, item_id, params):
+    TEMPLATES = {
+        'sms_target': 'Вам предложил личную встречу {{initiator}}{% if initiator_company %} {{initiator_company}}{% endif %}',
+        'push_target': 'Вам предложил личную встречу {{initiator}}{% if initiator_company %} {{initiator_company}}{% endif %}',
+        'sms_manager': '{{initiator}}{% if initiator_company %} {{initiator_company}}{% endif %} предложил личную встречу пользователю {{target}}{% if target_company %} {{target_company}}{% endif %}',
+        'push_manager': '{{initiator}}{% if initiator_company %} {{initiator_company}}{% endif %} предложил личную встречу пользователю {{target}}{% if target_company %} {{target_company}}{% endif %}',
+    }
+    user_initiator = User()
+    await user_initiator.set(id = user_id)
+    user_target = User()
+    await user_target.set(id = params['user_id'])
+    event = Event()
+    await event.set(id = item_id)
+    manager_initiator = User()
+    if user_initiator.community_manager_id:
+        await manager_initiator.set(id = user_initiator.community_manager_id)
+    manager_target = User()
+    if user_target.community_manager_id and user_target.community_manager_id != user_initiator.community_manager_id:
+        await manager_target.set(id = user_target.community_manager_id)
+    if user_target.id and user_initiator.id and event.id:
+        link = '/events/' + str(event.id)
+
+        body = Template(TEMPLATES['push_target'])
+        message = body.render(
+            initiator = user_initiator.name,
+            initiator_company = user_initiator.company,
+        )
+        send_push_message(api, [ user_target.id ], 'Назначение встречи', message, link)
+
+        body = Template(TEMPLATES['sms_target'])
+        message  = body.render(
+            initiator = user_initiator.name,
+            initiator_company = user_initiator.company,
+        )
+        if user_target.phone:
+            send_mobile_message(api.stream_mobile, user_target.phone, message, {})
+        
+        if manager_initiator.id or manager_target.id:
+            recepients = []
+            if manager_initiator.id:
+                recepients.append(manager_initiator.id)
+            if manager_target.id:
+                recepients.append(manager_target.id)
+
+            body = Template(TEMPLATES['push_manager'])
+            message = body.render(
+                initiator = user_initiator.name,
+                initiator_company = user_initiator.company,
+                target = user_target.name,
+                target_company = user_target.company,
+            )
+            send_push_message(api, receients, 'Назначение встречи', message, link)
+
+            body = Template(TEMPLATES['sms_manager'])
+            message = body.render(
+                initiator = user_initiator.name,
+                initiator_company = user_initiator.company,
+                target = user_target.name,
+                target_company = user_target.company,
+            )
+        
+            if manager_initiator.phone:
+                send_mobile_message(api.stream_mobile, manager_initiator.phone, message, {})
+            
+            if manager_target.phone:
+                send_mobile_message(api.stream_mobile, manager_target.phone, message, {})

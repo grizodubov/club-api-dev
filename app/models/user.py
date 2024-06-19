@@ -1708,7 +1708,7 @@ class User:
     ################################################################
     async def add_contact(self, contact_id):
         api = get_api_context()
-        data = await api.pg.club.execute(
+        await api.pg.club.execute(
             """INSERT INTO users_contacts (user_id, contact_id) VALUES ($1, $2) ON CONFLICT (user_id, contact_id) DO NOTHING""",
             self.id, contact_id
         )
@@ -1717,7 +1717,7 @@ class User:
     ################################################################
     async def del_contact(self, contact_id):
         api = get_api_context()
-        data = await api.pg.club.execute(
+        await api.pg.club.execute(
             """DELETE FROM users_contacts WHERE user_id = $1 AND contact_id = $2""",
             self.id, contact_id
         )
@@ -1726,7 +1726,7 @@ class User:
     ################################################################
     async def add_event(self, event_id):
         api = get_api_context()
-        data = await api.pg.club.execute(
+        await api.pg.club.execute(
             """INSERT INTO events_users (event_id, user_id) VALUES ($1, $2) ON CONFLICT (event_id, user_id) DO NOTHING""",
             event_id, self.id
         )
@@ -1735,7 +1735,7 @@ class User:
     ################################################################
     async def audit_event(self, event_id, audit):
         api = get_api_context()
-        data = await api.pg.club.execute(
+        await api.pg.club.execute(
             """UPDATE events_users SET audit = $3 WHERE event_id = $1 AND user_id = $2""",
             event_id, self.id, audit
         )
@@ -1744,7 +1744,7 @@ class User:
     ################################################################
     async def guests_event(self, event_id, guests):
         api = get_api_context()
-        data = await api.pg.club.execute(
+        await api.pg.club.execute(
             """UPDATE events_users SET guests = $3 WHERE event_id = $1 AND user_id = $2""",
             event_id, self.id, guests
         )
@@ -1753,7 +1753,7 @@ class User:
     ################################################################
     async def del_event(self, event_id):
         api = get_api_context()
-        data = await api.pg.club.execute(
+        await api.pg.club.execute(
             """DELETE FROM events_users WHERE event_id = $1 AND user_id = $2""",
             event_id, self.id
         )
@@ -2476,7 +2476,13 @@ async def get_residents(users_ids = None):
                 coalesce(t2.interests, '') AS interests,
                 coalesce(t4.roles, '{}'::text[]) AS roles,
                 coalesce(t5.amount, 0) AS rating,
-                t1.password AS _password
+                t1.password AS _password,
+                coalesce(ut1.tags, '') AS tags_1_company_scope,
+                coalesce(ut2.tags, '') AS tags_1_company_needs,
+                coalesce(ut3.tags, '') AS tags_1_personal_expertise,
+                coalesce(ut4.tags, '') AS tags_1_personal_needs,
+                coalesce(ut5.tags, '') AS tags_1_licenses,
+                coalesce(ut6.tags, '') AS tags_1_hobbies
             FROM
                 users t1
             INNER JOIN
@@ -2505,6 +2511,18 @@ async def get_residents(users_ids = None):
                 ) t5 ON t5.author_id = t1.id
             LEFT JOIN
                 avatars t8 ON t8.owner_id = t1.id AND t8.active IS TRUE
+            LEFT JOIN
+                users_tags_1 ut1 ON ut1.user_id = t1.id AND ut1.category = 'company scope'
+            LEFT JOIN
+                users_tags_1 ut2 ON ut2.user_id = t1.id AND ut2.category = 'company needs'
+            LEFT JOIN
+                users_tags_1 ut3 ON ut3.user_id = t1.id AND ut3.category = 'personal expertise'
+            LEFT JOIN
+                users_tags_1 ut4 ON ut4.user_id = t1.id AND ut4.category = 'personal needs'
+            LEFT JOIN
+                users_tags_1 ut5 ON ut5.user_id = t1.id AND ut5.category = 'licenses'
+            LEFT JOIN
+                users_tags_1 ut6 ON ut6.user_id = t1.id AND ut6.category = 'hobbies'
             WHERE
                 """ + query + """
             ORDER BY t1.name""",
@@ -2546,7 +2564,13 @@ async def get_speakers(users_ids = None):
                 coalesce(t2.interests, '') AS interests,
                 coalesce(t4.roles, '{}'::text[]) AS roles,
                 coalesce(t5.amount, 0) AS rating,
-                t1.password AS _password
+                t1.password AS _password,
+                coalesce(ut1.tags, '') AS tags_1_company_scope,
+                coalesce(ut2.tags, '') AS tags_1_company_needs,
+                coalesce(ut3.tags, '') AS tags_1_personal_expertise,
+                coalesce(ut4.tags, '') AS tags_1_personal_needs,
+                coalesce(ut5.tags, '') AS tags_1_licenses,
+                coalesce(ut6.tags, '') AS tags_1_hobbies
             FROM
                 users t1
             INNER JOIN
@@ -2575,6 +2599,18 @@ async def get_speakers(users_ids = None):
                 ) t5 ON t5.author_id = t1.id
             LEFT JOIN
                 avatars t8 ON t8.owner_id = t1.id AND t8.active IS TRUE
+            LEFT JOIN
+                users_tags_1 ut1 ON ut1.user_id = t1.id AND ut1.category = 'company scope'
+            LEFT JOIN
+                users_tags_1 ut2 ON ut2.user_id = t1.id AND ut2.category = 'company needs'
+            LEFT JOIN
+                users_tags_1 ut3 ON ut3.user_id = t1.id AND ut3.category = 'personal expertise'
+            LEFT JOIN
+                users_tags_1 ut4 ON ut4.user_id = t1.id AND ut4.category = 'personal needs'
+            LEFT JOIN
+                users_tags_1 ut5 ON ut5.user_id = t1.id AND ut5.category = 'licenses'
+            LEFT JOIN
+                users_tags_1 ut6 ON ut6.user_id = t1.id AND ut6.category = 'hobbies'
             WHERE
                 ('speaker' = ANY(t4.roles) OR t1.id = 10004)""" + query + """
             ORDER BY t1.name""",
