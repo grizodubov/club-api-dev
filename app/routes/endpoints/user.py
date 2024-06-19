@@ -62,6 +62,7 @@ def routes():
         Route('/ma/user/event/add', manager_user_add_event, methods = [ 'POST' ]),
         Route('/ma/user/event/del', manager_user_del_event, methods = [ 'POST' ]),
         Route('/ma/user/event/audit', manager_user_audit_event, methods = [ 'POST' ]),
+        Route('/ma/user/event/guests', manager_user_guests_event, methods = [ 'POST' ]),
 
         Route('/ma/user/control/update', manager_user_control_update, methods = [ 'POST' ]),
 
@@ -354,7 +355,7 @@ MODELS = {
 			'required': True,
 			'type': 'str',
             'list': True,
-            'values': [ 'admin', 'client', 'guest', 'manager', 'moderator', 'editor', 'chief', 'community manager', 'tester', 'speaker', 'agent', 'curator' ],
+            'values': [ 'admin', 'client', 'guest', 'manager', 'moderator', 'editor', 'chief', 'community manager', 'tester', 'speaker', 'agent', 'curator', 'organizer' ],
 		},
 		'tags': {
 			'required': True,
@@ -476,6 +477,30 @@ MODELS = {
 			'type': 'str',
             'processing': lambda x: x.strip(),
 		},
+        'tags_1_company_scope': {
+			'required': True,
+			'type': 'str',
+		},
+        'tags_1_company_needs': {
+			'required': True,
+			'type': 'str',
+		},
+        'tags_1_personal_expertise': {
+			'required': True,
+			'type': 'str',
+		},
+        'tags_1_personal_needs': {
+			'required': True,
+			'type': 'str',
+		},
+        'tags_1_licenses': {
+			'required': True,
+			'type': 'str',
+		},
+        'tags_1_hobbies': {
+			'required': True,
+			'type': 'str',
+		},
 	},
     # new
 	'new_moderator_user_update': {
@@ -568,7 +593,7 @@ MODELS = {
 			'required': True,
 			'type': 'str',
             'list': True,
-            'values': [ 'admin', 'client', 'guest', 'manager', 'moderator', 'editor', 'chief', 'community manager', 'tester', 'speaker', 'agent', 'curator' ],
+            'values': [ 'admin', 'client', 'guest', 'manager', 'moderator', 'editor', 'chief', 'community manager', 'tester', 'speaker', 'agent', 'curator', 'organizer' ],
 		},
 		'tags': {
 			'required': True,
@@ -1173,6 +1198,23 @@ MODELS = {
 			'required': True,
 			'type': 'int',
             'values': [ 0, 1, 2 ]
+		},
+    },
+    'manager_user_guests_event': {
+        'user_id': {
+			'required': True,
+			'type': 'int',
+            'value_min': 1,
+		},
+        'event_id': {
+			'required': True,
+			'type': 'int',
+            'value_min': 1,
+		},
+        'guests': {
+			'required': True,
+			'type': 'int',
+            'values': [ 0, 1, 2, 3, 4, 5 ]
 		},
     },
     'manager_user_control_update': {
@@ -2397,9 +2439,37 @@ async def manager_user_audit_event(request):
                 user = User()
                 await user.set(id = request.params['user_id'])
                 if user.id:
-                    if request.user.check_roles({ 'admin', 'moderator', 'chief' }) or \
+                    if request.user.check_roles({ 'admin', 'moderator', 'chief', 'organizer' }) or \
                             user.community_manager_id == request.user.id:
                         await user.audit_event(event_id = event.id, audit = request.params['audit'])
+                        dispatch('user_update', request)
+                        return OrjsonResponse({})
+                    else:
+                        return err(403, 'Нет доступа')
+                else:
+                    return err(404, 'Пользователь не найден')
+            else:
+                return err(404, 'Событие не найдено')
+        else:
+            return err(400, 'Неверный запрос')
+    else:
+        return err(403, 'Нет доступа')
+
+
+
+################################################################
+async def manager_user_guests_event(request):
+    if request.user.id and request.user.check_roles({ 'admin', 'moderator', 'manager', 'chief', 'community manager' }):
+        if validate(request.params, MODELS['manager_user_guests_event']):
+            event = Event()
+            await event.set(id = request.params['event_id'])
+            if event.id:
+                user = User()
+                await user.set(id = request.params['user_id'])
+                if user.id:
+                    if request.user.check_roles({ 'admin', 'moderator', 'chief', 'organizer' }) or \
+                            user.community_manager_id == request.user.id:
+                        await user.guests_event(event_id = event.id, guests = request.params['guests'])
                         dispatch('user_update', request)
                         return OrjsonResponse({})
                     else:
@@ -2547,7 +2617,7 @@ async def manager_user_connection_add(request):
                     if request.user.check_roles({ 'admin', 'moderator', 'chief' }) or \
                             user1.community_manager_id == request.user.id or \
                             user2.community_manager_id == request.user.id:
-                        await create_connection(event_id = event.id, user_1_id = user1.id, user_2_id = user2.id)
+                        await create_connection(event_id = event.id, user_1_id = user1.id, user_2_id = user2.id, creator_id = request.user.id)
                         dispatch('user_update', request)
                         return OrjsonResponse({})
                     else:

@@ -67,7 +67,7 @@ class Event:
                     LEFT JOIN
                         (
                             SELECT
-                                s1.event_id, array_agg(jsonb_build_object('id', s1.user_id, 'name', s2.name)) AS speakers
+                                s1.event_id, array_agg(jsonb_build_object('id', s1.user_id, 'name', s2.name, 'audit', s1.audit, 'speaker', true)) AS speakers
                             FROM
                                 events_speakers s1
                             INNER JOIN
@@ -181,7 +181,7 @@ class Event:
                     LEFT JOIN
                         (
                             SELECT
-                                s1.event_id, array_agg(jsonb_build_object('id', s1.user_id, 'name', s2.name)) AS speakers
+                                s1.event_id, array_agg(jsonb_build_object('id', s1.user_id, 'name', s2.name, 'audit', s1.audit, 'speaker', true)) AS speakers
                             FROM
                                 events_speakers s1
                             INNER JOIN
@@ -394,7 +394,7 @@ async def get_participants(events_ids):
     data = await api.pg.club.fetch(
         """SELECT
                 t1.event_id,
-                array_agg(jsonb_build_object('id', t1.user_id, 'name', t2.name, 'confirmation', t1.confirmation, 'audit', t1.audit)) AS participants
+                array_agg(jsonb_build_object('id', t1.user_id, 'name', t2.name, 'confirmation', t1.confirmation, 'audit', t1.audit, 'guests', t1.guests)) AS participants
             FROM
                 events_users t1
             INNER JOIN
@@ -419,8 +419,11 @@ async def get_participants_with_avatars(events_ids):
                     'id', t1.user_id,
                     'name', t2.name,
                     'company', t22.company,
+                    'catalog', t22.catalog,
+                    'annual', t22.annual,
                     'confirmation', t1.confirmation,
                     'audit', t1.audit,
+                    'guests', t1.guests,
                     'avatar_hash', t5.hash,
                     'tags', coalesce(t3.tags, ''),
                     'interests', coalesce(t3.interests, ''),
@@ -485,15 +488,18 @@ async def get_speakers(events_ids):
                     'id', t1.user_id,
                     'name', t2.name,
                     'company', t22.company,
+                    'annual', t22.annual,
+                    'catalog', t22.catalog,
                     'confirmation', true,
-                    'audit', 2,
+                    'audit', t1.audit,
                     'avatar_hash', t5.hash,
                     'tags', '',
                     'interests', '',
                     'tags_event','',
                     'interests_event', '',
                     'community_manager_id', t2.community_manager_id,
-                    'community_manager', coalesce(t4.name, '')
+                    'community_manager', coalesce(t4.name, ''),
+                    'speaker', true
                 )) AS speakers
             FROM
                 events_speakers t1

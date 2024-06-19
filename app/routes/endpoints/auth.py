@@ -983,7 +983,7 @@ async def manager_login(request):
     if validate(request.params, MODELS['moderator_login']):
         user = User()        
         if await user.check(request.params['account'], request.params['password']):
-            if set(user.roles) & { 'admin', 'moderator', 'manager', 'community manager', 'chief', 'agent' }:
+            if set(user.roles) & { 'admin', 'moderator', 'manager', 'community manager', 'chief', 'agent', 'organizer' }:
                 await request.session.assign(user.id)
                 request.user.copy(user = user)
                 request.api.websocket_update(request.session.id, request.user.id)
@@ -1005,7 +1005,7 @@ async def manager_login_email_validate(request):
         user = User()
         if await user.find(email = request.params['account']) and user.active:
             if await user.check_validation_code(code = request.params['code']):
-                if set(user.roles) & { 'admin', 'moderator', 'manager', 'community manager', 'chief', 'agent' }:
+                if set(user.roles) & { 'admin', 'moderator', 'manager', 'community manager', 'chief', 'agent', 'organizer' }:
                     await request.session.assign(user.id)
                     request.user.copy(user = user)
                     request.api.websocket_update(request.session.id, request.user.id)
@@ -1028,7 +1028,7 @@ async def manager_login_mobile_validate(request):
         user = User()
         if await user.find(phone = request.params['account']) and user.active:
             if await user.check_validation_code(code = request.params['code']):
-                if set(user.roles) & { 'admin', 'moderator', 'manager', 'community manager', 'chief', 'agent' }:
+                if set(user.roles) & { 'admin', 'moderator', 'manager', 'community manager', 'chief', 'agent', 'organizer' }:
                     await request.session.assign(user.id)
                     request.user.copy(user = user)
                     request.api.websocket_update(request.session.id, request.user.id)

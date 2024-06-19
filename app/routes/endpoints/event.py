@@ -7,7 +7,7 @@ from app.core.response import OrjsonResponse
 from app.core.event import dispatch
 from app.utils.validate import validate
 from app.models.event import Event, find_closest_event, get_participants, get_participants_with_avatars, get_all_speakers, get_future_events, get_speakers, get_events
-from app.models.user import User, get_connections
+from app.models.user import User, get_connections, create_connection
 
 
 
@@ -15,6 +15,7 @@ def routes():
     return [
         Route('/event/feed', events_feed, methods = [ 'POST' ]),
         Route('/event/info', event_info, methods = [ 'POST' ]),
+        Route('/event/connection', event_connection, methods = [ 'POST' ]),
 
         Route('/m/event/list', moderator_event_list, methods = [ 'POST' ]),
         Route('/m/event/update', moderator_event_update, methods = [ 'POST' ]),
@@ -62,6 +63,18 @@ MODELS = {
             'required': False,
             'type': 'bool',
             'default': False,
+        },
+    },
+    'event_connection': {
+        'event_id': {
+            'required': True,
+            'type': 'int',
+            'value_min': 1,
+        },
+        'user_id': {
+            'required': True,
+            'type': 'int',
+            'value_min': 1,
         },
     },
     # moderator
@@ -345,10 +358,43 @@ async def event_info(request):
                     event_id = event.id,
                     users_ids = [ p['id'] for p in event_participants ],
                 )
+                connections = {}
+                connections_data = await get_connections(events_ids = [ event.id ])
+                for connection in connections_data:
+                    if request.user.id == connection['user_1_id'] or request.user.id == connection['user_2_id']:
+                        if str(connection['event_id']) in connections:
+                            connections[str(connection['event_id'])].append(connection)
+                        else:
+                            connections[str(connection['event_id'])] = [ connection ]
                 return OrjsonResponse({
                     'event': info | { 'participants': event_participants, 'suggestions': suggestions },
                     'residents': residents,
+                    'connections': connections[str(event.id)] if str(event.id) in connections else [],
                 })
+            else:
+                return err(404, 'Событие не найдено')
+        else:
+            return err(400, 'Неверный запрос')
+    else:
+        return err(403, 'Нет доступа')
+
+
+
+################################################################
+async def event_connection(request):
+    if request.user.id:
+        if validate(request.params, MODELS['event_connection']):
+            event = Event()
+            await event.set(id = request.params['event_id'])
+            if event.id:
+                user2 = User()
+                await user2.set(id = request.params['user_id'])
+                if user2.id:
+                    await create_connection(event_id = event.id, user_1_id = request.user.id, user_2_id = user2.id, creator_id = request.user.id)
+                    dispatch('user_update', request)
+                    return OrjsonResponse({})
+                else:
+                    return err(404, 'Пользователь не найден')
             else:
                 return err(404, 'Событие не найдено')
         else:

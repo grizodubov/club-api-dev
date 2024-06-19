@@ -1739,6 +1739,15 @@ class User:
             """UPDATE events_users SET audit = $3 WHERE event_id = $1 AND user_id = $2""",
             event_id, self.id, audit
         )
+    
+
+    ################################################################
+    async def guests_event(self, event_id, guests):
+        api = get_api_context()
+        data = await api.pg.club.execute(
+            """UPDATE events_users SET guests = $3 WHERE event_id = $1 AND user_id = $2""",
+            event_id, self.id, guests
+        )
 
 
     ################################################################
@@ -1756,7 +1765,7 @@ class User:
         data = await api.pg.club.fetch(
             """SELECT
                     t1.id, t1.name, t1.format, t1.place, t1.time_event, t1.detail,
-                    t2.confirmation, t2.audit, FALSE AS archive
+                    t2.confirmation, t2.audit, t2.guests, FALSE AS archive
                 FROM
                     events t1
                 LEFT JOIN
@@ -1803,7 +1812,7 @@ class User:
         data = await api.pg.club.fetch(
             """SELECT
                     t1.id, t1.name, t1.format, t1.place, t1.time_event, t1.detail,
-                    t2.confirmation, t2.audit, TRUE AS archive
+                    t2.confirmation, t2.audit, t2.guests, TRUE AS archive
                 FROM
                     events t1
                 INNER JOIN
@@ -2960,14 +2969,14 @@ async def get_agents_list(community_manager_id, active_only = True):
 
 
 ################################################################
-async def create_connection(event_id, user_1_id, user_2_id):
+async def create_connection(event_id, user_1_id, user_2_id, creator_id):
     api = get_api_context()
     if user_1_id != user_2_id:
         id = await api.pg.club.fetchval(
             """INSERT INTO 
-                    users_connections (event_id, user_1_id, user_2_id)
+                    users_connections (event_id, user_1_id, user_2_id, creator_id)
                 VALUES
-                    ($1, $2, $3)
+                    ($1, $2, $3, $4)
                 ON CONFLICT
                     (event_id, user_1_id, user_2_id)
                 DO NOTHING
@@ -2976,6 +2985,7 @@ async def create_connection(event_id, user_1_id, user_2_id):
             event_id,
             user_1_id if user_1_id < user_2_id else user_2_id,
             user_2_id if user_1_id < user_2_id else user_1_id,
+            creator_id,
         )
         return id
     return None
@@ -3086,6 +3096,7 @@ async def get_connections(ids = None, events_ids = None, users_ids = None):
     data = await api.pg.club.fetch(
         """SELECT
                 t1.id, t1.event_id, t1.user_1_id, t1.user_2_id, t1.state, t1.rating_1, t1.rating_2,
+                t1.creator_id, t4.name AS creator,
                 t22.id AS community_manager_1_id, t33.id AS community_manager_2_id, 
                 coalesce(t22.name, '') AS community_manager_1,
                 coalesce(t33.name, '') AS community_manager_2,
@@ -3100,6 +3111,8 @@ async def get_connections(ids = None, events_ids = None, users_ids = None):
                 users t3 ON t3.id = t1.user_2_id
             LEFT JOIN
                 users t33 ON t33.id = t3.community_manager_id
+            LEFT JOIN
+                users t4 ON t4.id = t1.creator_id
             LEFT JOIN
                 (
                     SELECT
