@@ -343,7 +343,7 @@ async def event_info(request):
                 users = info['speakers'] + event_participants
                 residents = []
                 if users:
-                    result = await User.search(text = '')
+                    result = await User.search(text = '', ids = [ u['id'] for u in users ] + [ request.user.id ])
                     ### remove data for roles
                     roles = set(request.user.roles)
                     roles.discard('applicant')

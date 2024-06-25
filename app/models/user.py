@@ -68,7 +68,7 @@ class User:
 
     ################################################################
     @classmethod
-    async def search(cls, text, active_only = True, offset = None, limit = None, count = False, applicant = False, reverse = False, target = None):
+    async def search(cls, text, active_only = True, offset = None, limit = None, count = False, applicant = False, reverse = False, target = None, ids = []):
         api = get_api_context()
         result = []
         amount = None
@@ -76,6 +76,9 @@ class User:
         conditions = [ 't1.id >= 10000' ]
         condition_query = ''
         args = []
+        if ids:
+            conditions.append('t1.id = ANY($1)')
+            args.append(ids)
         if active_only:
             conditions.append('t1.active IS TRUE')
         if applicant is None:
@@ -2412,6 +2415,46 @@ class User:
 
 
 
+    ################################################################
+    async def view_profile(self, user_id):
+        api = get_api_context()
+        tv = await api.pg.club.fetchval(
+            """INSERT INTO
+                    users_profiles_views (user_id, target_id)
+                VALUES
+                    ($1, $2)
+                RETURNING
+                    time_view""",
+            self.id, user_id
+        )
+        if tv:
+            return True
+        return False
+
+
+
+    ################################################################
+    async def get_profile_views_amount(self):
+        api = get_api_context()
+        amount = await api.pg.club.fetchval(
+            """SELECT count(*) FROM users_profiles_views WHERE target_id = $1""",
+            self.id
+        )
+        return amount
+
+
+
+    ################################################################
+    async def get_date_profile_views_amount(self, dt):
+        api = get_api_context()
+        amount = await api.pg.club.fetchval(
+            """SELECT count(*) FROM users_profiles_views WHERE target_id = $1 AND time_view > date ($2) AND time_view < date ($2) + interval '24 hours'""",
+            self.id, datetime.strptime(dt, '%Y-%m-%d').date()
+        )
+        return amount
+
+
+
 ################################################################
 def check_online_by_id(id):
     api = get_api_context()
@@ -3032,8 +3075,27 @@ async def create_connection(event_id, user_1_id, user_2_id, creator_id):
 async def drop_connection(event_id, user_1_id, user_2_id):
     api = get_api_context()
     await api.pg.club.fetchval(
-        """DELETE FROM
+        """UPDATE
                 users_connections
+            SET
+                deleted = TRUE
+            WHERE
+                event_id = $1 AND user_1_id = $2 AND user_2_id = $3""",
+        event_id,
+        user_1_id if user_1_id < user_2_id else user_2_id,
+        user_2_id if user_1_id < user_2_id else user_1_id,
+    )
+
+
+
+################################################################
+async def recover_connection(event_id, user_1_id, user_2_id):
+    api = get_api_context()
+    await api.pg.club.fetchval(
+        """UPDATE
+                users_connections
+            SET
+                deleted = FALSE
             WHERE
                 event_id = $1 AND user_1_id = $2 AND user_2_id = $3""",
         event_id,
@@ -3132,7 +3194,7 @@ async def get_connections(ids = None, events_ids = None, users_ids = None):
     data = await api.pg.club.fetch(
         """SELECT
                 t1.id, t1.event_id, t1.user_1_id, t1.user_2_id, t1.state, t1.rating_1, t1.rating_2,
-                t1.creator_id, t4.name AS creator,
+                t1.creator_id, t4.name AS creator, t1.deleted,
                 t22.id AS community_manager_1_id, t33.id AS community_manager_2_id, 
                 coalesce(t22.name, '') AS community_manager_1,
                 coalesce(t33.name, '') AS community_manager_2,
@@ -3176,3 +3238,39 @@ async def get_connections(ids = None, events_ids = None, users_ids = None):
     if data:
         return [ dict(item) for item in data ]
     return []
+
+
+
+################################################################
+async def get_profiles_views_amount(users_ids):
+    api = get_api_context()
+    data = await api.pg.club.fetch(
+        """SELECT
+                target_id, count(time_view) AS amount
+            FROM
+                users_profiles_views
+            WHERE
+                target_id = ANY($1)
+            GROUP BY
+                target_id""",
+        users_ids
+    )
+    return { str(item['target_id']): item['amount'] for item in data }
+
+
+
+################################################################
+async def get_date_profiles_views_amount(users_ids, dt):
+    api = get_api_context()
+    data = await api.pg.club.fetch(
+        """SELECT
+                target_id, count(time_view) AS amount
+            FROM
+                users_profiles_views
+            WHERE
+                target_id = ANY($1) AND time_view > date ($2) AND time_view < date ($2) + interval '24 hours'
+            GROUP BY
+                target_id""",
+        users_ids, datetime.strptime(dt, '%Y-%m-%d').date()
+    )
+    return { str(item['target_id']): item['amount'] for item in data }

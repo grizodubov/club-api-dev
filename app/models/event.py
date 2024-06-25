@@ -400,7 +400,7 @@ async def get_participants(events_ids):
             INNER JOIN
                 users t2 ON t2.id = t1.user_id
             WHERE
-                t1.event_id = ANY($1)
+                t1.event_id = ANY($1) AND t2.active IS TRUE
             GROUP BY
                 t1.event_id""",
         events_ids
@@ -447,7 +447,7 @@ async def get_participants_with_avatars(events_ids):
             LEFT JOIN
                 avatars t5 ON t5.owner_id = t2.id AND t5.active IS TRUE
             WHERE
-                t1.event_id = ANY($1)
+                t1.event_id = ANY($1) AND t2.active IS TRUE
             GROUP BY
                 t1.event_id""",
         events_ids

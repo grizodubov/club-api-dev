@@ -8,7 +8,7 @@ from app.core.request import err
 from app.core.response import OrjsonResponse
 from app.core.event import dispatch
 from app.utils.validate import validate
-from app.models.user import User, get_residents, get_speakers, get_residents_contacts, get_community_managers, get_telegram_pin, get_last_activity, get_users_memberships, get_agents_list, get_agents, create_connection, drop_connection, update_connection_state, update_connection_comment, get_connections, update_connection_rating
+from app.models.user import User, get_residents, get_speakers, get_residents_contacts, get_community_managers, get_telegram_pin, get_last_activity, get_users_memberships, get_agents_list, get_agents, create_connection, recover_connection, drop_connection, update_connection_state, update_connection_comment, get_connections, update_connection_rating, get_profiles_views_amount, get_date_profiles_views_amount
 from app.models.event import Event, get_events_confirmations_pendings
 from app.models.item import Item
 from app.models.note import get_last_notes_times
@@ -33,6 +33,7 @@ def routes():
         Route('/user/event/del', user_del_event, methods = [ 'POST' ]),
         Route('/user/thumbsup', user_thumbs_up, methods = [ 'POST' ]),
         Route('/user/thumbsoff', user_thumbs_off, methods = [ 'POST' ]),
+        Route('/user/profile/view', user_view_profile, methods = [ 'POST' ]),
 
         Route('/user/{id:int}/helpful', user_helpful, methods = [ 'POST' ]),
 
@@ -73,9 +74,12 @@ def routes():
 
         Route('/ma/user/connection/add', manager_user_connection_add, methods = [ 'POST' ]),
         Route('/ma/user/connection/del', manager_user_connection_del, methods = [ 'POST' ]),
+        Route('/ma/user/connection/rec', manager_user_connection_rec, methods = [ 'POST' ]),
         Route('/ma/user/connection/state', manager_user_connection_state, methods = [ 'POST' ]),
         Route('/ma/user/connection/comment', manager_user_connection_comment, methods = [ 'POST' ]),
         Route('/ma/user/connection/rating', manager_user_connection_rating, methods = [ 'POST' ]),
+        Route('/ma/user/profiles/views', manager_user_profile_views, methods = [ 'POST' ]),
+        
     ]
 
 
@@ -95,6 +99,24 @@ MODELS = {
             'value_min': 1,
 		},
 	},
+    'user_view_profile': {
+        'user_id': {
+			'required': True,
+			'type': 'int',
+            'value_min': 1,
+		},
+    },
+    'manager_user_profile_views': {
+        'date': {
+			'required': True,
+			'type': 'str',
+        },
+        'users_ids': {
+			'required': True,
+			'type': 'int',
+            'list': True,
+		},
+    },
 	'user_update': {
 		'name': {
 			'required': True,
@@ -1317,6 +1339,23 @@ MODELS = {
             'value_min': 1,
 		},
     },
+    'manager_user_connection_rec': {
+        'event_id': {
+			'required': True,
+			'type': 'int',
+            'value_min': 1,
+		},
+        'user_1_id': {
+			'required': True,
+			'type': 'int',
+            'value_min': 1,
+		},
+        'user_2_id': {
+			'required': True,
+			'type': 'int',
+            'value_min': 1,
+		},
+    },
     'manager_user_connection_state': {
         'connection_id': {
 			'required': True,
@@ -1404,6 +1443,22 @@ async def user_update(request):
             await request.user.update(**request.params)
             dispatch('user_update', request)
             return OrjsonResponse({})
+        else:
+            return err(400, 'Неверный поиск')
+    else:
+        return err(403, 'Нет доступа')
+
+
+
+################################################################
+async def user_view_profile(request):
+    if request.user.id:
+        if validate(request.params, MODELS['user_view_profile']):
+            result = await request.user.view_profile(user_id = request.params['user_id'])
+            if result:
+                return OrjsonResponse({})
+            else:
+                return err(404, 'Пользователь не найден')
         else:
             return err(400, 'Неверный поиск')
     else:
@@ -2665,6 +2720,37 @@ async def manager_user_connection_del(request):
 
 
 ################################################################
+async def manager_user_connection_rec(request):
+    if request.user.id and request.user.check_roles({ 'admin', 'moderator', 'chief', 'community manager' }):
+        if validate(request.params, MODELS['manager_user_connection_rec']):
+            event = Event()
+            await event.set(id = request.params['event_id'])
+            if event.id:
+                user1 = User()
+                await user1.set(id = request.params['user_1_id'])
+                user2 = User()
+                await user2.set(id = request.params['user_2_id'])
+                if user1.id and user2.id:
+                    if request.user.check_roles({ 'admin', 'moderator', 'chief' }) or \
+                            user1.community_manager_id == request.user.id or \
+                            user2.community_manager_id == request.user.id:
+                        await recover_connection(event_id = event.id, user_1_id = user1.id, user_2_id = user2.id)
+                        dispatch('user_update', request)
+                        return OrjsonResponse({})
+                    else:
+                        return err(403, 'Нет доступа')
+                else:
+                    return err(404, 'Пользователь не найден')
+            else:
+                return err(404, 'Событие не найдено')
+        else:
+            return err(400, 'Неверный запрос')
+    else:
+        return err(403, 'Нет доступа')
+
+
+
+################################################################
 async def manager_user_connection_state(request):
     if request.user.id and request.user.check_roles({ 'admin', 'moderator', 'chief', 'community manager' }):
         if validate(request.params, MODELS['manager_user_connection_state']):
@@ -2748,6 +2834,32 @@ async def manager_user_connection_rating(request):
                     return err(403, 'Нет доступа')
             else:
                 return err(404, 'Стыковка не найдена')
+        else:
+            return err(400, 'Неверный запрос')
+    else:
+        return err(403, 'Нет доступа')
+
+
+
+################################################################
+async def manager_user_profile_views(request):
+    if request.user.id and request.user.check_roles({ 'admin', 'moderator', 'chief', 'community manager' }):
+        if validate(request.params, MODELS['manager_user_profile_views']):
+            amount = await get_profiles_views_amount(request.params['users_ids'])
+            amount_date = await get_date_profiles_views_amount(request.params['users_ids'], request.params['date'])
+            result = {}
+            for k, v in amount.items():
+                result[k] = {
+                    'amount': v,
+                    'amount_date': 0,
+                }
+            for k, v in amount_date.items():
+                if k in result:
+                    result[k]['amount_date'] = v
+            return OrjsonResponse({
+                'views': result,
+                'date': request.params['date'],
+            })
         else:
             return err(400, 'Неверный запрос')
     else:
