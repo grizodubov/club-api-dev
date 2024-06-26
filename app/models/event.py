@@ -583,7 +583,7 @@ async def get_events():
                 events t1
             WHERE
                 t1.active IS TRUE AND
-                t1.time_event >= '2024-06-05'::date
+                (t1.time_event >= '2024-06-05'::date OR t1.id = 12833)
             ORDER BY
                 t1.time_event"""
     )
