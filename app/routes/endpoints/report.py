@@ -4,7 +4,7 @@ from starlette.routing import Route
 from app.core.request import err
 from app.core.response import OrjsonResponse
 from app.utils.validate import validate
-from app.models.report import get_clients, create_file
+from app.models.report import get_clients, create_clients_file
 
 
 
@@ -39,7 +39,7 @@ async def manager_report_clients_create(request):
             if config is not None:
                 clients_ids = await request.user.get_allowed_clients_ids()
                 result = await get_clients(config, clients_ids)
-                file = create_file(result)
+                file = create_clients_file(result)
                 return OrjsonResponse({
                     'clients': result,
                     'file': file,
