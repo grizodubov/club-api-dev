@@ -588,3 +588,47 @@ async def get_events():
                 t1.time_event"""
     )
     return [ dict(item) for item in data ]
+
+
+
+################################################################
+async def get_events_for_report():
+    api = get_api_context()
+    data = await api.pg.club.fetch(
+        """SELECT
+                t1.id, t1.time_event::date::text || ' '::text || substr(t1.name, 0, 40) || '…' AS name
+            FROM
+                events t1
+            WHERE
+                t1.active IS TRUE AND
+                t1.time_event >= ((now() at time zone 'utc')::date - 180)
+            ORDER BY
+                t1.time_event DESC"""
+    )
+    return [ dict(item) for item in data ]
+
+
+
+################################################################
+async def get_participants_for_report(events_ids = None):
+    api = get_api_context()
+    args = []
+    where = [ 't2.active IS TRUE' ]
+    if events_ids:
+        args.append(events_ids)
+        where.append('t1.event_id = ANY($1)')
+    data = await api.pg.club.fetch(
+        """SELECT
+                t1.event_id,
+                array_agg(jsonb_build_object('id', t1.user_id, 'audit', t1.audit)) AS participants
+            FROM
+                events_users t1
+            INNER JOIN
+                users t2 ON t2.id = t1.user_id
+            WHERE
+                """ + ' AND '.join(where) + """
+            GROUP BY
+                t1.event_id""",
+        *args
+    )
+    return { str(item['event_id']): item['participants'] for item in data }
