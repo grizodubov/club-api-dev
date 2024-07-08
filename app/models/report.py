@@ -5,8 +5,9 @@ from datetime import datetime
 from pandas import DataFrame
 
 from app.core.context import get_api_context
-from app.models.user import get_users_memberships, get_last_activity
+from app.models.user import get_users_memberships, get_last_activity, get_connections_for_report
 from app.models.event import Event, get_participants_for_report
+from app.models.note import get_notes_for_report
 
 
 STAGES = [
@@ -35,7 +36,7 @@ async def get_clients(config, clients_ids):
     api = get_api_context()
 
     columns = [ 't1.id', 't1.name AS avatar_name', 't5.hash AS avatar_hash' ]
-    query = []
+    query = [ 't1.active IS TRUE' ]
     args = []
     i = 1
 
@@ -72,11 +73,20 @@ async def get_clients(config, clients_ids):
     events_users_ids = None
     events_users_cache = {}
 
-    if { 'Мероприятие', 'Присутствие на мероприятии' } & set(config.keys()):
-        if 'Мероприятие' in config and config['Мероприятие']['value'] != '0':
+    if { 'Мероприятие', 'Присутствие на мероприятии', 'Назначенные встречи', 'Состоявшиеся встречи' } & set(config.keys()):
+        events_ids = None
+        audit_flag = None
+        if 'Мероприятие' in config and config['Мероприятие']['filter'] and config['Мероприятие']['value'] != '0':
             event = Event()
             await event.set(id = int(config['Мероприятие']['value']))
-        events_participants = await get_participants_for_report(None if config['Мероприятие']['value'] == '0' else [ int(config['Мероприятие']['value']) ])
+            if event.id:
+                events_ids = [ event.id ]
+        if 'Присутствие на мероприятии' in config and config['Присутствие на мероприятии']['filter'] and config['Присутствие на мероприятии']['value'] != '1000':
+            if config['Присутствие на мероприятии']['value'] == '1':
+                audit_flag = True
+            else:
+                audit_flag = False
+        events_participants = await get_participants_for_report(events_ids, audit_flag)
         events_users_ids = []
         for k, v in events_participants.items():
             for p in v:
@@ -110,7 +120,9 @@ async def get_clients(config, clients_ids):
                 LEFT JOIN
                     avatars t5 ON t5.owner_id = t1.id AND t5.active IS TRUE
                 WHERE
-                    """ + ' AND '.join(query),
+                    """ + ' AND '.join(query) + """
+                ORDER BY
+                    t1.name""",
             *args
         )
         if data:
@@ -118,14 +130,30 @@ async def get_clients(config, clients_ids):
     
     if users_ids:
 
-        if { 'Стадия', 'Контрольная дата' } & set(config.keys()):
+        if { 'Стадия', 'Контрольная дата', 'Пробный период (дней)' } & set(config.keys()):
             memberships = await get_users_memberships(users_ids)
         
         if { 'Активность' } & set(config.keys()):
             activity = await get_last_activity(users_ids = users_ids)
+        
+        if { 'Назначенные встречи', 'Состоявшиеся встречи' } & set(config.keys()):
+            connections = await get_connections_for_report(events_ids = [ event.id ] if event and event.id else None, users_ids = users_ids)
+        
+        if { 'Журнал' } & set(config.keys()):
+            notes = await get_notes_for_report(users_ids = users_ids)
 
         for item in data:
             temp = dict(item).copy()
+            
+            # Стадия
+            if 'Стадия' in config:
+                tc = memberships[str(item['id'])]['stage']
+                if config['Стадия']['filter']:
+                    if config['Стадия']['value'] != '1000':
+                        if int(config['Стадия']['value']) != tc:
+                            continue
+                if config['Стадия']['report']:
+                    temp.update({ 'stage': STAGES[tc] })
 
             # Контрольная дата
             if 'Контрольная дата' in config:
@@ -151,15 +179,27 @@ async def get_clients(config, clients_ids):
                 if config['Контрольная дата']['report']:
                     temp.update({ 'date_control': tc })
             
-            # Стадия
-            if 'Стадия' in config:
-                tc = memberships[str(item['id'])]['stage']
-                if config['Стадия']['filter']:
-                    if config['Стадия']['value'] != '1000':
-                        if int(config['Стадия']['value']) != tc:
+            # Пробный период (дней)
+            if 'Пробный период (дней)' in config:
+                ts = memberships[str(item['id'])]['stage']
+                tc = memberships[str(item['id'])]['stages'][ts]['time']
+                d = ''
+                if tc:
+                    dt1 = datetime.now().date()
+                    dt2 = datetime.fromtimestamp(round(tc / 1000), pytz.utc).date()
+                    d = (dt2 - dt1).days
+                if config['Пробный период (дней)']['filter']:
+                    if config['Пробный период (дней)']['value'] != '1000':
+                        if ts not in { 4, 5 }:
                             continue
-                if config['Стадия']['report']:
-                    temp.update({ 'stage': STAGES[tc] })
+                        if not tc:
+                            continue
+                        if config['Пробный период (дней)']['value'] == '0' and d >= 0:
+                            continue
+                        if config['Пробный период (дней)']['value'] == '1' and d < 0:
+                            continue
+                if config['Пробный период (дней)']['report']:
+                    temp.update({ 'demo': d })
 
             # Активность
             if 'Активность' in config:
@@ -184,6 +224,20 @@ async def get_clients(config, clients_ids):
                                 continue
                 if config['Активность']['report']:
                     temp.update({ 'time_last_activity': tc })
+            
+            # Журнал
+            if 'Журнал' in config:
+                if config['Журнал']['report']:
+                    feed = ''
+                    if str(item['id']) in notes:
+                        for note in notes[str(item['id'])]:
+                            if note['time_update']:
+                                dt = datetime.fromtimestamp(round(note['time_update'] / 1000), pytz.utc)
+                            else:
+                                dt = datetime.fromtimestamp(round(note['time_create'] / 1000), pytz.utc)
+                            feed += note['author_name'] + ' | ' + '{:04d}'.format(dt.year) + '-' + '{:02d}'.format(dt.month) + '-' + '{:02d}'.format(dt.day) + ' ' + '{:02d}'.format(dt.hour) + ' ' + '{:02d}'.format(dt.minute) + "\n"
+                            feed += note['text'] + "\n\n"
+                    temp.update({ 'notes': feed })
                 
             # Мероприятие
             if 'Мероприятие' in config:
@@ -204,12 +258,33 @@ async def get_clients(config, clients_ids):
             # Присутствие на мероприятии
             if 'Присутствие на мероприятии' in config:
                 if config['Присутствие на мероприятии']['report']:
-                    if config['Присутствие на мероприятии']['value'] == '1000':
-                        pass
-                        #temp.update({ 'event_participation': 'Все мероприятия' })
+                    if 'Мероприятие' not in config or config['Мероприятие']['value'] == '0':
+                        if config['Присутствие на мероприятии']['value'] == '1000':
+                            temp.update({ 'event_participation': 'Пришёл: ' + str(events_users_cache[str(item['id'])]['Пришёл']) + "\n" + 'Не пришёл: ' + str(events_users_cache[str(item['id'])]['Не пришёл']) })
+                        elif config['Присутствие на мероприятии']['value'] == '0':
+                            temp.update({ 'event_participation': 'Пришёл: ' + str(events_users_cache[str(item['id'])]['Не пришёл']) })
+                        elif config['Присутствие на мероприятии']['value'] == '1':
+                            temp.update({ 'event_participation': 'Пришёл: ' + str(events_users_cache[str(item['id'])]['Пришёл']) })
                     else:
-                        pass
-                        
+                        if config['Присутствие на мероприятии']['value'] == '1000':
+                            if events_users_cache[str(item['id'])]['Пришёл']:
+                                temp.update({ 'event_participation': 'Пришёл' })
+                            if events_users_cache[str(item['id'])]['Не пришёл']:
+                                temp.update({ 'event_participation': 'Не пришёл' })
+                        elif config['Присутствие на мероприятии']['value'] == '0':
+                            if events_users_cache[str(item['id'])]['Не пришёл']:
+                                temp.update({ 'event_participation': 'Не пришёл' })
+                        elif config['Присутствие на мероприятии']['value'] == '1':
+                            if events_users_cache[str(item['id'])]['Пришёл']:
+                                temp.update({ 'event_participation': 'Пришёл' })
+            
+            if 'Назначенные встречи' in config:
+                if config['Назначенные встречи']['report']:
+                    temp.update({ 'connections': len(connections[str(item['id'])]['all']) if str(item['id']) in connections else 0 })
+            
+            if 'Состоявшиеся встречи' in config:
+                if config['Состоявшиеся встречи']['report']:
+                    temp.update({ 'connections_fulfilled': len(connections[str(item['id'])]['fulfilled']) if str(item['id']) in connections else 0 })
 
             result.append(temp)
 
@@ -231,7 +306,12 @@ def create_clients_file(data):
         'link_telegram': 'Telegram ID',
         'stage': 'Стадия',
         'date_control': 'Контрольная дата',
+        'demo': 'Пробный период (дней)',
+        'notes': 'Журнал',
         'event': 'Мероприятие',
+        'event_participation': 'Присутствие на мероприятии',
+        'connections': 'Назначенные встречи',
+        'connections_fulfilled': 'Состоявшиеся встречи',
         'time_last_activity': 'Активность',
     }
 
@@ -268,53 +348,3 @@ def create_clients_file(data):
     df.to_excel('/var/www/media.clubgermes.ru/html/reports/' + uid + '.xlsx', sheet_name = 'sheet1', index = False)
 
     return 'https://media.clubgermes.ru/reports/' + uid + '.xlsx'
-
-
-
-# {
-#     name: 'Фамилия / Имя',
-#     type: 'text',
-#     column: 'name',
-# },
-# {
-#     name: 'Компания',
-#     type: 'text',
-#     column: 'company',
-# },
-# {
-#     name: 'ИНН',
-#     type: 'text',
-#     column: 'inn',
-# },
-# {
-#     name: 'Должность',
-#     type: 'text',
-#     column: 'position',
-# },
-# {
-#     name: 'Email',
-#     type: 'text',
-#     column: 'email',
-# },
-# {
-#     name: 'Телефон',
-#     type: 'text',
-#     column: 'phone',
-# },
-# {
-#     name: 'Telegram ID',
-#     type: 'text',
-#     column: 'link_telegram',
-# },
-# {
-#     name: 'Контрольная дата',
-#     type: 'date',
-#     column: 'date_control',
-#     modificator: {
-#         name: 'Контрольная дата (модификатор)',
-#         type: 'select',
-#         column: '',
-#         options: [ { value: '1', text: 'Совпадение' }, { value: '2', text: 'Больше' }, { value: '3', text: 'Меньше' } ],
-#         default: '1',
-#     }
-# },

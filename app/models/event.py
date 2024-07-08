@@ -610,13 +610,19 @@ async def get_events_for_report():
 
 
 ################################################################
-async def get_participants_for_report(events_ids = None):
+async def get_participants_for_report(events_ids = None, audit = None):
     api = get_api_context()
     args = []
     where = [ 't2.active IS TRUE' ]
+    i = 1
     if events_ids:
         args.append(events_ids)
-        where.append('t1.event_id = ANY($1)')
+        where.append('t1.event_id = ANY($' + str(i) + ')')
+    if audit is not None:
+        if audit:
+            where.append('t1.audit = 2')
+        else:
+            where.append('t1.audit != 2')
     data = await api.pg.club.fetch(
         """SELECT
                 t1.event_id,

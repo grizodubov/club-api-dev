@@ -6,6 +6,7 @@ import os.path
 from datetime import datetime
 import pytz
 import asyncio
+import pprint
 
 from app.core.context import get_api_context
 from app.utils.packager import pack as data_pack, unpack as data_unpack
@@ -1266,7 +1267,7 @@ class User:
         data = await api.pg.club.fetch(
             """SELECT
                     t2.id, t2.name,
-                    t4.company, t4.position, t4.status,
+                    t4.company, t4.position, t4.status, t4.catalog,
                     t4.link_telegram,
                     coalesce(t3.tags, '') AS tags,
                     coalesce(t3.interests, '') AS interests,
@@ -1289,7 +1290,7 @@ class User:
                 UNION ALL
                 SELECT
                     t6.id, t6.name,
-                    NULL AS company, NULL AS position, NULL AS status,
+                    NULL AS company, NULL AS position, NULL AS status, NULL AS catalog,
                     NULL AS link_telegram,
                     NULL AS tags,
                     NULL AS interests,
@@ -1705,6 +1706,249 @@ class User:
                 *args
             )
             return [ dict(item) | { 'online': check_online_by_id(item['id']) } for item in data ]
+        return []
+
+
+    ################################################################
+    async def get_suggestions_new(self, filter = None, from_id = None, users_ids = None, today_offset = None):
+        api = get_api_context()
+        if filter is None:
+            filter = [ 'company scope', 'company needs' ]
+        offers = {
+            'company scope': 'bid',
+            'company needs': 'ask',
+        }
+        mapping = {
+            'company scope': 'company needs',
+            'company needs': 'company scope',
+        }
+        mask = [ 'company scope', 'company needs' ]
+        filter = [ f for f in filter if f in mask ]
+        if filter:
+            queries = []
+            args = []
+            for f in filter:
+                p = getattr(self, 'tags_1_' + re.sub(r'\s', '_', mapping[f]))
+                if p.strip():
+                    query = """SELECT
+                                    t1.id, t1.name, t2.time_update AS time_create,
+                                    t3.company, t3.position, t3.status, t3.catalog,
+                                    t3.link_telegram,
+                                    t2.tags AS tags,
+                                    ${v2} AS offer,
+                                    t8.hash AS avatar_hash
+                                FROM
+                                    users t1
+                                INNER JOIN
+                                    users_tags_1 t2 ON t2.user_id = t1.id AND t2.category = ${v3}
+                                INNER JOIN
+                                    users_info t3 ON t3.user_id = t1.id
+                                LEFT JOIN
+                                    (
+                                        SELECT
+                                            r3.user_id, array_agg(r3.alias) AS roles
+                                        FROM
+                                            (
+                                                SELECT
+                                                    r1.user_id, r2.alias
+                                                FROM
+                                                    users_roles r1
+                                                INNER JOIN
+                                                    roles r2 ON r2.id = r1.role_id
+                                            ) r3
+                                        GROUP BY
+                                            r3.user_id
+                                    ) t4 ON t4.user_id = t1.id
+                                LEFT JOIN
+                                    avatars t8 ON t8.owner_id = t1.id AND t8.active IS TRUE
+                                WHERE
+                                    t1.id >= 10000 AND
+                                    t1.active IS TRUE AND
+                                    t2.tags SIMILAR TO ${v1} ESCAPE '#'""".format(v1 = len(args) + 1, v2 = len(args) + 2, v3 = len(args) + 3)
+                    # query = """SELECT
+                    #                 t1.id, t1.name, t2.time_update AS time_create,
+                    #                 t3.company, t3.position, t3.status, t3.catalog,
+                    #                 t3.link_telegram,
+                    #                 ts_headline(t2.tags, to_tsquery(${v1}::text), 'HighlightAll=true, StartSel=~, StopSel=~') AS tags,
+                    #                 ${v1} AS search,
+                    #                 ${v2} AS offer,
+                    #                 t8.hash AS avatar_hash,
+                    #                 ts_rank_cd(to_tsvector(t2.tags), to_tsquery(${v1}::text), 32) AS __rank
+                    #             FROM
+                    #                 users t1
+                    #             INNER JOIN
+                    #                 users_tags_1 t2 ON t2.user_id = t1.id AND t2.category = ${v3}
+                    #             INNER JOIN
+                    #                 users_info t3 ON t3.user_id = t1.id
+                    #             LEFT JOIN
+                    #                 (
+                    #                     SELECT
+                    #                         r3.user_id, array_agg(r3.alias) AS roles
+                    #                     FROM
+                    #                         (
+                    #                             SELECT
+                    #                                 r1.user_id, r2.alias
+                    #                             FROM
+                    #                                 users_roles r1
+                    #                             INNER JOIN
+                    #                                 roles r2 ON r2.id = r1.role_id
+                    #                         ) r3
+                    #                     GROUP BY
+                    #                         r3.user_id
+                    #                 ) t4 ON t4.user_id = t1.id
+                    #             LEFT JOIN
+                    #                 avatars t8 ON t8.owner_id = t1.id AND t8.active IS TRUE
+                    #             WHERE
+                    #                 t1.id >= 10000 AND
+                    #                 t1.active IS TRUE AND
+                    #                 to_tsvector(t2.tags) @@ to_tsquery(${v1})""".format(v1 = len(args) + 1, v2 = len(args) + 2, v3 = len(args) + 3)
+                    queries.append(query)
+                    args.append('%(' + '|'.join([ re.sub(r'\|', '#|', t.strip()) for t in p.strip().split('+') if t.strip() ]) + ')%')
+                    args.append(offers[f])
+                    args.append(f)
+            if queries:
+                where = []
+                query_where = ''
+                #
+                where.append('id <> ${v} '.format(v = len(args) + 1))
+                args.append(self.id)
+                #
+                where.append('id NOT IN (SELECT contact_id FROM users_contacts WHERE user_id = ${v})'.format(v = len(args) + 1))
+                args.append(self.id)
+                # from_id
+                if from_id:
+                    where.append('id > ${v} '.format(v = len(args) + 1))
+                    args.append(id)
+                # users_ids
+                if users_ids:
+                    where.append('id = ANY(${v})'.format(v = len(args) + 1))
+                    args.append(users_ids)
+                # today_offset
+                if today_offset:
+                    where.append('time_create >= (now() at time zone \'utc\')::date + (${v} * interval \'1 minute\')'.format(v = len(args) + 1))
+                    args.append(today_offset)
+                if where:
+                    query_where = ' WHERE ' + ' AND '.join(where)
+                data = await api.pg.club.fetch(
+                    """SELECT
+                            id, name, time_create, company, position, status, catalog, link_telegram, tags, offer, avatar_hash, t5.amount AS helpful, count(*) OVER() AS amount
+                        FROM
+                            (
+                                SELECT * FROM
+                                    (""" + ' UNION ALL '.join(queries) + """
+                                    ) d""" + query_where + """
+                                ORDER BY
+                                    time_create DESC
+                            ) u
+                        LEFT JOIN
+                        (
+                            SELECT author_id, count(id) AS amount FROM posts WHERE helpful IS TRUE GROUP BY author_id
+                        ) t5 ON t5.author_id = u.id""",
+                    *args
+                )
+                return [ dict(item) | { 'online': check_online_by_id(item['id']) } for item in data ]
+        return []
+
+
+    ################################################################
+    async def get_events_summary(self):
+        api = get_api_context()
+        result = []
+        events = await api.pg.club.fetch(
+            """SELECT
+                    t1.id, t1.name, t1.format, t1.place, t1.time_event, t1.detail,
+                    t2.confirmation, t2.audit, t2.guests
+                FROM
+                    events t1
+                INNER JOIN
+                    events_users t2 ON t2.event_id = t1.id AND t2.user_id = $1
+                WHERE
+                    t1.active IS TRUE
+                ORDER BY
+                    t1.time_event DESC""",
+            self.id
+        )
+        if events:
+            connections = await self.get_connections_summary()
+            stats = {
+                'events': [ 0, 0, 0 ],
+                'connections': [ 0, 0, 0 ],
+            }
+            for event in events:
+                temp = dict(event)
+                if 'connections' not in temp:
+                    temp.update(
+                        {
+                            'connections': [],
+                            'stats': [ 0, 0, 0 ],
+                        }
+                    )
+                stats['events'][0] += 1
+                if temp['audit'] == 2:
+                    stats['events'][2] += 1
+                else:
+                    stats['events'][1] += 1
+                for connection in connections:
+                    if connection['event_id'] == temp['id']:
+                        temp['connections'].append(connection)
+                        stats['connections'][0] += 1
+                        temp['stats'][0] += 1
+                        if connection['state']:
+                            stats['connections'][2] += 1
+                            temp['stats'][2] += 1
+                        else:
+                            stats['connections'][1] += 1
+                            temp['stats'][1] += 1
+                result.append(temp)
+        return {
+            'events': result,
+            'stats': stats,
+        }
+
+
+    ################################################################
+    async def get_connections_summary(self):
+        api = get_api_context()
+        data = await api.pg.club.fetch(
+            """SELECT
+                    t1.id, t1.event_id, t1.user_1_id, t1.user_2_id, t1.state, t1.rating_1, t1.rating_2,
+                    t2.name AS user_1_name, t3.name AS user_2_name,
+                    t2.active AS user_1_active, t3.active AS user_2_active,
+                    t1.creator_id, t4.name AS creator, t1.deleted,
+                    t22.id AS community_manager_1_id, t33.id AS community_manager_2_id, 
+                    coalesce(t22.name, '') AS community_manager_1,
+                    coalesce(t33.name, '') AS community_manager_2,
+                    t7.hash AS user_1_avatar_hash,
+                    t8.hash AS user_2_avatar_hash,
+                    t222.company AS user_1_company,
+                    t333.company AS user_2_company
+                FROM
+                    users_connections t1
+                LEFT JOIN
+                    users t2 ON t2.id = t1.user_1_id
+                LEFT JOIN
+                    users_info t222 ON t222.user_id = t1.user_1_id
+                LEFT JOIN
+                    users t22 ON t22.id = t2.community_manager_id
+                LEFT JOIN
+                    users t3 ON t3.id = t1.user_2_id
+                LEFT JOIN
+                    users_info t333 ON t333.user_id = t1.user_2_id
+                LEFT JOIN
+                    users t33 ON t33.id = t3.community_manager_id
+                LEFT JOIN
+                    users t4 ON t4.id = t1.creator_id
+                LEFT JOIN
+                    avatars t7 ON t7.owner_id = t1.user_1_id AND t7.active IS TRUE
+                LEFT JOIN
+                    avatars t8 ON t8.owner_id = t1.user_2_id AND t8.active IS TRUE
+                WHERE
+                    t1.deleted IS FALSE AND
+                    (t1.user_1_id = $1 OR t1.user_2_id = $1)""",
+            self.id
+        )
+        if data:
+            return [ dict(item) for item in data ]
         return []
 
 
@@ -3274,3 +3518,50 @@ async def get_date_profiles_views_amount(users_ids, dt):
         users_ids, datetime.strptime(dt, '%Y-%m-%d').date()
     )
     return { str(item['target_id']): item['amount'] for item in data }
+
+
+
+################################################################
+async def get_connections_for_report(events_ids = None, users_ids = None):
+    api = get_api_context()
+    result = {}
+    query_string = ''
+    query = [ 't1.deleted IS FALSE' ]
+    args = []
+    i = 1
+    if events_ids:
+        query.append('t1.event_id = ANY($' + str(i) + ')')
+        args.append(events_ids)
+        i += 1
+    if users_ids:
+        query.append('(t1.user_1_id = ANY($' + str(i) + ') OR t1.user_2_id = ANY($' + str(i) + '))')
+        args.append(users_ids)
+        i += 1
+    if query:
+        query_string = ' WHERE ' + ' AND '.join(query)
+    data = await api.pg.club.fetch(
+        """SELECT
+                t1.id, t1.event_id, t1.user_1_id, t1.user_2_id, t1.state, t1.rating_1, t1.rating_2, t1.creator_id
+            FROM
+                users_connections t1
+            """ + query_string,
+        *args
+    )
+    if data:
+        for item in data:
+            if str(item['user_1_id']) not in result:
+                result[str(item['user_1_id'])] = {
+                    'all': set(),
+                    'fulfilled': set(),
+                }
+            if str(item['user_2_id']) not in result:
+                result[str(item['user_2_id'])] = {
+                    'all': set(),
+                    'fulfilled': set(),
+                }
+            result[str(item['user_1_id'])]['all'].add(item['user_2_id'])
+            result[str(item['user_2_id'])]['all'].add(item['user_1_id'])
+            if item['state']:
+                result[str(item['user_1_id'])]['fulfilled'].add(item['user_2_id'])
+                result[str(item['user_2_id'])]['fulfilled'].add(item['user_1_id'])
+    return result

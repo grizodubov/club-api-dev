@@ -1,7 +1,7 @@
 from datetime import datetime
 import asyncio
 import re
-from random import randint, choices
+from random import randint, choices, sample
 from starlette.routing import Route
 
 from app.core.request import err
@@ -80,6 +80,8 @@ def routes():
         Route('/ma/user/connection/rating', manager_user_connection_rating, methods = [ 'POST' ]),
         Route('/ma/user/profiles/views', manager_user_profile_views, methods = [ 'POST' ]),
         
+        Route('/ma/user/suggestions', manager_user_suggestions, methods = [ 'POST' ]),
+        Route('/ma/user/events/summary', manager_user_events_summary, methods = [ 'POST' ]),
     ]
 
 
@@ -1396,6 +1398,20 @@ MODELS = {
             'values': [ 0, 1, 2 ],
         }
     },
+    'manager_user_suggestions': {
+        'id': {
+			'required': True,
+			'type': 'int',
+            'value_min': 1,
+		},
+    },
+    'manager_user_events_summary': {
+        'id': {
+			'required': True,
+			'type': 'int',
+            'value_min': 1,
+		},
+    },
 }
 
 
@@ -1500,23 +1516,32 @@ async def user_contacts(request):
 ################################################################
 async def user_recommendations(request):
     if request.user.id:
-        result = await request.user.get_recommendations(amount = 3)
+        data = await request.user.get_suggestions_new()
         ### remove data for roles
         roles = set(request.user.roles)
         roles.discard('applicant')
         roles.discard('guest')
-        if not roles:
-            for item in result['tags']:
-                if request.user.id != item['id']:
-                    item['company'] = ''
-                    item['position'] = ''
-                    item['link_telegram'] = ''
-            for item in result['interests']:
-                if request.user.id != item['id']:
-                    item['company'] = ''
-                    item['position'] = ''
-                    item['link_telegram'] = ''
-        return OrjsonResponse(result | { 'self_tags': request.user.tags, 'self_interests': request.user.interests })
+        result = {
+            'tags_all': [],
+            'interests_all': [],
+            'tags': [],
+            'interests': [],
+        }
+        for item in data:
+            if not roles:
+                item['company'] = ''
+                item['position'] = ''
+                item['link_telegram'] = ''
+            if item['offer'] == 'bid':
+                result['tags_all'].append(item)
+            if item['offer'] == 'ask':
+                result['interests_all'].append(item)
+        if result['tags_all']:
+            result['tags'] = sample(result['tags_all'], k = min(3, len(result['tags_all'])))
+        temp = [ item['id'] for item in result['tags_all'] ]
+        if result['interests_all']:
+            result['interests'] = sample(list(filter(lambda x: x['id'] not in temp, result['interests_all'])), k = min(3, len(result['interests_all'])))
+        return OrjsonResponse(result | { 'self_tags': request.user.tags_1_company_scope, 'self_interests': request.user.tags_1_company_needs })
     else:
         return err(403, 'Нет доступа')
 
@@ -2860,6 +2885,44 @@ async def manager_user_profile_views(request):
                 'views': result,
                 'date': request.params['date'],
             })
+        else:
+            return err(400, 'Неверный запрос')
+    else:
+        return err(403, 'Нет доступа')
+
+
+
+################################################################
+async def manager_user_suggestions(request):
+    if request.user.id and request.user.check_roles({ 'admin', 'moderator', 'manager', 'chief', 'community manager' }):
+        if validate(request.params, MODELS['manager_user_suggestions']):
+            user = User()
+            await user.set(id = request.params['id'])
+            if user.id:
+                data = await user.get_suggestions_new()
+                return OrjsonResponse({
+                    'suggestions': data,
+                })
+            else:
+                return err(404, 'Пользователь не найден')
+        else:
+            return err(400, 'Неверный запрос')
+    else:
+        return err(403, 'Нет доступа')
+
+
+
+################################################################
+async def manager_user_events_summary(request):
+    if request.user.id and request.user.check_roles({ 'admin', 'moderator', 'manager', 'chief', 'community manager' }):
+        if validate(request.params, MODELS['manager_user_events_summary']):
+            user = User()
+            await user.set(id = request.params['id'])
+            if user.id:
+                data = await user.get_events_summary()
+                return OrjsonResponse(data)
+            else:
+                return err(404, 'Пользователь не найден')
         else:
             return err(400, 'Неверный запрос')
     else:

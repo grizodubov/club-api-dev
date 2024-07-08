@@ -355,8 +355,7 @@ async def event_info(request):
                             temp['position'] = ''
                             temp['link_telegram'] = ''
                         residents.append(temp)
-                suggestions = await request.user.get_event_suggestions(
-                    event_id = event.id,
+                suggestions = await request.user.get_suggestions_new(
                     users_ids = [ p['id'] for p in event_participants ],
                 )
                 connections = {}

@@ -138,3 +138,40 @@ async def get_last_notes_times(users_ids):
     return {
         str(item['user_id']): item['time_last_note'] for item in data
     }
+
+
+
+################################################################
+async def get_notes_for_report(users_ids):
+    api = get_api_context()
+    data = await api.pg.club.fetch(
+        """SELECT
+                n.user_id, array_agg(n.note) AS notes
+            FROM
+                (
+                    SELECT
+                        t1.user_id,
+                        jsonb_build_object(
+                            'time_create', round(extract(epoch FROM t1.time_create) * 1000)::bigint,
+                            'time_update', round(extract(epoch FROM t1.time_update) * 1000)::bigint,
+                            'author_id', t1.author_id,
+                            'author_id_deleted', t1.author_id_deleted,
+                            'author_name', t2.name,
+                            'text', t1.note,
+                            'title', t1.title
+                        ) AS note
+                    FROM
+                        notes t1
+                    INNER JOIN
+                        users t2 ON t2.id = t1.author_id OR t2.id = t1.author_id_deleted
+                    WHERE
+                        t1.user_id = ANY($1)
+                    ORDER BY
+                        coalesce(t1.time_update, t1.time_create) DESC
+                ) n
+            GROUP BY n.user_id""",
+        users_ids
+    )
+    if data:
+        return { str(item['user_id']): item['notes'] for item in data }
+    return {}
