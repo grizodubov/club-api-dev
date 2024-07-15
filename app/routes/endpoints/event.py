@@ -9,6 +9,7 @@ from app.utils.validate import validate
 from app.models.event import Event, find_closest_event, get_participants, get_participants_with_avatars, get_all_speakers, get_future_events, get_speakers, get_events
 from app.models.user import User, get_connections, create_connection
 from app.models.notification import create_notifications
+from app.models.notification_1 import create as create_notification_1
 
 
 
@@ -392,6 +393,22 @@ async def event_connection(request):
                 if user2.id:
                     await create_connection(event_id = event.id, user_1_id = request.user.id, user_2_id = user2.id, creator_id = request.user.id)
                     create_notifications('connection_add', request.user.id, event.id, request.params)
+                    await create_notification_1(
+                        user_id = user2.id,
+                        event = 'connection', 
+                        data = {
+                            'initiator': {
+                                'id': request.user.id,
+                                'name': request.user.name,
+                            },
+                            'event': {
+                                'id': event.id,
+                                'time_event': event.time_event,
+                                'format': event.format,
+                                'name': event.name,
+                            }
+                        }
+                    )
                     dispatch('user_update', request)
                     return OrjsonResponse({})
                 else:

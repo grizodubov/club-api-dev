@@ -87,7 +87,7 @@ async def after_request(request, response):
     print('---- After request: begin')
     if request.url.path != '/acquire':
         if request.state.session.token_next:
-            response.headers['x-binding-messages'] = str(await request.user.get_unread_messages_amount())
+            response.headers['x-binding-notifications'] = str(await request.user.get_notifications_1_new())
     print('---- After request: end')
 
 

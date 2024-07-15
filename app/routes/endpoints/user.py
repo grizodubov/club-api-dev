@@ -1536,11 +1536,14 @@ async def user_recommendations(request):
                 result['tags_all'].append(item)
             if item['offer'] == 'ask':
                 result['interests_all'].append(item)
+        temp = []
         if result['tags_all']:
-            result['tags'] = sample(result['tags_all'], k = min(3, len(result['tags_all'])))
-        temp = [ item['id'] for item in result['tags_all'] ]
+            #result['tags'] = sample(result['tags_all'], k = min(3, len(result['tags_all'])))
+            result['tags'] = result['tags_all']
+            temp = [ item['id'] for item in result['tags'] ]
         if result['interests_all']:
-            result['interests'] = sample(list(filter(lambda x: x['id'] not in temp, result['interests_all'])), k = min(3, len(result['interests_all'])))
+            #result['interests'] = sample(list(filter(lambda x: x['id'] not in temp, result['interests_all'])), k = min(3, len(result['interests_all'])))
+            result['interests'] = [ item for item in result['interests_all'] if item['id'] not in temp ]
         return OrjsonResponse(result | { 'self_tags': request.user.tags_1_company_scope, 'self_interests': request.user.tags_1_company_needs })
     else:
         return err(403, 'Нет доступа')
@@ -2897,7 +2900,7 @@ async def manager_user_suggestions(request):
     if request.user.id and request.user.check_roles({ 'admin', 'moderator', 'manager', 'chief', 'community manager' }):
         if validate(request.params, MODELS['manager_user_suggestions']):
             user = User()
-            await user.set(id = request.params['id'])
+            await user.set(id = request.params['id'], active = None)
             if user.id:
                 data = await user.get_suggestions_new()
                 return OrjsonResponse({
@@ -2917,7 +2920,7 @@ async def manager_user_events_summary(request):
     if request.user.id and request.user.check_roles({ 'admin', 'moderator', 'manager', 'chief', 'community manager' }):
         if validate(request.params, MODELS['manager_user_events_summary']):
             user = User()
-            await user.set(id = request.params['id'])
+            await user.set(id = request.params['id'], active = None)
             if user.id:
                 data = await user.get_events_summary()
                 return OrjsonResponse(data)

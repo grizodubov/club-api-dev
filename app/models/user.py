@@ -12,6 +12,7 @@ from app.core.context import get_api_context
 from app.utils.packager import pack as data_pack, unpack as data_unpack
 from app.models.role import get_roles
 from app.models.message import check_recepient, check_recepients
+from app.models.notification_1 import get_stats
 
 
 
@@ -1868,12 +1869,12 @@ class User:
                     t1.time_event DESC""",
             self.id
         )
+        stats = {
+            'events': [ 0, 0, 0 ],
+            'connections': [ 0, 0, 0 ],
+        }
         if events:
             connections = await self.get_connections_summary()
-            stats = {
-                'events': [ 0, 0, 0 ],
-                'connections': [ 0, 0, 0 ],
-            }
             for event in events:
                 temp = dict(event)
                 if 'connections' not in temp:
@@ -2696,6 +2697,12 @@ class User:
             self.id, datetime.strptime(dt, '%Y-%m-%d').date()
         )
         return amount
+
+
+    ################################################################
+    async def get_notifications_1_new(self):
+        data = await get_stats(user_id = self.id)
+        return data['new']
 
 
 

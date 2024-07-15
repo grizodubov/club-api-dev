@@ -199,8 +199,8 @@ async def poll_add_vote(request):
                 if user_vote_time:
                     if poll.rating_format == 'Каждый месяц':
                         dt_now = datetime.now(tz = pytz.utc)
-                        dt = dt_now.timestamp() * 1000 - user_vote_time
-                        if dt < 1728000000:
+                        dt = datetime.fromtimestamp(round(user_vote_time / 1000), pytz.utc)
+                        if dt_now.month == dt.month and dt_now.year == dt.year:
                             return err(404, 'Голос уже принят')
                     else:
                         return err(404, 'Голос уже принят')

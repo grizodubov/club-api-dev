@@ -468,8 +468,7 @@ async def get_user_rating_polls(user):
                     v2.closed IS FALSE AND
                     (
                         (
-                            v2.rating_format = 'Один раз' AND
-                            v1.time_create >= $2
+                            v2.rating_format = 'Один раз'
                         ) OR
                         (
                             v2.rating_format = 'Каждый месяц' AND
