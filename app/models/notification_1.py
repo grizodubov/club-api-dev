@@ -24,7 +24,7 @@ async def get_list(user_id, time_breakpoint = None, limit = None):
             args.append(limit)
     result = await api.pg.club.fetch(
         """SELECT
-                time_notify, time_view, event, data
+                time_notify::text AS time_notify, time_view, event, data
             FROM
                 notifications_1
             WHERE
@@ -66,8 +66,8 @@ async def view(user_id, time_notify = None):
     where = [ 'user_id = $1' ]
     args = [ user_id ]
     if time_notify is not None:
-        where.append('time_notify = ANY($2)')
-        args.append(time_notify if type(time_notify) == list else [ time_notify ])
+        where.append('time_notify = $2')
+        args.append(time_notify)
     await api.pg.club.execute(
         """UPDATE
                 notifications_1

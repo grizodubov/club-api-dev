@@ -82,6 +82,7 @@ def routes():
         
         Route('/ma/user/suggestions', manager_user_suggestions, methods = [ 'POST' ]),
         Route('/ma/user/events/summary', manager_user_events_summary, methods = [ 'POST' ]),
+        Route('/ma/user/views/summary', manager_user_views_summary, methods = [ 'POST' ]),
     ]
 
 
@@ -1411,6 +1412,17 @@ MODELS = {
 			'type': 'int',
             'value_min': 1,
 		},
+    },
+    'manager_user_views_summary': {
+        'id': {
+			'required': True,
+			'type': 'int',
+            'value_min': 1,
+		},
+        'date': {
+			'required': True,
+			'type': 'str',
+        },
     },
 }
 
@@ -2924,6 +2936,28 @@ async def manager_user_events_summary(request):
             if user.id:
                 data = await user.get_events_summary()
                 return OrjsonResponse(data)
+            else:
+                return err(404, 'Пользователь не найден')
+        else:
+            return err(400, 'Неверный запрос')
+    else:
+        return err(403, 'Нет доступа')
+
+
+
+################################################################
+async def manager_user_views_summary(request):
+    if request.user.id and request.user.check_roles({ 'admin', 'moderator', 'chief', 'community manager' }):
+        if validate(request.params, MODELS['manager_user_views_summary']):
+            user = User()
+            await user.set(id = request.params['id'], active = None)
+            if user.id:
+                stats = await user.get_profile_views_amount(request.params['date'])
+                log = await user.get_profile_views()
+                return OrjsonResponse({
+                    'stats': stats,
+                    'log': log,
+                })
             else:
                 return err(404, 'Пользователь не найден')
         else:

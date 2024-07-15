@@ -2663,17 +2663,18 @@ class User:
     ################################################################
     async def view_profile(self, user_id):
         api = get_api_context()
-        tv = await api.pg.club.fetchval(
-            """INSERT INTO
-                    users_profiles_views (user_id, target_id)
-                VALUES
-                    ($1, $2)
-                RETURNING
-                    time_view""",
-            self.id, user_id
-        )
-        if tv:
-            return True
+        if self.id != user_id:
+            tv = await api.pg.club.fetchval(
+                """INSERT INTO
+                        users_profiles_views (user_id, target_id)
+                    VALUES
+                        ($1, $2)
+                    RETURNING
+                        time_view""",
+                self.id, user_id
+            )
+            if tv:
+                return True
         return False
 
 
@@ -2703,6 +2704,100 @@ class User:
     async def get_notifications_1_new(self):
         data = await get_stats(user_id = self.id)
         return data['new']
+
+
+    ################################################################
+    async def get_profile_views_amount(self, dt):
+        api = get_api_context()
+        data1 = await api.pg.club.fetchrow(
+            """SELECT
+                    count(*) AS views_all,
+                    count(*) FILTER (WHERE time_view > date($2) AND time_view < date($2) + interval '24 hours') AS views_yersterday,
+                    count(*) FILTER (WHERE time_view > date($2) - interval '144 hours' AND time_view < date($2) + interval '24 hours') AS views_week,
+                    count(*) FILTER (WHERE time_view > date($2) - interval '696 hours' AND time_view < date($2) + interval '24 hours') AS views_month
+                FROM
+                    users_profiles_views
+                WHERE
+                    target_id = $1 AND user_id IN (
+                        SELECT user_id FROM users_roles WHERE role_id = 10002
+                    )""",
+            self.id, datetime.strptime(dt, '%Y-%m-%d').date()
+        )
+        data2 = await api.pg.club.fetchrow(
+            """SELECT
+                    count(*) AS views_all,
+                    count(*) FILTER (WHERE time_view > date($2) AND time_view < date($2) + interval '24 hours') AS views_yersterday,
+                    count(*) FILTER (WHERE time_view > date($2) - interval '144 hours' AND time_view < date($2) + interval '24 hours') AS views_week,
+                    count(*) FILTER (WHERE time_view > date($2) - interval '696 hours' AND time_view < date($2) + interval '24 hours') AS views_month
+                FROM
+                    users_profiles_views
+                WHERE
+                    user_id = $1 AND target_id IN (
+                        SELECT user_id FROM users_roles WHERE role_id = 10002
+                    )""",
+            self.id, datetime.strptime(dt, '%Y-%m-%d').date()
+        )
+        return {
+            'in': {
+                'all': data1['views_all'],
+                'yersterday': data1['views_yersterday'],
+                'week': data1['views_week'],
+                'month': data1['views_month'],
+            },
+            'out': {
+                'all': data2['views_all'],
+                'yersterday': data2['views_yersterday'],
+                'week': data2['views_week'],
+                'month': data2['views_month'],
+            },
+        }
+
+
+    ################################################################
+    async def get_profile_views(self):
+        api = get_api_context()
+        data1 = await api.pg.club.fetch(
+            """SELECT
+                    t1.time_view, t2.id, t2.name, t3.company, t2.active, t4.hash AS avatar_hash
+                FROM
+                    users_profiles_views t1
+                INNER JOIN
+                    users t2 ON t2.id = t1.user_id
+                INNER JOIN
+                    users_info t3 ON t3.user_id = t1.user_id
+                LEFT JOIN
+                    avatars t4 ON t4.owner_id = t1.user_id AND t4.active IS TRUE
+                WHERE
+                    t1.target_id = $1 AND t1.user_id IN (
+                        SELECT user_id FROM users_roles WHERE role_id = 10002
+                    )
+                ORDER BY
+                    t1.time_view DESC LIMIT 100""",
+            self.id
+        )
+        data2 = await api.pg.club.fetch(
+            """SELECT
+                    t1.time_view, t2.id, t2.name, t3.company, t2.active, t4.hash AS avatar_hash
+                FROM
+                    users_profiles_views t1
+                INNER JOIN
+                    users t2 ON t2.id = t1.target_id
+                INNER JOIN
+                    users_info t3 ON t3.user_id = t1.target_id
+                LEFT JOIN
+                    avatars t4 ON t4.owner_id = t1.target_id AND t4.active IS TRUE
+                WHERE
+                    t1.user_id = $1 AND t1.target_id IN (
+                        SELECT user_id FROM users_roles WHERE role_id = 10002
+                    )
+                ORDER BY
+                    t1.time_view DESC LIMIT 100""",
+            self.id
+        )
+        return {
+            'in': [ dict(item) for item in data1 ] if data1 else [],
+            'out': [ dict(item) for item in data2 ] if data2 else [],
+        }
 
 
 

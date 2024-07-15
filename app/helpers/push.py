@@ -11,7 +11,7 @@ def send_push_message(api, recepients_ids, title, message, link):
 
 
 ################################################################
-async def stateful_session(api, recepients_ids, title, message, link):
+async def stateful_session(api, recepients_ids, title, message, link, data = None):
     #recepients_ids = [ 10004, 10069 ]
     tokens = await api.pg.club.fetch(
         """SELECT
@@ -34,6 +34,8 @@ async def stateful_session(api, recepients_ids, title, message, link):
                 'link': link
             },
         }
+        if data is not None:
+            m['data'].update(data)
         async with AsyncPyFCM(google_application_credentials="fcm-credentials.json") as async_fcm:
             responses = await asyncio.gather(
                 *[ task_send(async_fcm, m | { 'token': item['device_token'] }) for item in tokens ]

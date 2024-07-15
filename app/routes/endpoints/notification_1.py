@@ -21,7 +21,7 @@ MODELS = {
     'notifications_list': {
         'time_breakpoint': {
             'required': True,
-			'type': 'int',
+			'type': 'str',
             'null': True,
         },
         'limit': {
@@ -33,8 +33,7 @@ MODELS = {
     'notification_view': {
         'time_notify': {
             'required': True,
-			'type': 'int',
-            'list': True,
+			'type': 'str',
         },
     },
 }
@@ -85,7 +84,7 @@ async def notification_view_all(request):
     if request.user.id:
         await view(
             user_id = request.user.id,
-            time_create = None,
+            time_notify = None,
         )
         return OrjsonResponse({})
     else:

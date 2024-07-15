@@ -21,10 +21,13 @@ def jsonb_decoder(value):
 
 ####################################################################
 def timestamp_encoder(value):
-    try:
-        return datetime.fromtimestamp(value / 1000).strftime('%Y-%m-%d %H:%M:%S.%f')
-    except:
-        return datetime.fromtimestamp(value / 1000).strftime('%Y-%m-%d %H:%M:%S')
+    if type(value) == int or type(value) == float:
+        try:
+            return datetime.fromtimestamp(value / 1000).strftime('%Y-%m-%d %H:%M:%S.%f')
+        except:
+            return datetime.fromtimestamp(value / 1000).strftime('%Y-%m-%d %H:%M:%S')
+    else:
+        return value
 
 
 ####################################################################

@@ -30,7 +30,7 @@ app = Starlette(
             allow_methods = [ '*' ],
             allow_headers = [ '*' ],
             expose_headers = [
-                'x-binding-messages',
+                'x-binding-notifications',
             ],
             allow_credentials = False,
         ),

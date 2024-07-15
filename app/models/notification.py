@@ -528,14 +528,20 @@ async def process_connection_add(api, user_id, item_id, params):
     if user_target.community_manager_id and user_target.community_manager_id != user_initiator.community_manager_id:
         await manager_target.set(id = user_target.community_manager_id)
     if user_target.id and user_initiator.id and event.id:
-        link = '/events/' + str(event.id)
+        link = '/residents/' + str(user_initiator.id)
 
         body = Template(TEMPLATES['push_target'])
         message = body.render(
             initiator = user_initiator.name,
             initiator_company = user_initiator.company,
         )
-        send_push_message(api, [ user_target.id ], 'Назначение встречи', message, link)
+        send_push_message(api, [ user_target.id ], 'Назначение встречи', message, link, {
+            'event': 'connection',
+            'initiator_id': user_initiator.id,
+            'initiator_name': user_initiator.name,
+            'event_id': event.id,
+            'event_time_event': event.time_event,
+        })
 
         body = Template(TEMPLATES['sms_target'])
         message  = body.render(
