@@ -282,7 +282,7 @@ async def tag_1_get_tags(category):
 ####################################################################
 async def tag_1_catalog_add_tag(id, catalog, tag):
     api = get_api_context()
-    data = await api.pg.club.fetch(
+    await api.pg.club.execute(
         """INSERT INTO
                 tags_catalog (parent_id, catalog, tag)
             VALUES
@@ -295,7 +295,7 @@ async def tag_1_catalog_add_tag(id, catalog, tag):
 ####################################################################
 async def tag_1_catalog_update_tag(id, tag):
     api = get_api_context()
-    data = await api.pg.club.fetch(
+    await api.pg.club.execute(
         """UPDATE
                 tags_catalog
             SET
@@ -310,7 +310,7 @@ async def tag_1_catalog_update_tag(id, tag):
 ####################################################################
 async def tag_1_catalog_delete_tag(id):
     api = get_api_context()
-    data = await api.pg.club.fetch(
+    await api.pg.club.execute(
         """DELETE FROM
                 tags_catalog
             WHERE
@@ -338,6 +338,32 @@ async def tag_1_user_update_tag(category, tag, tag_new):
 async def tag_1_user_delete_tag(category, tag):
     api = get_api_context()
     await update_user_tag(api, category, tag, '')
+
+
+
+####################################################################
+async def tag_1_user_move_tag(category, tag, parent_id):
+    api = get_api_context()
+    catalog = await api.pg.club.fetchval(
+        """SELECT catalog FROM tags_categories WHERE alias = $1""",
+        category
+    )
+    pid = None
+    if parent_id != '0':
+        pid = int(parent_id)
+        tag_root = await api.pg.club.fetchval(
+            """SELECT tag FROM tags_catalog WHERE id = $1""",
+            pid
+        )
+        if tag_root:
+            await update_user_tag(api, category, tag, tag_root + ' | ' + tag)
+    await api.pg.club.execute(
+        """INSERT INTO
+                tags_catalog (parent_id, catalog, tag)
+            VALUES
+                ($1, $2, $3)""",
+        pid, catalog, tag
+    )
 
 
 

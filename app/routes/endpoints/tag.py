@@ -4,7 +4,7 @@ from app.core.request import err
 from app.core.response import OrjsonResponse
 from app.core.event import dispatch
 from app.utils.validate import validate
-from app.models.tag import get_tags, update_tag, tag_1_get_categories, tag_1_get_category, tag_1_get_catalog, tag_1_get_tags, tag_1_category_update, tag_1_catalog_add_tag, tag_1_catalog_update_tag, tag_1_catalog_delete_tag, tag_1_user_update_tag, tag_1_user_delete_tag
+from app.models.tag import get_tags, update_tag, tag_1_get_categories, tag_1_get_category, tag_1_get_catalog, tag_1_get_tags, tag_1_category_update, tag_1_catalog_add_tag, tag_1_catalog_update_tag, tag_1_catalog_delete_tag, tag_1_user_update_tag, tag_1_user_delete_tag, tag_1_user_move_tag
 
 
 
@@ -20,6 +20,7 @@ def routes():
         Route('/m/tag1/category/update', moderator_tag1_category_update, methods = [ 'POST' ]),
         Route('/m/tag1/catalog/tag', moderator_tag1_catalog_tag, methods = [ 'POST' ]),
         Route('/m/tag1/user/tag', moderator_tag1_user_tag, methods = [ 'POST' ]),
+        Route('/m/tag1/user/tag/move', moderator_tag1_user_tag_move, methods = [ 'POST' ]),
     ]
 
 
@@ -94,6 +95,21 @@ MODELS = {
             'list': True,
         },
         'tag_new': {
+            'required': True,
+			'type': 'str',
+        },
+    },
+    'moderator_tag1_user_tag_move': {
+        'category': {
+            'required': True,
+			'type': 'str',
+        },
+        'tag': {
+            'required': True,
+			'type': 'str',
+            'list': True,
+        },
+        'parent_id': {
             'required': True,
 			'type': 'str',
         },
@@ -279,6 +295,19 @@ async def moderator_tag1_user_tag(request):
                 await tag_1_user_update_tag(request.params['category'], request.params['tag'], request.params['tag_new'])
             elif request.params['method'] == 'del':
                 await tag_1_user_delete_tag(request.params['category'], request.params['tag'])
+            return OrjsonResponse({})
+        else:
+            return err(400, 'Неверный запрос')
+    else:
+        return err(403, 'Нет доступа')
+
+
+
+################################################################
+async def moderator_tag1_user_tag_move(request):
+    if request.user.id and request.user.check_roles({ 'admin', 'moderator' }):
+        if validate(request.params, MODELS['moderator_tag1_user_tag_move']):
+            await tag_1_user_move_tag(request.params['category'], request.params['tag'], request.params['parent_id'])
             return OrjsonResponse({})
         else:
             return err(400, 'Неверный запрос')
