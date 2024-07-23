@@ -24,7 +24,7 @@ async def get_list(user_id, time_breakpoint = None, limit = None):
             args.append(limit)
     result = await api.pg.club.fetch(
         """SELECT
-                time_notify::text AS time_notify, time_view, event, data
+                time_notify, time_notify::text AS time_notify_key, time_view, event, data
             FROM
                 notifications_1
             WHERE
@@ -89,4 +89,25 @@ async def create(user_id, event, data):
             VALUES
                 ($1, $2, $3)""",
         user_id, event, data
+    )
+
+
+
+####################################################################
+async def create_multiple(users_ids, event, data):
+    api = get_api_context()
+    i = 1
+    query = []
+    args = []
+    for id in users_ids:
+        temp = '($' + str(i) + ', $' + str(i + 1) + ', $' + str(i + 2) + ')'
+        query.append(temp)
+        args.extend([ id, event, data ])
+        i = i + 3
+    await api.pg.club.execute(
+        """INSERT INTO
+                notifications_1 (user_id, event, data)
+            VALUES
+                """ + ', '.join(query),
+        *args
     )

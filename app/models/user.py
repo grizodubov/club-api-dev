@@ -1981,6 +1981,19 @@ class User:
 
 
     ################################################################
+    async def check_event(self, event_id):
+        api = get_api_context()
+        result = await api.pg.club.fetchval(
+            """SELECT user_id FROM events_users WHERE event_id = $1 AND user_id = $2""",
+            event_id, self.id
+        )
+        print(result)
+        if result:
+            return True
+        return False
+
+
+    ################################################################
     async def audit_event(self, event_id, audit):
         api = get_api_context()
         await api.pg.club.execute(
@@ -2714,7 +2727,11 @@ class User:
                     count(*) AS views_all,
                     count(*) FILTER (WHERE time_view > date($2) AND time_view < date($2) + interval '24 hours') AS views_yersterday,
                     count(*) FILTER (WHERE time_view > date($2) - interval '144 hours' AND time_view < date($2) + interval '24 hours') AS views_week,
-                    count(*) FILTER (WHERE time_view > date($2) - interval '696 hours' AND time_view < date($2) + interval '24 hours') AS views_month
+                    count(*) FILTER (WHERE time_view > date($2) - interval '696 hours' AND time_view < date($2) + interval '24 hours') AS views_month,
+                    count(DISTINCT user_id) AS views_all_unique,
+                    count(DISTINCT user_id) FILTER (WHERE time_view > date($2) AND time_view < date($2) + interval '24 hours') AS views_yersterday_unique,
+                    count(DISTINCT user_id) FILTER (WHERE time_view > date($2) - interval '144 hours' AND time_view < date($2) + interval '24 hours') AS views_week_unique,
+                    count(DISTINCT user_id) FILTER (WHERE time_view > date($2) - interval '696 hours' AND time_view < date($2) + interval '24 hours') AS views_month_unique
                 FROM
                     users_profiles_views
                 WHERE
@@ -2728,7 +2745,11 @@ class User:
                     count(*) AS views_all,
                     count(*) FILTER (WHERE time_view > date($2) AND time_view < date($2) + interval '24 hours') AS views_yersterday,
                     count(*) FILTER (WHERE time_view > date($2) - interval '144 hours' AND time_view < date($2) + interval '24 hours') AS views_week,
-                    count(*) FILTER (WHERE time_view > date($2) - interval '696 hours' AND time_view < date($2) + interval '24 hours') AS views_month
+                    count(*) FILTER (WHERE time_view > date($2) - interval '696 hours' AND time_view < date($2) + interval '24 hours') AS views_month,
+                    count(DISTINCT target_id) AS views_all_unique,
+                    count(DISTINCT target_id) FILTER (WHERE time_view > date($2) AND time_view < date($2) + interval '24 hours') AS views_yersterday_unique,
+                    count(DISTINCT target_id) FILTER (WHERE time_view > date($2) - interval '144 hours' AND time_view < date($2) + interval '24 hours') AS views_week_unique,
+                    count(DISTINCT target_id) FILTER (WHERE time_view > date($2) - interval '696 hours' AND time_view < date($2) + interval '24 hours') AS views_month_unique
                 FROM
                     users_profiles_views
                 WHERE
@@ -2743,12 +2764,20 @@ class User:
                 'yersterday': data1['views_yersterday'],
                 'week': data1['views_week'],
                 'month': data1['views_month'],
+                'all_unique': data1['views_all_unique'],
+                'yersterday_unique': data1['views_yersterday_unique'],
+                'week_unique': data1['views_week_unique'],
+                'month_unique': data1['views_month_unique'],
             },
             'out': {
                 'all': data2['views_all'],
                 'yersterday': data2['views_yersterday'],
                 'week': data2['views_week'],
                 'month': data2['views_month'],
+                'all_unique': data2['views_all_unique'],
+                'yersterday_unique': data2['views_yersterday_unique'],
+                'week_unique': data2['views_week_unique'],
+                'month_unique': data2['views_month_unique'],
             },
         }
 
@@ -2798,6 +2827,30 @@ class User:
             'in': [ dict(item) for item in data1 ] if data1 else [],
             'out': [ dict(item) for item in data2 ] if data2 else [],
         }
+
+
+    ################################################################
+    async def get_event_connections_ids(self, event_id):
+        api = get_api_context()
+        data = await api.pg.club.fetch(
+            """SELECT
+                    user_1_id, user_2_id
+                FROM
+                    users_connections
+                WHERE
+                    (user_1_id = $1 OR user_2_id = $1) AND
+                    event_id = $2 AND
+                    deleted IS FALSE""",
+            self.id, event_id
+        )
+        temp = []
+        if data:
+            for item in data:
+                if item['user_1_id'] != self.id:
+                    temp.append(item['user_1_id'])
+                else:
+                    temp.append(item['user_2_id'])
+        return temp
 
 
 
@@ -3404,7 +3457,8 @@ async def create_connection(event_id, user_1_id, user_2_id, creator_id):
                     ($1, $2, $3, $4)
                 ON CONFLICT
                     (event_id, user_1_id, user_2_id)
-                DO NOTHING
+                DO UPDATE SET
+                    deleted = FALSE
                 RETURNING
                     id""",
             event_id,

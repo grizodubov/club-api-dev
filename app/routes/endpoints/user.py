@@ -14,6 +14,7 @@ from app.models.item import Item
 from app.models.note import get_last_notes_times
 from app.helpers.mobile import send_mobile_message
 from app.models.notification import create_notifications
+from app.models.notification_1 import create_multiple as create_notification_1_multi
 
 
 
@@ -1724,7 +1725,7 @@ async def user_add_event(request):
             return err(400, 'Неверный запрос')
     else:
         return err(403, 'Нет доступа')
-
+        
 
 
 ################################################################
@@ -2545,6 +2546,26 @@ async def manager_user_audit_event(request):
                     if request.user.check_roles({ 'admin', 'moderator', 'chief', 'organizer' }) or \
                             user.community_manager_id == request.user.id:
                         await user.audit_event(event_id = event.id, audit = request.params['audit'])
+                        if request.params['audit'] == 2:
+                            create_notifications('user_arrive', request.user.id, user.id, request.params)
+                            connections_ids = await user.get_event_connections_ids(event_id = event.id)
+                            if connections_ids:
+                                await create_notification_1_multi(
+                                    users_ids = connections_ids,
+                                    event = 'arrive', 
+                                    data = {
+                                        'user': {
+                                            'id': user.id,
+                                            'name': user.name,
+                                        },
+                                        'event': {
+                                            'id': event.id,
+                                            'time_event': event.time_event,
+                                            'format': event.format,
+                                            'name': event.name,
+                                        }
+                                    }
+                                )
                         dispatch('user_update', request)
                         return OrjsonResponse({})
                     else:
