@@ -6,6 +6,7 @@ from app.core.response import OrjsonResponse
 from app.utils.validate import validate
 from app.models.report import get_clients, create_clients_file
 from app.models.event import get_events_for_report
+from app.models.user import get_community_managers_for_report
 
 
 
@@ -13,6 +14,7 @@ def routes():
     return [
         Route('/ma/report/clients/create', manager_report_clients_create, methods = [ 'POST' ]),
         Route('/ma/report/events/list', manager_report_events_list, methods = [ 'POST' ]),
+        Route('/ma/report/managers/list', manager_report_managers_list, methods = [ 'POST' ]),
     ]
 
 
@@ -61,6 +63,24 @@ async def manager_report_events_list(request):
         events = await get_events_for_report()
         return OrjsonResponse({
             'events': events,
+        })
+    else:
+        return err(403, 'Нет доступа')
+
+
+
+################################################################
+async def manager_report_managers_list(request):
+    if request.user.id and request.user.check_roles({ 'admin', 'editor', 'manager', 'chief', 'community manager', 'agent', 'curator' }):
+        agent_id = None
+        community_manager_id = None
+        if request.user.check_roles({ 'agent' }) and not request.user.check_roles({ 'admin', 'editor', 'manager', 'chief', 'curator' }):
+            agent_id = request.user.id
+        if request.user.check_roles({ 'community manager' }) and not request.user.check_roles({ 'admin', 'editor', 'manager', 'chief', 'curator' }):
+            community_manager_id = request.user.id
+        managers = await get_community_managers_for_report(agent_id = agent_id, community_manager_id = community_manager_id)
+        return OrjsonResponse({
+            'managers': managers,
         })
     else:
         return err(403, 'Нет доступа')

@@ -29,13 +29,13 @@ async def stateful_session(api, recepients_ids, title, message, link, data = Non
         temp = {}
         for item in tokens_data:
             if item['device_id'] not in temp:
-                temp[item['device_id']] = item
+                temp[item['device_id']] = dict(item)
             else:
                 if temp[item['device_id']]['time_last_activity'] < item['time_last_activity']:
-                    temp[item['device_id']] = item
+                    temp[item['device_id']] = dict(item)
         tokens = []
         for v in temp.values():
-            tokens.append[v['device_token']]
+            tokens.append(v['device_token'])
         if tokens:
             m = {
                 'notification': {

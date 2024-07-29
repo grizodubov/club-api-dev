@@ -35,8 +35,9 @@ EVENTS = {
 async def get_clients(config, clients_ids):
     api = get_api_context()
 
-    columns = [ 't1.id', 't1.name AS avatar_name', 't5.hash AS avatar_hash' ]
-    query = [ 't1.active IS TRUE' ]
+    columns = [ 't1.id', 't1.active', 't1.name AS avatar_name', 't3.alias AS role', 't5.hash AS avatar_hash', 't6.name AS community_manager' ]
+    #query = [ 't1.active IS TRUE' ]
+    query = []
     args = []
     i = 1
 
@@ -52,6 +53,7 @@ async def get_clients(config, clients_ids):
         'Фамилия / Имя': 't1.name',
         'Компания': 't4.company',
         'ИНН': 't4.inn',
+        'Отрасль': 't4.catalog',
         'Оборот': 't4.annual',
         'Должность': 't4.position',
         'Email': 't1.email',
@@ -72,6 +74,25 @@ async def get_clients(config, clients_ids):
     event = None
     events_users_ids = None
     events_users_cache = {}
+
+    if 'Роль' not in config or not config['Роль']['filter'] or (config['Роль']['filter'] and config['Роль']['value'] == 'client'):
+        query.append("""t3.alias = 'client'""")
+    else:
+        if config['Роль']['filter'] and config['Роль']['value'] == 'applicant':
+            query.append("""t3.alias = 'applicant'""")
+        if config['Роль']['filter'] and config['Роль']['value'] == 'guest':
+            query.append("""t3.alias = 'guest'""")
+
+    if 'Активен' in config and config['Активен']['filter'] and config['Активен']['value'] != '1000':
+        if config['Активен']['value'] == '0':
+            query.append('t1.active IS FALSE')
+        if config['Активен']['value'] == '1':
+            query.append('t1.active IS TRUE')
+
+    if 'Коммьюнити-менеджер' in config and config['Коммьюнити-менеджер']['filter'] and config['Коммьюнити-менеджер']['value'] != '0':
+        query.append('t1.community_manager_id = $' + str(i))
+        args.append(int(config['Коммьюнити-менеджер']['value']))
+        i += 1
 
     if { 'Мероприятие', 'Присутствие на мероприятии', 'Назначенные встречи', 'Состоявшиеся встречи' } & set(config.keys()):
         events_ids = None
@@ -103,9 +124,14 @@ async def get_clients(config, clients_ids):
         if events_users_ids:
             query.append('t1.id = ANY($' + str(i) + ')')
             args.append(list(set(events_users_ids)))
+    
+    users_ids = []
+
+    where = ''
+    if query:
+        where = 'WHERE ' + ' AND '.join(query)
 
     if columns and (events_users_ids is None or events_users_ids):
-        query.append("""t3.alias = 'client'""")
         data = await api.pg.club.fetch(
             """SELECT
                     """ + ', '.join(columns) + """
@@ -119,8 +145,9 @@ async def get_clients(config, clients_ids):
                     users_info t4 ON t4.user_id = t1.id
                 LEFT JOIN
                     avatars t5 ON t5.owner_id = t1.id AND t5.active IS TRUE
-                WHERE
-                    """ + ' AND '.join(query) + """
+                LEFT JOIN
+                    users t6 ON t6.id = t1.community_manager_id
+                """ + where + """
                 ORDER BY
                     t1.name""",
             *args
@@ -130,7 +157,7 @@ async def get_clients(config, clients_ids):
     
     if users_ids:
 
-        if { 'Стадия', 'Контрольная дата', 'Пробный период (дней)' } & set(config.keys()):
+        if { 'Стадия', 'Отказ', 'Контрольная дата', 'Пробный период (дней)' } & set(config.keys()):
             memberships = await get_users_memberships(users_ids)
         
         if { 'Активность' } & set(config.keys()):
@@ -144,7 +171,22 @@ async def get_clients(config, clients_ids):
 
         for item in data:
             temp = dict(item).copy()
-            
+
+            # Активен
+            if 'Активен' in config:
+                if config['Активен']['report']:
+                    temp.update({ 'active': 'Да' if item['active'] is True else 'Нет' })
+
+            # Роль
+            if 'Роль' in config:
+                if config['Роль']['report']:
+                    roles = {
+                        'client': 'Клиент',
+                        'applicant': 'Новичок',
+                        'guest': 'Гость',
+                    }
+                    temp.update({ 'role': roles[item['role']] if item['role'] in roles else '' })
+
             # Стадия
             if 'Стадия' in config:
                 tc = memberships[str(item['id'])]['stage']
@@ -154,6 +196,19 @@ async def get_clients(config, clients_ids):
                             continue
                 if config['Стадия']['report']:
                     temp.update({ 'stage': STAGES[tc] })
+            
+            # Отказ
+            if 'Отказ' in config:
+                ts = memberships[str(item['id'])]['stage']
+                rejection = memberships[str(item['id'])]['stages'][ts]['rejection']
+                if config['Отказ']['filter']:
+                    if config['Отказ']['value'] != '1000':
+                        if config['Отказ']['value'] == '0' and rejection is True:
+                            continue
+                        if config['Отказ']['value'] == '1' and rejection is False:
+                            continue
+                if config['Отказ']['report']:
+                    temp.update({ 'rejection': 'Да' if rejection else 'Нет' })
 
             # Контрольная дата
             if 'Контрольная дата' in config:
@@ -285,7 +340,11 @@ async def get_clients(config, clients_ids):
             if 'Состоявшиеся встречи' in config:
                 if config['Состоявшиеся встречи']['report']:
                     temp.update({ 'connections_fulfilled': len(connections[str(item['id'])]['fulfilled']) if str(item['id']) in connections else 0 })
-
+            
+            if 'Коммьюнити-менеджер' in config:
+                if config['Коммьюнити-менеджер']['report']:
+                    temp.update({ 'community_manager': item['community_manager'] })
+            
             result.append(temp)
 
     return result
@@ -297,14 +356,18 @@ def create_clients_file(data):
 
     FIELDS = {
         'name': 'Имя',
+        'role': 'Роль',
+        'active': 'Активен',
         'company': 'Компания',
         'inn': 'ИНН',
+        'catalog': 'Отрасль',
         'annual': 'Оборот',
         'position': 'Должность',
         'email': 'Email',
         'phone': 'Телефон',
         'link_telegram': 'Telegram ID',
         'stage': 'Стадия',
+        'rejection': 'Отказ',
         'date_control': 'Контрольная дата',
         'demo': 'Пробный период (дней)',
         'notes': 'Журнал',
@@ -313,6 +376,7 @@ def create_clients_file(data):
         'connections': 'Назначенные встречи',
         'connections_fulfilled': 'Состоявшиеся встречи',
         'time_last_activity': 'Активность',
+        'community_manager': 'Коммьюнити-менеджер',
     }
 
     table = {}

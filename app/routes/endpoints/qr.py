@@ -15,6 +15,7 @@ from app.models.notification_1 import create_multiple as create_notification_1_m
 
 def routes():
     return [
+        Route('/qr/show', qr_show, methods = [ 'POST' ]),
         Route('/qr/event/register', qr_event_register, methods = [ 'POST' ]),
 
         Route('/ma/qr/create', manager_qr_create, methods = [ 'POST' ]),
@@ -48,6 +49,24 @@ MODELS = {
         },
     },
 }
+
+
+################################################################
+async def qr_show(request):
+    if request.user.id:
+        file ='profile-' + str(request.user.id)
+        data = {
+            'type': 'user',
+            'method': 'profile',
+            'id': request.user.id
+        }
+        url = create_code('user', file, data)
+        return OrjsonResponse({
+            'url': url,
+        })
+    else:
+        return err(403, 'Нет доступа')
+        
 
 
 ################################################################

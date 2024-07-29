@@ -3129,6 +3129,41 @@ async def get_community_managers():
 
 
 ################################################################
+async def get_community_managers_for_report(agent_id = None, community_manager_id = None):
+    api = get_api_context()
+    where = [ "t3.alias = 'community manager'" ]
+    args = []
+    i = 1
+    if agent_id:
+        where.append('t1.agent_id = $' + str(i))
+        args.append(agent_id)
+        i += 1
+    if community_manager_id:
+        where.append('t1.id = $' + str(i))
+        args.append(community_manager_id)
+        i += 1
+    data = await api.pg.club.fetch(
+        """SELECT
+                t1.id, t1.name
+            FROM
+                users t1
+            INNER JOIN
+                users_roles t2 ON t2.user_id = t1.id
+            INNER JOIN
+                roles t3 ON t3.id = t2.role_id
+            WHERE
+                """ + ' AND '.join(where) + """
+            ORDER BY
+                t1.name""",
+        *args
+    )
+    return [
+        { 'id': item['id'], 'name': item['name'] } for item in data
+    ]
+
+
+
+################################################################
 async def get_agents():
     api = get_api_context()
     data = await api.pg.club.fetch(
