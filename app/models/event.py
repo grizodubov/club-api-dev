@@ -391,16 +391,39 @@ async def find_closest_event(mark):
 ################################################################
 async def get_participants(events_ids):
     api = get_api_context()
+    # data = await api.pg.club.fetch(
+    #     """SELECT
+    #             t1.event_id,
+    #             array_agg(jsonb_build_object('id', t1.user_id, 'name', t2.name, 'confirmation', t1.confirmation, 'audit', t1.audit, 'guests', t1.guests)) AS participants
+    #         FROM
+    #             events_users t1
+    #         INNER JOIN
+    #             users t2 ON t2.id = t1.user_id
+    #         WHERE
+    #             t1.event_id = ANY($1) AND t2.active IS TRUE
+    #         GROUP BY
+    #             t1.event_id""",
+    #     events_ids
+    # )
     data = await api.pg.club.fetch(
         """SELECT
                 t1.event_id,
-                array_agg(jsonb_build_object('id', t1.user_id, 'name', t2.name, 'confirmation', t1.confirmation, 'audit', t1.audit, 'guests', t1.guests)) AS participants
+                array_agg(
+                    jsonb_build_object(
+                        'id', t1.user_id,
+                        'name', t2.name,
+                        'confirmation', t1.confirmation,
+                        'audit', t1.audit,
+                        'guests', t1.guests,
+                        'active', t2.active
+                    )
+                ) AS participants
             FROM
                 events_users t1
             INNER JOIN
                 users t2 ON t2.id = t1.user_id
             WHERE
-                t1.event_id = ANY($1) AND t2.active IS TRUE
+                t1.event_id = ANY($1)
             GROUP BY
                 t1.event_id""",
         events_ids
@@ -412,6 +435,46 @@ async def get_participants(events_ids):
 ################################################################
 async def get_participants_with_avatars(events_ids):
     api = get_api_context()
+    # data = await api.pg.club.fetch(
+    #     """SELECT
+    #             t1.event_id,
+    #             array_agg(jsonb_build_object(
+    #                 'id', t1.user_id,
+    #                 'name', t2.name,
+    #                 'company', t22.company,
+    #                 'catalog', t22.catalog,
+    #                 'annual', t22.annual,
+    #                 'confirmation', t1.confirmation,
+    #                 'audit', t1.audit,
+    #                 'guests', t1.guests,
+    #                 'avatar_hash', t5.hash,
+    #                 'tags', coalesce(t3.tags, ''),
+    #                 'interests', coalesce(t3.interests, ''),
+    #                 'tags_event', coalesce(t6.tags, ''),
+    #                 'interests_event', coalesce(t6.interests, ''),
+    #                 'community_manager_id', t2.community_manager_id,
+    #                 'community_manager', coalesce(t4.name, '')
+    #             )) AS participants
+    #         FROM
+    #             events_users t1
+    #         INNER JOIN
+    #             users t2 ON t2.id = t1.user_id
+    #         INNER JOIN
+    #             users_info t22 ON t22.user_id = t2.id
+    #         INNER JOIN
+    #             users_tags t3 ON t3.user_id = t2.id
+    #         LEFT JOIN
+    #             users_events_tags t6 ON t6.user_id = t2.id AND t6.event_id = t1.event_id
+    #         LEFT JOIN
+    #             users t4 ON t4.id = t2.community_manager_id
+    #         LEFT JOIN
+    #             avatars t5 ON t5.owner_id = t2.id AND t5.active IS TRUE
+    #         WHERE
+    #             t1.event_id = ANY($1) AND t2.active IS TRUE
+    #         GROUP BY
+    #             t1.event_id""",
+    #     events_ids
+    # )
     data = await api.pg.club.fetch(
         """SELECT
                 t1.event_id,
@@ -430,7 +493,10 @@ async def get_participants_with_avatars(events_ids):
                     'tags_event', coalesce(t6.tags, ''),
                     'interests_event', coalesce(t6.interests, ''),
                     'community_manager_id', t2.community_manager_id,
-                    'community_manager', coalesce(t4.name, '')
+                    'community_manager', coalesce(t4.name, ''),
+                    'active', t2.active,
+                    'stage', coalesce(tm.stage_id, tm2.stage_id),
+                    'rejection', coalesce(tm.rejection, tm2.rejection)
                 )) AS participants
             FROM
                 events_users t1
@@ -441,13 +507,17 @@ async def get_participants_with_avatars(events_ids):
             INNER JOIN
                 users_tags t3 ON t3.user_id = t2.id
             LEFT JOIN
+                users_memberships tm ON tm.user_id = t2.id AND tm.active IS TRUE
+            LEFT JOIN
+                users_memberships tm2 ON tm2.user_id = t2.id AND tm2.stage_id = 1
+            LEFT JOIN
                 users_events_tags t6 ON t6.user_id = t2.id AND t6.event_id = t1.event_id
             LEFT JOIN
                 users t4 ON t4.id = t2.community_manager_id
             LEFT JOIN
                 avatars t5 ON t5.owner_id = t2.id AND t5.active IS TRUE
             WHERE
-                t1.event_id = ANY($1) AND t2.active IS TRUE
+                t1.event_id = ANY($1)
             GROUP BY
                 t1.event_id""",
         events_ids
@@ -499,7 +569,10 @@ async def get_speakers(events_ids):
                     'interests_event', '',
                     'community_manager_id', t2.community_manager_id,
                     'community_manager', coalesce(t4.name, ''),
-                    'speaker', true
+                    'speaker', true,
+                    'active', true,
+                    'stage', 1000,
+                    'rejection', false
                 )) AS speakers
             FROM
                 events_speakers t1
@@ -613,7 +686,8 @@ async def get_events_for_report():
 async def get_participants_for_report(events_ids = None, audit = None):
     api = get_api_context()
     args = []
-    where = [ 't2.active IS TRUE' ]
+    # where = [ 't2.active IS TRUE' ]
+    where = [ '(t2.active IS TRUE OR t2.active IS FALSE)' ]
     i = 1
     if events_ids:
         args.append(events_ids)
