@@ -2400,9 +2400,9 @@ async def manager_user_create(request):
         if validate(request.params, MODELS['manager_user_create']):
             user = User()
             if await user.find(email = request.params['email']):
-                return err(400, 'Email уже зарегистрирован')
+                return err(400, 'Email уже зарегистрирован. Пользователь \'' + user.name + '\'')
             if await user.find(phone = request.params['phone']):
-                return err(400, 'Телефон уже зарегистрирован')
+                return err(400, 'Телефон уже зарегистрирован. Пользователь \'' + user.name + '\'')
             community_manager_id = None
             if request.user.check_roles({ 'admin', 'moderator', 'manager', 'chief' }):
                 community_manager_id = request.params['community_manager_id']
