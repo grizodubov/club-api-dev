@@ -89,10 +89,13 @@ async def get_clients(config, clients_ids):
         if config['Активен']['value'] == '1':
             query.append('t1.active IS TRUE')
 
-    if 'Коммьюнити-менеджер' in config and config['Коммьюнити-менеджер']['filter'] and config['Коммьюнити-менеджер']['value'] != '0':
-        query.append('t1.community_manager_id = $' + str(i))
-        args.append(int(config['Коммьюнити-менеджер']['value']))
-        i += 1
+    if 'Коммьюнити-менеджер' in config and config['Коммьюнити-менеджер']['filter']:
+        if config['Коммьюнити-менеджер']['value']:
+            query.append('t1.community_manager_id = ANY($' + str(i) + ')')
+            args.append([ int(cm) for cm in config['Коммьюнити-менеджер']['value'] ])
+            i += 1
+        else:
+            query.append('TRUE IS FALSE')
 
     if { 'Мероприятие', 'Присутствие на мероприятии', 'Назначенные встречи', 'Состоявшиеся встречи' } & set(config.keys()):
         events_ids = None
@@ -176,6 +179,8 @@ async def get_clients(config, clients_ids):
             if 'Активен' in config:
                 if config['Активен']['report']:
                     temp.update({ 'active': 'Да' if item['active'] is True else 'Нет' })
+            if 'Активен' not in config or not config['Активен']['report']:
+                del temp['active']
 
             # Роль
             if 'Роль' in config:
@@ -186,14 +191,19 @@ async def get_clients(config, clients_ids):
                         'guest': 'Гость',
                     }
                     temp.update({ 'role': roles[item['role']] if item['role'] in roles else '' })
+            if 'Роль' not in config or not config['Роль']['report']:
+                del temp['role']
 
             # Стадия
             if 'Стадия' in config:
                 tc = memberships[str(item['id'])]['stage']
                 if config['Стадия']['filter']:
-                    if config['Стадия']['value'] != '1000':
-                        if int(config['Стадия']['value']) != tc:
+                    if config['Стадия']['value']:
+                        stages = [ int(s) for s in config['Стадия']['value'] ]
+                        if tc not in stages:
                             continue
+                    else:
+                        continue
                 if config['Стадия']['report']:
                     temp.update({ 'stage': STAGES[tc] })
             
@@ -344,7 +354,9 @@ async def get_clients(config, clients_ids):
             if 'Коммьюнити-менеджер' in config:
                 if config['Коммьюнити-менеджер']['report']:
                     temp.update({ 'community_manager': item['community_manager'] })
-            
+            if 'Коммьюнити-менеджер' not in config or not config['Коммьюнити-менеджер']['report']:
+                del temp['community_manager']
+
             result.append(temp)
 
     return result
