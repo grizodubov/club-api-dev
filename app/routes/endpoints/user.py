@@ -1950,12 +1950,25 @@ async def new_user_resident(request):
             roles.discard('applicant')
             roles.discard('guest')
             residents = []
+            show = True
+            if not roles:
+                show = False
+            else:
+                if not roles & { 'admin', 'manager', 'moderator', 'editor', 'community manager', 'tester', 'chief', 'agent', 'curator', 'organizer' }:
+                    show = False
+                    if 'client' in roles:
+                        membership = await get_users_memberships([ request.user.id ])
+                        if str(request.user.id) in membership and membership[str(request.user.id)]['stage'] >= 4:
+                            show = True
             for item in result:
                 temp = item.show()
-                if not roles and request.user.id != temp['id']:
-                    temp['company'] = ''
-                    temp['position'] = ''
-                    temp['link_telegram'] = ''
+                if show is False and request.user.id != temp['id']:
+                    for k in temp.keys():
+                        if k not in { 'id', 'active', 'name', 'company', 'avatar_hash', 'catalog', 'position' }:
+                            temp[k] = ''
+                    temp['show'] = False
+                else:
+                    temp['show'] = True
                 residents.append(temp)
             return OrjsonResponse({
                 'residents': residents,

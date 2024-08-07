@@ -99,7 +99,7 @@ async def qr_event_register(request):
                         )
                     dispatch('user_update', request)
                     return OrjsonResponse({
-                        '_notification': 'Регистрация прошла успешно!',
+                        '_popup': 'registration',
                     })
                 else:
                     return OrjsonResponse({
