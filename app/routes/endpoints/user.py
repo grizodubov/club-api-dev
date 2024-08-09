@@ -8,7 +8,7 @@ from app.core.request import err
 from app.core.response import OrjsonResponse
 from app.core.event import dispatch
 from app.utils.validate import validate
-from app.models.user import User, get_residents, get_speakers, get_residents_contacts, get_community_managers, get_telegram_pin, get_last_activity, get_users_memberships, get_agents_list, get_agents, create_connection, recover_connection, drop_connection, update_connection_state, update_connection_comment, get_connections, update_connection_rating, get_profiles_views_amount, get_date_profiles_views_amount
+from app.models.user import User, get_residents, get_speakers, get_residents_contacts, get_community_managers, get_telegram_pin, get_last_activity, get_users_memberships, get_agents_list, get_agents, create_connection, recover_connection, drop_connection, update_connection_state, update_connection_comment, get_connections, update_connection_rating, get_profiles_views_amount, get_date_profiles_views_amount, create_offline_connection, get_all_clients, update_suggestion, update_suggestion_comment
 from app.models.event import Event, get_events_confirmations_pendings
 from app.models.item import Item
 from app.models.note import get_last_notes_times
@@ -85,6 +85,15 @@ def routes():
         Route('/ma/user/events/summary', manager_user_events_summary, methods = [ 'POST' ]),
         Route('/ma/user/views/summary', manager_user_views_summary, methods = [ 'POST' ]),
         Route('/ma/user/contacts', manager_user_contacts, methods = [ 'POST' ]),
+
+        Route('/ma/user/connections/offline', manager_user_connections_offline, methods = [ 'POST' ]),
+        Route('/ma/user/connections/offline/clients', manager_user_connections_offline_clients, methods = [ 'POST' ]),
+
+        Route('/ma/user/connection/offline/add', manager_user_connection_offline_add, methods = [ 'POST' ]),
+        Route('/ma/user/connection/offline/del', manager_user_connection_offline_del, methods = [ 'POST' ]),
+
+        Route('/ma/user/suggestions/state', manager_user_suggestions_state, methods = [ 'POST' ]),
+        Route('/ma/user/suggestions/comment', manager_user_suggestions_comment, methods = [ 'POST' ]),
     ]
 
 
@@ -1433,6 +1442,71 @@ MODELS = {
             'value_min': 1,
 		},
     },
+    'manager_user_connections_offline': {
+        'id': {
+			'required': True,
+			'type': 'int',
+            'value_min': 1,
+		},
+    },
+    'manager_user_connection_offline_add': {
+        'user_1_id': {
+			'required': True,
+			'type': 'int',
+            'value_min': 1,
+		},
+        'user_2_id': {
+			'required': True,
+			'type': 'int',
+            'value_min': 1,
+		},
+    },
+    'manager_user_connection_offline_del': {
+        'user_1_id': {
+			'required': True,
+			'type': 'int',
+            'value_min': 1,
+		},
+        'user_2_id': {
+			'required': True,
+			'type': 'int',
+            'value_min': 1,
+		},
+    },
+    'manager_user_suggestions_state': {
+        'user_id': {
+			'required': True,
+			'type': 'int',
+            'value_min': 1,
+		},
+        'partner_id': {
+			'required': True,
+			'type': 'int',
+            'value_min': 1,
+		},
+        'state': {
+            'required': True,
+			'type': 'bool',
+            'null': True,
+        }
+    },
+    'manager_user_suggestions_comment': {
+        'user_id': {
+			'required': True,
+			'type': 'int',
+            'value_min': 1,
+		},
+        'partner_id': {
+			'required': True,
+			'type': 'int',
+            'value_min': 1,
+		},
+        'comment': {
+            'required': True,
+			'type': 'str',
+            'length_min': 1,
+        }
+    },
 }
 
 
@@ -2747,9 +2821,9 @@ async def manager_user_connection_add(request):
             await event.set(id = request.params['event_id'])
             if event.id:
                 user1 = User()
-                await user1.set(id = request.params['user_1_id'])
+                await user1.set(id = request.params['user_1_id'], active = None)
                 user2 = User()
-                await user2.set(id = request.params['user_2_id'])
+                await user2.set(id = request.params['user_2_id'], active = None)
                 if user1.id and user2.id:
                     if request.user.check_roles({ 'admin', 'moderator', 'chief' }) or \
                             user1.community_manager_id == request.user.id or \
@@ -2778,9 +2852,9 @@ async def manager_user_connection_del(request):
             await event.set(id = request.params['event_id'])
             if event.id:
                 user1 = User()
-                await user1.set(id = request.params['user_1_id'])
+                await user1.set(id = request.params['user_1_id'], active = None)
                 user2 = User()
-                await user2.set(id = request.params['user_2_id'])
+                await user2.set(id = request.params['user_2_id'], active = None)
                 if user1.id and user2.id:
                     if request.user.check_roles({ 'admin', 'moderator', 'chief' }) or \
                             user1.community_manager_id == request.user.id or \
@@ -2809,9 +2883,9 @@ async def manager_user_connection_rec(request):
             await event.set(id = request.params['event_id'])
             if event.id:
                 user1 = User()
-                await user1.set(id = request.params['user_1_id'])
+                await user1.set(id = request.params['user_1_id'], active = None)
                 user2 = User()
-                await user2.set(id = request.params['user_2_id'])
+                await user2.set(id = request.params['user_2_id'], active = None)
                 if user1.id and user2.id:
                     if request.user.check_roles({ 'admin', 'moderator', 'chief' }) or \
                             user1.community_manager_id == request.user.id or \
@@ -2840,9 +2914,9 @@ async def manager_user_connection_state(request):
             if connections:
                 connection = connections[0]
                 user1 = User()
-                await user1.set(id = connection['user_1_id'])
+                await user1.set(id = connection['user_1_id'], active = None)
                 user2 = User()
-                await user2.set(id = connection['user_2_id'])
+                await user2.set(id = connection['user_2_id'], active = None)
                 if request.user.check_roles({ 'admin', 'moderator', 'chief' }) or \
                         user1.community_manager_id == request.user.id or \
                         user2.community_manager_id == request.user.id:
@@ -2868,9 +2942,9 @@ async def manager_user_connection_comment(request):
             if connections:
                 connection = connections[0]
                 user1 = User()
-                await user1.set(id = connection['user_1_id'])
+                await user1.set(id = connection['user_1_id'], active = None)
                 user2 = User()
-                await user2.set(id = connection['user_2_id'])
+                await user2.set(id = connection['user_2_id'], active = None)
                 if request.user.check_roles({ 'admin', 'moderator', 'chief' }) or \
                         user1.community_manager_id == request.user.id or \
                         user2.community_manager_id == request.user.id:
@@ -2896,9 +2970,9 @@ async def manager_user_connection_rating(request):
             if connections:
                 connection = connections[0]
                 user1 = User()
-                await user1.set(id = connection['user_1_id'])
+                await user1.set(id = connection['user_1_id'], active = None)
                 user2 = User()
-                await user2.set(id = connection['user_2_id'])
+                await user2.set(id = connection['user_2_id'], active = None)
                 part = 0
                 if request.user.check_roles({ 'admin', 'moderator', 'chief' }):
                     part = request.params['part']
@@ -3020,6 +3094,136 @@ async def manager_user_contacts(request):
                 return OrjsonResponse({
                     'contacts': contacts,
                 })
+            else:
+                return err(404, 'Пользователь не найден')
+        else:
+            return err(400, 'Неверный запрос')
+    else:
+        return err(403, 'Нет доступа')
+
+
+
+################################################################
+async def manager_user_connections_offline(request):
+    if request.user.id and request.user.check_roles({ 'admin', 'moderator', 'manager', 'chief', 'community manager' }):
+        if validate(request.params, MODELS['manager_user_connections_offline']):
+            user = User()
+            await user.set(id = request.params['id'], active = None)
+            if user.id:
+                data = await user.get_offline_connections()
+                return OrjsonResponse({ 'connections': data })
+            else:
+                return err(404, 'Пользователь не найден')
+        else:
+            return err(400, 'Неверный запрос')
+    else:
+        return err(403, 'Нет доступа')
+
+
+
+################################################################
+async def manager_user_connections_offline_clients(request):
+    if request.user.id and request.user.check_roles({ 'admin', 'moderator', 'manager', 'chief', 'community manager' }):
+        data = await get_all_clients()
+        return OrjsonResponse({ 'clients': data })
+    else:
+        return err(403, 'Нет доступа')
+
+
+
+################################################################
+async def manager_user_connection_offline_add(request):
+    if request.user.id and request.user.check_roles({ 'admin', 'moderator', 'chief', 'community manager' }):
+        if validate(request.params, MODELS['manager_user_connection_offline_add']):
+            user1 = User()
+            await user1.set(id = request.params['user_1_id'], active = None)
+            user2 = User()
+            await user2.set(id = request.params['user_2_id'], active = None)
+            if user1.id and user2.id:
+                if request.user.check_roles({ 'admin', 'moderator', 'chief' }) or \
+                        user1.community_manager_id == request.user.id or \
+                        user2.community_manager_id == request.user.id:
+                    await create_offline_connection(user_1_id = user1.id, user_2_id = user2.id, creator_id = request.user.id)
+                    dispatch('user_update', request)
+                    return OrjsonResponse({})
+                else:
+                    return err(403, 'Нет доступа')
+            else:
+                return err(404, 'Пользователь не найден')
+        else:
+            return err(400, 'Неверный запрос')
+    else:
+        return err(403, 'Нет доступа')
+
+
+
+################################################################
+async def manager_user_connection_offline_del(request):
+    if request.user.id and request.user.check_roles({ 'admin', 'moderator', 'chief', 'community manager' }):
+        if validate(request.params, MODELS['manager_user_connection_offline_del']):
+            user1 = User()
+            await user1.set(id = request.params['user_1_id'], active = None)
+            user2 = User()
+            await user2.set(id = request.params['user_2_id'], active = None)
+            if user1.id and user2.id:
+                if request.user.check_roles({ 'admin', 'moderator', 'chief' }) or \
+                        user1.community_manager_id == request.user.id or \
+                        user2.community_manager_id == request.user.id:
+                    await drop_connection(event_id = None, user_1_id = user1.id, user_2_id = user2.id)
+                    dispatch('user_update', request)
+                    return OrjsonResponse({})
+                else:
+                    return err(403, 'Нет доступа')
+            else:
+                return err(404, 'Пользователь не найден')
+        else:
+            return err(400, 'Неверный запрос')
+    else:
+        return err(403, 'Нет доступа')
+
+
+
+################################################################
+async def manager_user_suggestions_state(request):
+    if request.user.id and request.user.check_roles({ 'admin', 'moderator', 'chief', 'community manager' }):
+        if validate(request.params, MODELS['manager_user_suggestions_state']):
+            user1 = User()
+            await user1.set(id = request.params['user_id'], active = None)
+            user2 = User()
+            await user2.set(id = request.params['partner_id'], active = None)
+            if user1.id and user2.id and user1.id != user2.id:
+                if request.user.check_roles({ 'admin', 'moderator', 'chief' }) or \
+                        user1.community_manager_id == request.user.id:
+                    await update_suggestion(user_id = user1.id, partner_id = user2.id, state = request.params['state'])
+                    dispatch('user_update', request)
+                    return OrjsonResponse({})
+                else:
+                    return err(403, 'Нет доступа')
+            else:
+                return err(404, 'Пользователь не найден')
+        else:
+            return err(400, 'Неверный запрос')
+    else:
+        return err(403, 'Нет доступа')
+
+
+
+################################################################
+async def manager_user_suggestions_comment(request):
+    if request.user.id and request.user.check_roles({ 'admin', 'moderator', 'chief', 'community manager' }):
+        if validate(request.params, MODELS['manager_user_suggestions_comment']):
+            user1 = User()
+            await user1.set(id = request.params['user_id'], active = None)
+            user2 = User()
+            await user2.set(id = request.params['partner_id'], active = None)
+            if user1.id and user2.id and user1.id != user2.id:
+                if request.user.check_roles({ 'admin', 'moderator', 'chief' }) or \
+                        user1.community_manager_id == request.user.id:
+                    await update_suggestion_comment(user_id = user1.id, partner_id = user2.id, comment = request.params['comment'], author_id = request.user.id)
+                    dispatch('user_update', request)
+                    return OrjsonResponse({})
+                else:
+                    return err(403, 'Нет доступа')
             else:
                 return err(404, 'Пользователь не найден')
         else:

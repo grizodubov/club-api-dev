@@ -1732,18 +1732,22 @@ class User:
                 p = getattr(self, 'tags_1_' + re.sub(r'\s', '_', mapping[f]))
                 if p.strip():
                     query = """SELECT
-                                    t1.id, t1.name, t2.time_update AS time_create,
+                                    t1.id, t1.name, t2.time_update AS time_create, t1.active,
                                     t3.company, t3.position, t3.status, t3.catalog,
                                     t3.link_telegram,
                                     t2.tags AS tags,
                                     ${v2} AS offer,
-                                    t8.hash AS avatar_hash
+                                    t8.hash AS avatar_hash,
+                                    cm.id AS community_manager_id,
+                                    cm.name AS community_manager
                                 FROM
                                     users t1
                                 INNER JOIN
                                     users_tags_1 t2 ON t2.user_id = t1.id AND t2.category = ${v3}
                                 INNER JOIN
                                     users_info t3 ON t3.user_id = t1.id
+                                LEFT JOIN
+                                    users cm ON cm.id = t1.community_manager_id
                                 LEFT JOIN
                                     (
                                         SELECT
@@ -1830,9 +1834,12 @@ class User:
                     args.append(today_offset)
                 if where:
                     query_where = ' WHERE ' + ' AND '.join(where)
+                args.append(self.id)
                 data = await api.pg.club.fetch(
                     """SELECT
-                            id, name, time_create, company, position, status, catalog, link_telegram, tags, offer, avatar_hash, t5.amount AS helpful, count(*) OVER() AS amount
+                            id, name, active, time_create, company, position, status, catalog, link_telegram, tags,
+                            community_manager_id, community_manager, t9.state,
+                            offer, avatar_hash, t5.amount AS helpful, ct.comments, count(*) OVER() AS amount
                         FROM
                             (
                                 SELECT * FROM
@@ -1844,7 +1851,32 @@ class User:
                         LEFT JOIN
                         (
                             SELECT author_id, count(id) AS amount FROM posts WHERE helpful IS TRUE GROUP BY author_id
-                        ) t5 ON t5.author_id = u.id""",
+                        ) t5 ON t5.author_id = u.id
+                        LEFT JOIN
+                            users_suggestions t9 ON t9.user_id = $""" + str(len(args)) + """ AND t9.partner_id = u.id
+                        LEFT JOIN
+                        (
+                            SELECT
+                                ct7.partner_id, array_agg(comment) AS comments
+                            FROM (
+                                SELECT
+                                    ct5.user_id, ct5.partner_id, jsonb_build_object(
+                                        'id', ct5.id,
+                                        'time_create', ct5.time_create,
+                                        'comment', ct5.comment,
+                                        'author_id', ct5.author_id,
+                                        'author_name', ct6.name
+                                    ) AS comment
+                                FROM
+                                    suggestions_comments ct5
+                                INNER JOIN
+                                    users ct6 ON ct6.id = ct5.author_id
+                                WHERE
+                                    ct5.user_id = $""" + str(len(args)) + """
+                                ORDER BY ct5.id DESC
+                            ) ct7
+                            GROUP BY ct7.partner_id
+                        ) ct ON ct.partner_id = u.id""",
                     *args
                 )
                 return [ dict(item) | { 'online': check_online_by_id(item['id']) } for item in data ]
@@ -2672,7 +2704,6 @@ class User:
         )
 
 
-
     ################################################################
     async def view_profile(self, user_id):
         api = get_api_context()
@@ -2689,7 +2720,6 @@ class User:
             if tv:
                 return True
         return False
-
 
 
     ################################################################
@@ -2851,6 +2881,75 @@ class User:
                 else:
                     temp.append(item['user_2_id'])
         return temp
+
+
+    ################################################################
+    async def get_offline_connections(self):
+        api = get_api_context()
+        data = await api.pg.club.fetch(
+            """SELECT
+                    t1.id, t1.event_id, t1.user_1_id, t1.user_2_id, t1.state, t1.rating_1, t1.rating_2,
+                    t2.name AS user_1_name, t3.name AS user_2_name,
+                    t2.active AS user_1_active, t3.active AS user_2_active,
+                    t1.creator_id, t4.name AS creator, t1.deleted,
+                    t22.id AS community_manager_1_id, t33.id AS community_manager_2_id, 
+                    coalesce(t22.name, '') AS community_manager_1,
+                    coalesce(t33.name, '') AS community_manager_2,
+                    t7.hash AS user_1_avatar_hash,
+                    t8.hash AS user_2_avatar_hash,
+                    t222.company AS user_1_company,
+                    t333.company AS user_2_company,
+                    ct.comments
+                FROM
+                    users_connections t1
+                LEFT JOIN
+                    users t2 ON t2.id = t1.user_1_id
+                LEFT JOIN
+                    users_info t222 ON t222.user_id = t1.user_1_id
+                LEFT JOIN
+                    users t22 ON t22.id = t2.community_manager_id
+                LEFT JOIN
+                    users t3 ON t3.id = t1.user_2_id
+                LEFT JOIN
+                    users_info t333 ON t333.user_id = t1.user_2_id
+                LEFT JOIN
+                    users t33 ON t33.id = t3.community_manager_id
+                LEFT JOIN
+                    users t4 ON t4.id = t1.creator_id
+                LEFT JOIN
+                    avatars t7 ON t7.owner_id = t1.user_1_id AND t7.active IS TRUE
+                LEFT JOIN
+                    avatars t8 ON t8.owner_id = t1.user_2_id AND t8.active IS TRUE
+                LEFT JOIN
+                    (
+                        SELECT
+                            ct7.connection_id, array_agg(comment) AS comments
+                        FROM (
+                            SELECT
+                                ct5.connection_id, jsonb_build_object(
+                                    'id', ct5.id,
+                                    'time_create', ct5.time_create,
+                                    'comment', ct5.comment,
+                                    'author_id', ct5.author_id,
+                                    'author_name', ct6.name
+                                ) AS comment
+                            FROM
+                                connections_comments ct5
+                            INNER JOIN
+                                users ct6 ON ct6.id = ct5.author_id
+                            ORDER BY ct5.id DESC
+                        ) ct7
+                        GROUP BY ct7.connection_id
+                    ) ct ON ct.connection_id = t1.id
+                WHERE
+                    t1.event_id IS NULL AND
+                    t1.deleted IS FALSE AND
+                    (t1.user_1_id = $1 OR t1.user_2_id = $1)""",
+            self.id
+        )
+        if data:
+            return [ dict(item) for item in data ]
+        return []
 
 
 
@@ -3507,18 +3606,77 @@ async def create_connection(event_id, user_1_id, user_2_id, creator_id):
 
 
 ################################################################
+async def create_offline_connection(user_1_id, user_2_id, creator_id):
+    api = get_api_context()
+    if user_1_id != user_2_id:
+        check = await api.pg.club.fetchrow(
+            """SELECT
+                    id, creator_id, deleted
+                FROM
+                    users_connections
+                WHERE
+                    (
+                        (user_1_id = $1 AND user_2_id = $2) OR
+                        (user_1_id = $2 AND user_2_id = $1)
+                    ) AND
+                    event_id IS NULL""",
+            user_1_id, user_2_id
+        )
+        if check:
+            query = []
+            args = []
+            if check['creator_id'] != creator_id:
+                query.append('creator_id = $1')
+                args.append(creator_id)
+            if check['deleted']:
+                query.append('deleted = FALSE')
+            if query:
+                args.append(check['id'])
+                await api.pg.club.fetchval(
+                    """UPDATE
+                            users_connections
+                        SET
+                            """ + ', '.join(query) + """
+                        WHERE
+                            id = $""" + str(len(args)),
+                    *args
+                )
+        else:
+            id = await api.pg.club.fetchval(
+                """INSERT INTO 
+                        users_connections (event_id, user_1_id, user_2_id, creator_id)
+                    VALUES
+                        ($1, $2, $3, $4)
+                    RETURNING
+                        id""",
+                None,
+                user_1_id if user_1_id < user_2_id else user_2_id,
+                user_2_id if user_1_id < user_2_id else user_1_id,
+                creator_id,
+            )
+            return id
+    return None
+
+
+
+################################################################
 async def drop_connection(event_id, user_1_id, user_2_id):
     api = get_api_context()
+    query = 'event_id IS NULL'
+    args = []
+    if event_id:
+        query = 'event_id = $3'
+        args.append(event_id)
     await api.pg.club.fetchval(
         """UPDATE
                 users_connections
             SET
                 deleted = TRUE
             WHERE
-                event_id = $1 AND user_1_id = $2 AND user_2_id = $3""",
-        event_id,
+                user_1_id = $1 AND user_2_id = $2 AND """ + query,
         user_1_id if user_1_id < user_2_id else user_2_id,
         user_2_id if user_1_id < user_2_id else user_1_id,
+        *args
     )
 
 
@@ -3756,3 +3914,69 @@ async def get_connections_for_report(events_ids = None, users_ids = None):
                 result[str(item['user_1_id'])]['fulfilled'].add(item['user_2_id'])
                 result[str(item['user_2_id'])]['fulfilled'].add(item['user_1_id'])
     return result
+
+
+
+################################################################
+async def get_all_clients():
+    api = get_api_context()
+    data = await api.pg.club.fetch(
+        """SELECT
+                t1.id, t1.name, t1.active, t2.company, t3.hash AS avatar_hash,
+                t4.id AS community_manager_id, t4.name AS community_manager_name
+            FROM
+                users t1
+            INNER JOIN
+                users_info t2 ON t2.user_id = t1.id
+            INNER JOIN
+                users_roles t5 ON t5.user_id = t1.id AND t5.role_id = 10002
+            LEFT JOIN
+                avatars t3 ON t3.owner_id = t1.id AND t3.active IS TRUE
+            LEFT JOIN
+                users t4 ON t4.id = t1.community_manager_id
+            ORDER BY
+                t1.name"""
+    )
+    if data:
+        return [ dict(item) for item in data ]
+    return []
+
+
+
+################################################################
+async def update_suggestion(user_id, partner_id, state):
+    api = get_api_context()
+    await api.pg.club.execute(
+        """INSERT INTO
+                users_suggestions (user_id, partner_id, state)
+            VALUES
+                ($1, $2, $3)
+            ON CONFLICT
+                (user_id, partner_id)
+            DO UPDATE SET
+                state = EXCLUDED.state""",
+        user_id, partner_id, state
+    )
+
+
+
+################################################################
+async def update_suggestion_comment(user_id, partner_id, comment, author_id):
+    api = get_api_context()
+    await api.pg.club.execute(
+        """INSERT INTO
+                users_suggestions (user_id, partner_id, state)
+            VALUES
+                ($1, $2, NULL)
+            ON CONFLICT
+                (user_id, partner_id)
+            DO NOTHING""",
+        user_id, partner_id
+    )
+    await api.pg.club.execute(
+        """INSERT INTO
+                suggestions_comments (user_id, partner_id, comment, author_id)
+            VALUES
+                ($1, $2, $3, $4)""",
+        user_id, partner_id, comment, author_id
+    )
