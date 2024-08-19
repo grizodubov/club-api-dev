@@ -3218,7 +3218,8 @@ async def manager_user_suggestions_comment(request):
             await user2.set(id = request.params['partner_id'], active = None)
             if user1.id and user2.id and user1.id != user2.id:
                 if request.user.check_roles({ 'admin', 'moderator', 'chief' }) or \
-                        user1.community_manager_id == request.user.id:
+                        user1.community_manager_id == request.user.id or \
+                        user2.community_manager_id == request.user.id:
                     await update_suggestion_comment(user_id = user1.id, partner_id = user2.id, comment = request.params['comment'], author_id = request.user.id)
                     dispatch('user_update', request)
                     return OrjsonResponse({})

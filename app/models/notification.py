@@ -559,7 +559,7 @@ async def process_connection_add(api, user_id, item_id, params):
                 target = user_target.name,
                 target_company = user_target.company,
             )
-            send_push_message(api, receients, 'Назначение встречи', message, link)
+            send_push_message(api, recepients, 'Назначение встречи', message, link)
 
             body = Template(TEMPLATES['sms_manager'])
             message = body.render(
