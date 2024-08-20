@@ -2653,6 +2653,27 @@ async def manager_user_audit_event(request):
                                         }
                                     }
                                 )
+                            if user.community_manager_id:
+                                manager = User()
+                                await manager.set(id = user.community_manager_id)
+                                if manager.id:
+                                    await create_notification_1(
+                                        user_id = manager.id,
+                                        event = 'arrive', 
+                                        data = {
+                                            'user': {
+                                                'id': user.id,
+                                                'name': user.name,
+                                            },
+                                            'event': {
+                                                'id': event.id,
+                                                'time_event': event.time_event,
+                                                'format': event.format,
+                                                'name': event.name,
+                                            }
+                                        },
+                                        mode = 'manager',
+                                    )
                         dispatch('user_update', request)
                         return OrjsonResponse({})
                     else:

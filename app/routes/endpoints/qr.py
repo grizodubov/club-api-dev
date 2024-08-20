@@ -97,6 +97,27 @@ async def qr_event_register(request):
                                 }
                             }
                         )
+                    if request.user.community_manager_id:
+                        manager = User()
+                        await manager.set(id = request.user.community_manager_id)
+                        if manager.id:
+                            await create_notification_1(
+                                user_id = manager.id,
+                                event = 'arrive', 
+                                data = {
+                                    'user': {
+                                        'id': request.user.id,
+                                        'name': request.user.name,
+                                    },
+                                    'event': {
+                                        'id': event.id,
+                                        'time_event': event.time_event,
+                                        'format': event.format,
+                                        'name': event.name,
+                                    }
+                                },
+                                mode = 'manager',
+                            )
                     dispatch('user_update', request)
                     return OrjsonResponse({
                         '_popup': 'registration',

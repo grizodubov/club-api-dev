@@ -3,19 +3,19 @@ from app.core.context import get_api_context
 
 
 ####################################################################
-async def get_list(user_id, time_breakpoint = None, limit = None):
+async def get_list(user_id, time_breakpoint = None, limit = None, mode = 'client'):
     api = get_api_context()
-    where = [ 'user_id = $1' ]
+    where = [ 'user_id = $1', 'mode = $2' ]
     query = ''
-    args = [ user_id ]
+    args = [ user_id, mode ]
     if time_breakpoint:
         if limit is None:
-            where.append('time_notify >= $2')
+            where.append('time_notify >= $3')
             args.append(time_breakpoint)
         else:
-            where.append('time_notify < $2')
+            where.append('time_notify < $3')
             args.append(time_breakpoint)
-            query = 'LIMIT $3'
+            query = 'LIMIT $4'
             args.append(limit)
     else:
         if limit is None:
@@ -41,8 +41,13 @@ async def get_list(user_id, time_breakpoint = None, limit = None):
 
 
 ####################################################################
-async def get_stats(user_id):
+async def get_stats(user_id, mode = None):
     api = get_api_context()
+    query = ''
+    args = [ user_id ]
+    if mode:
+        query = ' AND mode = $2'
+        args.append(mode)
     result = await api.pg.club.fetchrow(
         """SELECT
                 count(time_notify) AS all,
@@ -50,8 +55,8 @@ async def get_stats(user_id):
             FROM
                 notifications_1
             WHERE
-                user_id = $1""",
-        user_id
+                user_id = $1""" + query,
+        *args
     )
     return {
         'all': result['all'],
@@ -81,32 +86,32 @@ async def view(user_id, time_notify = None):
 
 
 ####################################################################
-async def create(user_id, event, data):
+async def create(user_id, event, data, mode = 'client'):
     api = get_api_context()
     await api.pg.club.execute(
         """INSERT INTO
-                notifications_1 (user_id, event, data)
+                notifications_1 (user_id, event, data, mode)
             VALUES
-                ($1, $2, $3)""",
-        user_id, event, data
+                ($1, $2, $3, $4)""",
+        user_id, event, data, mode
     )
 
 
 
 ####################################################################
-async def create_multiple(users_ids, event, data):
+async def create_multiple(users_ids, event, data, mode = 'client'):
     api = get_api_context()
     i = 1
     query = []
     args = []
     for id in users_ids:
-        temp = '($' + str(i) + ', $' + str(i + 1) + ', $' + str(i + 2) + ')'
+        temp = '($' + str(i) + ', $' + str(i + 1) + ', $' + str(i + 2) + ', $' + str(i + 3) + ')'
         query.append(temp)
         args.extend([ id, event, data ])
-        i = i + 3
+        i = i + 4
     await api.pg.club.execute(
         """INSERT INTO
-                notifications_1 (user_id, event, data)
+                notifications_1 (user_id, event, data, mode)
             VALUES
                 """ + ', '.join(query),
         *args

@@ -87,7 +87,7 @@ async def after_request(request, response):
     print('---- After request: begin')
     if request.url.path != '/acquire':
         if request.state.session.token_next:
-            response.headers['x-binding-notifications'] = str(await request.user.get_notifications_1_new())
+            response.headers['x-binding-notifications'] = str(await request.user.get_notifications_1_new('manager' if request.url.path.startswith('/ma/') else 'client'))
     print('---- After request: end')
 
 

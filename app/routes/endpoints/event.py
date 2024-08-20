@@ -409,6 +409,56 @@ async def event_connection(request):
                             }
                         }
                     )
+                    if request.user.community_manager_id:
+                        manager = User()
+                        await manager.set(id = request.user.community_manager_id)
+                        if manager.id:
+                            await create_notification_1(
+                                user_id = manager.id,
+                                event = 'connection_summary', 
+                                data = {
+                                    'initiator': {
+                                        'id': request.user.id,
+                                        'name': request.user.name,
+                                    },
+                                    'target': {
+                                        'id': user2.id,
+                                        'name': user2.name,
+                                    },
+                                    'event': {
+                                        'id': event.id,
+                                        'time_event': event.time_event,
+                                        'format': event.format,
+                                        'name': event.name,
+                                    }
+                                },
+                                mode = 'manager',
+                            )
+                    if user2.community_manager_id and user2.community_manager_id != request.user.community_manager_id:
+                        manager = User()
+                        await manager.set(id = user2.community_manager_id)
+                        if manager.id:
+                            await create_notification_1(
+                                user_id = manager.id,
+                                event = 'connection_summary', 
+                                data = {
+                                    'initiator': {
+                                        'id': request.user.id,
+                                        'name': request.user.name,
+                                    },
+                                    'target': {
+                                        'id': user2.id,
+                                        'name': user2.name,
+                                    },
+                                    'event': {
+                                        'id': event.id,
+                                        'time_event': event.time_event,
+                                        'format': event.format,
+                                        'name': event.name,
+                                    }
+                                },
+                                mode = 'manager',
+                            )
                     dispatch('user_update', request)
                     return OrjsonResponse({})
                 else:

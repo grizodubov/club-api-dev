@@ -13,6 +13,8 @@ def routes():
         Route('/notification/1/list', notifications_list, methods = [ 'POST' ]),
         Route('/notification/1/view', notification_view, methods = [ 'POST' ]),
         Route('/notification/1/view/all', notification_view_all, methods = [ 'POST' ]),
+
+        Route('/ma/notification/1/list', manager_notifications_list, methods = [ 'POST' ]),
     ]
 
 
@@ -34,6 +36,19 @@ MODELS = {
         'time_notify': {
             'required': True,
 			'type': 'str',
+        },
+    },
+
+    'manager_notifications_list': {
+        'time_breakpoint': {
+            'required': True,
+			'type': 'str',
+            'null': True,
+        },
+        'limit': {
+            'required': True,
+			'type': 'int',
+            'null': True,
         },
     },
 }
@@ -87,5 +102,30 @@ async def notification_view_all(request):
             time_notify = None,
         )
         return OrjsonResponse({})
+    else:
+        return err(403, 'Нет доступа')
+
+
+
+################################################################
+async def manager_notifications_list(request):
+    if request.user.id:
+        if validate(request.params, MODELS['manager_notifications_list']):
+            notifications = await get_list(
+                user_id = request.user.id,
+                time_breakpoint = request.params['time_breakpoint'],
+                limit = request.params['limit'],
+                mode = 'manager',
+            )
+            stats = await get_stats(
+                user_id = request.user.id,
+                mode = 'manager',
+            )
+            return OrjsonResponse({
+                'notifications': notifications,
+                'stats': stats,
+            })
+        else:
+            return err(400, 'Неверный запрос')
     else:
         return err(403, 'Нет доступа')

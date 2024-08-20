@@ -2744,8 +2744,8 @@ class User:
 
 
     ################################################################
-    async def get_notifications_1_new(self):
-        data = await get_stats(user_id = self.id)
+    async def get_notifications_1_new(self, mode):
+        data = await get_stats(user_id = self.id, mode = mode)
         return data['new']
 
 
