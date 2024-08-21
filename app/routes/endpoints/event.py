@@ -7,7 +7,7 @@ from app.core.response import OrjsonResponse
 from app.core.event import dispatch
 from app.utils.validate import validate
 from app.models.event import Event, find_closest_event, get_participants, get_participants_with_avatars, get_all_speakers, get_future_events, get_speakers, get_events
-from app.models.user import User, get_connections, create_connection
+from app.models.user import User, get_connections, create_connection, update_connection_response
 from app.models.notification import create_notifications
 from app.models.notification_1 import create as create_notification_1
 
@@ -18,6 +18,7 @@ def routes():
         Route('/event/feed', events_feed, methods = [ 'POST' ]),
         Route('/event/info', event_info, methods = [ 'POST' ]),
         Route('/event/connection', event_connection, methods = [ 'POST' ]),
+        Route('/event/connection/response', event_connection_response, methods = [ 'POST' ]),
 
         Route('/m/event/list', moderator_event_list, methods = [ 'POST' ]),
         Route('/m/event/update', moderator_event_update, methods = [ 'POST' ]),
@@ -77,6 +78,22 @@ MODELS = {
             'required': True,
             'type': 'int',
             'value_min': 1,
+        },
+    },
+    'event_connection_response': {
+        'event_id': {
+            'required': True,
+            'type': 'int',
+            'value_min': 1,
+        },
+        'user_id': {
+            'required': True,
+            'type': 'int',
+            'value_min': 1,
+        },
+        'response': {
+            'required': True,
+            'type': 'bool',
         },
     },
     # moderator
@@ -391,15 +408,21 @@ async def event_connection(request):
                 user2 = User()
                 await user2.set(id = request.params['user_id'])
                 if user2.id:
-                    await create_connection(event_id = event.id, user_1_id = request.user.id, user_2_id = user2.id, creator_id = request.user.id)
+                    await create_connection(
+                        event_id = event.id,
+                        user_1_id = request.user.id,
+                        user_2_id = user2.id,
+                        creator_id = request.user.id
+                    )
                     create_notifications('connection_add', request.user.id, event.id, request.params)
                     await create_notification_1(
                         user_id = user2.id,
-                        event = 'connection', 
+                        event = 'connection_add', 
                         data = {
                             'initiator': {
                                 'id': request.user.id,
                                 'name': request.user.name,
+                                'hash': request.user.avatar_hash,
                             },
                             'event': {
                                 'id': event.id,
@@ -415,15 +438,17 @@ async def event_connection(request):
                         if manager.id:
                             await create_notification_1(
                                 user_id = manager.id,
-                                event = 'connection_summary', 
+                                event = 'manager_connection_add', 
                                 data = {
                                     'initiator': {
                                         'id': request.user.id,
                                         'name': request.user.name,
+                                        'hash': request.user.avatar_hash,
                                     },
                                     'target': {
                                         'id': user2.id,
                                         'name': user2.name,
+                                        'hash': user2.avatar_hash,
                                     },
                                     'event': {
                                         'id': event.id,
@@ -440,15 +465,118 @@ async def event_connection(request):
                         if manager.id:
                             await create_notification_1(
                                 user_id = manager.id,
-                                event = 'connection_summary', 
+                                event = 'manager_connection_add', 
                                 data = {
                                     'initiator': {
                                         'id': request.user.id,
                                         'name': request.user.name,
+                                        'hash': request.user.avatar_hash,
                                     },
                                     'target': {
                                         'id': user2.id,
                                         'name': user2.name,
+                                        'hash': user2.avatar_hash,
+                                    },
+                                    'event': {
+                                        'id': event.id,
+                                        'time_event': event.time_event,
+                                        'format': event.format,
+                                        'name': event.name,
+                                    }
+                                },
+                                mode = 'manager',
+                            )
+                    dispatch('user_update', request)
+                    return OrjsonResponse({})
+                else:
+                    return err(404, 'Пользователь не найден')
+            else:
+                return err(404, 'Событие не найдено')
+        else:
+            return err(400, 'Неверный запрос')
+    else:
+        return err(403, 'Нет доступа')
+
+
+
+################################################################
+async def event_connection_response(request):
+    if request.user.id:
+        if validate(request.params, MODELS['event_connection_response']):
+            event = Event()
+            await event.set(id = request.params['event_id'])
+            if event.id:
+                user2 = User()
+                await user2.set(id = request.params['user_id'])
+                if user2.id:
+                    await update_connection_response(
+                        event_id = event.id,
+                        user_1_id = request.user.id,
+                        user_2_id = user2.id,
+                        resp = request.params['response'],
+                    )
+                    create_notifications('connection_response', request.user.id, event.id, request.params)
+                    await create_notification_1(
+                        user_id = user2.id,
+                        event = 'connection_response', 
+                        data = {
+                            'initiator': {
+                                'id': request.user.id,
+                                'name': request.user.name,
+                                'hash': request.user.avatar_hash,
+                            },
+                            'event': {
+                                'id': event.id,
+                                'time_event': event.time_event,
+                                'format': event.format,
+                                'name': event.name,
+                            }
+                        }
+                    )
+                    if request.user.community_manager_id:
+                        manager = User()
+                        await manager.set(id = request.user.community_manager_id)
+                        if manager.id:
+                            await create_notification_1(
+                                user_id = manager.id,
+                                event = 'manager_connection_response', 
+                                data = {
+                                    'initiator': {
+                                        'id': request.user.id,
+                                        'name': request.user.name,
+                                        'hash': request.user.avatar_hash,
+                                    },
+                                    'target': {
+                                        'id': user2.id,
+                                        'name': user2.name,
+                                        'hash': user2.avatar_hash,
+                                    },
+                                    'event': {
+                                        'id': event.id,
+                                        'time_event': event.time_event,
+                                        'format': event.format,
+                                        'name': event.name,
+                                    }
+                                },
+                                mode = 'manager',
+                            )
+                    if user2.community_manager_id and user2.community_manager_id != request.user.community_manager_id:
+                        manager = User()
+                        await manager.set(id = user2.community_manager_id)
+                        if manager.id:
+                            await create_notification_1(
+                                user_id = manager.id,
+                                event = 'manager_connection_response', 
+                                data = {
+                                    'initiator': {
+                                        'id': request.user.id,
+                                        'name': request.user.name,
+                                        'hash': request.user.avatar_hash,
+                                    },
+                                    'target': {
+                                        'id': user2.id,
+                                        'name': user2.name,
+                                        'hash': user2.avatar_hash,
                                     },
                                     'event': {
                                         'id': event.id,

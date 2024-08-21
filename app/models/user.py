@@ -1945,6 +1945,7 @@ class User:
         data = await api.pg.club.fetch(
             """SELECT
                     t1.id, t1.event_id, t1.user_1_id, t1.user_2_id, t1.state, t1.rating_1, t1.rating_2,
+                    t1.response,
                     t2.name AS user_1_name, t3.name AS user_2_name,
                     t2.active AS user_1_active, t3.active AS user_2_active,
                     t1.creator_id, t4.name AS creator, t1.deleted,
@@ -2889,6 +2890,7 @@ class User:
         data = await api.pg.club.fetch(
             """SELECT
                     t1.id, t1.event_id, t1.user_1_id, t1.user_2_id, t1.state, t1.rating_1, t1.rating_2,
+                    t1.response,
                     t2.name AS user_1_name, t3.name AS user_2_name,
                     t2.active AS user_1_active, t3.active AS user_2_active,
                     t1.creator_id, t4.name AS creator, t1.deleted,
@@ -3682,6 +3684,28 @@ async def drop_connection(event_id, user_1_id, user_2_id):
 
 
 ################################################################
+async def update_connection_response(event_id, user_1_id, user_2_id, resp):
+    api = get_api_context()
+    query = 'event_id IS NULL'
+    args = [ resp ]
+    if event_id:
+        query = 'event_id = $4'
+        args.append(event_id)
+    await api.pg.club.fetchval(
+        """UPDATE
+                users_connections
+            SET
+                response = $3
+            WHERE
+                user_1_id = $1 AND user_2_id = $2 AND """ + query,
+        user_1_id if user_1_id < user_2_id else user_2_id,
+        user_2_id if user_1_id < user_2_id else user_1_id,
+        *args
+    )
+
+
+
+################################################################
 async def recover_connection(event_id, user_1_id, user_2_id):
     api = get_api_context()
     await api.pg.club.fetchval(
@@ -3787,6 +3811,7 @@ async def get_connections(ids = None, events_ids = None, users_ids = None):
     data = await api.pg.club.fetch(
         """SELECT
                 t1.id, t1.event_id, t1.user_1_id, t1.user_2_id, t1.state, t1.rating_1, t1.rating_2,
+                t1.response,
                 t1.creator_id, t4.name AS creator, t1.deleted,
                 t22.id AS community_manager_1_id, t33.id AS community_manager_2_id, 
                 coalesce(t22.name, '') AS community_manager_1,
@@ -3890,7 +3915,7 @@ async def get_connections_for_report(events_ids = None, users_ids = None):
         query_string = ' WHERE ' + ' AND '.join(query)
     data = await api.pg.club.fetch(
         """SELECT
-                t1.id, t1.event_id, t1.user_1_id, t1.user_2_id, t1.state, t1.rating_1, t1.rating_2, t1.creator_id
+                t1.id, t1.event_id, t1.user_1_id, t1.user_2_id, t1.state, t1.rating_1, t1.rating_2, t1.creator_id, t1.response
             FROM
                 users_connections t1
             """ + query_string,

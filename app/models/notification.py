@@ -512,8 +512,8 @@ async def process_connection_add(api, user_id, item_id, params):
     TEMPLATES = {
         'sms_target': 'Вам предложил личную встречу {{initiator}}{% if initiator_company %} ({{initiator_company}}){% endif %}',
         'push_target': 'Вам предложил личную встречу {{initiator}}{% if initiator_company %} ({{initiator_company}}){% endif %}',
-        'sms_manager': '{{initiator}}{% if initiator_company %} ({{initiator_company}}){% endif %} предложил личную встречу пользователю {{target}}{% if target_company %} ({{target_company}}){% endif %}',
-        'push_manager': '{{initiator}}{% if initiator_company %} ({{initiator_company}}){% endif %} предложил личную встречу пользователю {{target}}{% if target_company %} ({{target_company}}){% endif %}',
+        'sms_manager': '{{initiator}}{% if initiator_company %} ({{initiator_company}}){% endif %} предложил личную встречу клиенту {{target}}{% if target_company %} ({{target_company}}){% endif %}',
+        'push_manager': '{{initiator}}{% if initiator_company %} ({{initiator_company}}){% endif %} предложил личную встречу клиенту {{target}}{% if target_company %} ({{target_company}}){% endif %}',
     }
     user_initiator = User()
     await user_initiator.set(id = user_id)
@@ -567,6 +567,80 @@ async def process_connection_add(api, user_id, item_id, params):
                 initiator_company = user_initiator.company,
                 target = user_target.name,
                 target_company = user_target.company,
+            )
+        
+            if manager_initiator.phone:
+                send_mobile_message(api.stream_mobile, manager_initiator.phone, message, {})
+            
+            if manager_target.phone:
+                send_mobile_message(api.stream_mobile, manager_target.phone, message, {})
+
+
+
+####################################################################
+async def process_connection_response(api, user_id, item_id, params):
+    TEMPLATES = {
+        'sms_target': '{{initiator}}{% if initiator_company %} ({{initiator_company}}){% endif %} {% if resp %}согласился с Вашим предложением{% else %}отклонил Ваше предложение{% endif %} о личной встрече',
+        'push_target': '{{initiator}}{% if initiator_company %} ({{initiator_company}}){% endif %} {% if resp %}согласился с Вашим предложением{% else %}отклонил Ваше предложение{% endif %} о личной встрече',
+        'sms_manager': '{{initiator}}{% if initiator_company %} ({{initiator_company}}){% endif %} {% if resp %}согласился с предложением{% else %}отклонил предложение{% endif %} о личной встрече с клиентом {{target}}{% if target_company %} ({{target_company}}){% endif %}',
+        'push_manager': '{{initiator}}{% if initiator_company %} ({{initiator_company}}){% endif %} {% if resp %}согласился с предложением{% else %}отклонил предложение{% endif %} о личной встрече с клиентом {{target}}{% if target_company %} ({{target_company}}){% endif %}',
+    }
+    user_initiator = User()
+    await user_initiator.set(id = user_id)
+    user_target = User()
+    await user_target.set(id = params['user_id'])
+    event = Event()
+    await event.set(id = item_id)
+    manager_initiator = User()
+    if user_initiator.community_manager_id:
+        await manager_initiator.set(id = user_initiator.community_manager_id)
+    manager_target = User()
+    if user_target.community_manager_id and user_target.community_manager_id != user_initiator.community_manager_id:
+        await manager_target.set(id = user_target.community_manager_id)
+    if user_target.id and user_initiator.id and event.id:
+        link = '/residents/' + str(user_initiator.id)
+
+        body = Template(TEMPLATES['push_target'])
+        message = body.render(
+            initiator = user_initiator.name,
+            initiator_company = user_initiator.company,
+            resp = params['response'],
+        )
+        send_push_message(api, [ user_target.id ], 'Назначение встречи', message, link)
+
+        body = Template(TEMPLATES['sms_target'])
+        message  = body.render(
+            initiator = user_initiator.name,
+            initiator_company = user_initiator.company,
+            resp = params['response'],
+        )
+        if user_target.phone:
+            send_mobile_message(api.stream_mobile, user_target.phone, message, {})
+        
+        if manager_initiator.id or manager_target.id:
+            recepients = []
+            if manager_initiator.id:
+                recepients.append(manager_initiator.id)
+            if manager_target.id:
+                recepients.append(manager_target.id)
+
+            body = Template(TEMPLATES['push_manager'])
+            message = body.render(
+                initiator = user_initiator.name,
+                initiator_company = user_initiator.company,
+                target = user_target.name,
+                target_company = user_target.company,
+                resp = params['response'],
+            )
+            send_push_message(api, recepients, 'Назначение встречи', message, link)
+
+            body = Template(TEMPLATES['sms_manager'])
+            message = body.render(
+                initiator = user_initiator.name,
+                initiator_company = user_initiator.company,
+                target = user_target.name,
+                target_company = user_target.company,
+                resp = params['response'],
             )
         
             if manager_initiator.phone:
