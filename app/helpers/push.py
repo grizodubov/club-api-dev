@@ -1,4 +1,5 @@
 import asyncio
+import ast
 from async_pyfcm import AsyncPyFCM
 
 
@@ -20,7 +21,9 @@ async def stateful_session(api, recepients_ids, title, message, link, data = Non
             FROM
                 sessions
             WHERE
-                user_id = ANY($1) AND device_token <> '' AND device_token IS NOT NULL
+                user_id = ANY($1) AND device_token <> '' AND device_token IS NOT NULL AND device_token NOT IN (
+                    SELECT token FROM device_token_fails
+                )
             GROUP BY
                 device_id, device_token""",
         recepients_ids
@@ -50,16 +53,29 @@ async def stateful_session(api, recepients_ids, title, message, link, data = Non
                 m['data'].update(data)
             async with AsyncPyFCM(google_application_credentials="fcm-credentials.json") as async_fcm:
                 responses = await asyncio.gather(
-                    *[ task_send(async_fcm, m | { 'token': item }) for item in tokens ]
+                    *[ task_send(async_fcm, api, m | { 'token': item }) for item in tokens ]
                 )
 
 
 
 ################################################################
-async def task_send(async_fcm, m):
+async def task_send(async_fcm, api, m):
+    data_string = None
     try:
         response = await async_fcm.send(m)
-    except:
-        print('ERROR')
+    except Exception as e:
+        print('ERROR: ' + m['token'])
+        data_string = str(e)
     else:
         print('OK')
+    if data_string:
+        try:
+            data = ast.literal_eval(data_string)
+        except:
+            print('STRANGE ERROR')
+        else:
+            if type(data) == dict and 'error' in data and type(data['error']) == dict and 'code' in data['error'] and data['error']['code'] == 404:
+                await api.pg.club.execute(
+                    """INSERT INTO device_token_fails (token) VALUES ($1) ON CONFLICT (token) DO NOTHING""",
+                    m['token']
+                )

@@ -14,7 +14,7 @@ from app.models.item import Item
 from app.models.note import get_last_notes_times
 from app.helpers.mobile import send_mobile_message
 from app.models.notification import create_notifications
-from app.models.notification_1 import create_multiple as create_notification_1_multi
+from app.models.notification_1 import create_multiple as create_notification_1_multi, create as create_notification_1
 
 
 

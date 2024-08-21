@@ -23,25 +23,26 @@ def send_email(stream, email, subject, body, data = {}):
 async def send(email, subject, body):
     print('SENDING EMAIL:', email, subject)
     # print(body)
-    SMTP_SERVER = "smtp.yandex.ru"
-    SMTP_PORT = 587
-    SENDER_EMAIL = "info@digitender.ru"
-    SENDER_PASSWORD = "nocoiavacbfkslgf"
-    if email and re.match(r"[^@]+@[^@]+\.[^@]+", email):
-        message = MIMEText(body, 'html', 'utf-8')
-        message['Subject'] = Header(subject, 'utf-8')
-        message['From'] = SENDER_EMAIL
-        message['To'] = email    
-        server = aiosmtplib.SMTP(hostname = SMTP_SERVER, port = SMTP_PORT)
-        await server.connect()
-        await server.ehlo()
-        # await server.starttls()
-        await server.login(SENDER_EMAIL, SENDER_PASSWORD)
-        try:
-            await server.sendmail(SENDER_EMAIL, email, message.as_string())
-        except Exception as e:
-            print('MAIL: SEND ERROR', e)
-            raise Exception('Mail send error')
-        print('MAIL SENT!')
-    else:
-        print('MAIL: WRONG EMAIL', email)
+    # SMTP_SERVER = "smtp.yandex.ru"
+    # SMTP_PORT = 587
+    # SENDER_EMAIL = "info@digitender.ru"
+    # SENDER_PASSWORD = "nocoiavacbfkslgf"
+    # if email and re.match(r"[^@]+@[^@]+\.[^@]+", email):
+    #     message = MIMEText(body, 'html', 'utf-8')
+    #     message['Subject'] = Header(subject, 'utf-8')
+    #     message['From'] = SENDER_EMAIL
+    #     message['To'] = email    
+    #     server = aiosmtplib.SMTP(hostname = SMTP_SERVER, port = SMTP_PORT)
+    #     await server.connect()
+    #     await server.ehlo()
+    #     # await server.starttls()
+    #     await server.login(SENDER_EMAIL, SENDER_PASSWORD)
+    #     try:
+    #         await server.sendmail(SENDER_EMAIL, email, message.as_string())
+    #     except Exception as e:
+    #         print('MAIL: SEND ERROR', e)
+    #         raise Exception('Mail send error')
+    #     print('MAIL SENT!')
+    # else:
+    #     print('MAIL: WRONG EMAIL', email)
+    print('EMAIL NOT SENT')
