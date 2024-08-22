@@ -2644,6 +2644,7 @@ async def manager_user_audit_event(request):
                                         'user': {
                                             'id': user.id,
                                             'name': user.name,
+                                            'hash': user.avatar_hash,
                                         },
                                         'event': {
                                             'id': event.id,
@@ -2664,6 +2665,7 @@ async def manager_user_audit_event(request):
                                             'user': {
                                                 'id': user.id,
                                                 'name': user.name,
+                                                'hash': user.avatar_hash,
                                             },
                                             'event': {
                                                 'id': event.id,

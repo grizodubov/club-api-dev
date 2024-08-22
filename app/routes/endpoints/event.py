@@ -9,7 +9,7 @@ from app.utils.validate import validate
 from app.models.event import Event, find_closest_event, get_participants, get_participants_with_avatars, get_all_speakers, get_future_events, get_speakers, get_events
 from app.models.user import User, get_connections, create_connection, update_connection_response
 from app.models.notification import create_notifications
-from app.models.notification_1 import create as create_notification_1
+from app.models.notification_1 import create as create_notification_1, view
 
 
 
@@ -81,6 +81,10 @@ MODELS = {
         },
     },
     'event_connection_response': {
+        'time_notify': {
+            'required': True,
+			'type': 'str',
+        },
         'event_id': {
             'required': True,
             'type': 'int',
@@ -94,6 +98,7 @@ MODELS = {
         'response': {
             'required': True,
             'type': 'bool',
+            'null': True,
         },
     },
     # moderator
@@ -509,6 +514,10 @@ async def event_connection_response(request):
                 user2 = User()
                 await user2.set(id = request.params['user_id'])
                 if user2.id:
+                    await view(
+                        user_id = request.user.id,
+                        time_notify = request.params['time_notify'],
+                    )
                     await update_connection_response(
                         event_id = event.id,
                         user_1_id = request.user.id,
@@ -530,7 +539,8 @@ async def event_connection_response(request):
                                 'time_event': event.time_event,
                                 'format': event.format,
                                 'name': event.name,
-                            }
+                            },
+                            'response': request.params['response'],
                         }
                     )
                     if request.user.community_manager_id:
@@ -556,7 +566,8 @@ async def event_connection_response(request):
                                         'time_event': event.time_event,
                                         'format': event.format,
                                         'name': event.name,
-                                    }
+                                    },
+                                    'response': request.params['response'],
                                 },
                                 mode = 'manager',
                             )
@@ -583,7 +594,8 @@ async def event_connection_response(request):
                                         'time_event': event.time_event,
                                         'format': event.format,
                                         'name': event.name,
-                                    }
+                                    },
+                                    'response': request.params['response'],
                                 },
                                 mode = 'manager',
                             )

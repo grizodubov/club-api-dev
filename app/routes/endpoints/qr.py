@@ -88,6 +88,7 @@ async def qr_event_register(request):
                                 'user': {
                                     'id': request.user.id,
                                     'name': request.user.name,
+                                    'hash': request.user.avatar_hash,
                                 },
                                 'event': {
                                     'id': event.id,
@@ -108,6 +109,7 @@ async def qr_event_register(request):
                                     'user': {
                                         'id': request.user.id,
                                         'name': request.user.name,
+                                        'hash': request.user.avatar_hash,
                                     },
                                     'event': {
                                         'id': event.id,

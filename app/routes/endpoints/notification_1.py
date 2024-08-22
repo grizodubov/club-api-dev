@@ -4,7 +4,7 @@ from app.core.request import err
 from app.core.response import OrjsonResponse
 from app.core.event import dispatch
 from app.utils.validate import validate
-from app.models.notification_1 import get_list, get_stats, view
+from app.models.notification_1 import get_list, get_stats, view, get_connections
 
 
 
@@ -64,11 +64,19 @@ async def notifications_list(request):
                 time_breakpoint = request.params['time_breakpoint'],
                 limit = request.params['limit'],
             )
+            events_ids = []
+            for n in notifications:
+                if n['event'] == 'connection_add':
+                    events_ids.append(n['data']['event']['id'])
+            connections = {}
+            if events_ids:
+                connections = await get_connections(events_ids, request.user.id)
             stats = await get_stats(
                 user_id = request.user.id
             )
             return OrjsonResponse({
                 'notifications': notifications,
+                'connections': connections,
                 'stats': stats,
             })
         else:

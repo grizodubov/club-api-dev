@@ -582,8 +582,8 @@ async def process_connection_response(api, user_id, item_id, params):
     TEMPLATES = {
         'sms_target': '{{initiator}}{% if initiator_company %} ({{initiator_company}}){% endif %} {% if resp %}согласился с Вашим предложением{% else %}отклонил Ваше предложение{% endif %} о личной встрече',
         'push_target': '{{initiator}}{% if initiator_company %} ({{initiator_company}}){% endif %} {% if resp %}согласился с Вашим предложением{% else %}отклонил Ваше предложение{% endif %} о личной встрече',
-        'sms_manager': '{{initiator}}{% if initiator_company %} ({{initiator_company}}){% endif %} {% if resp %}согласился с предложением{% else %}отклонил предложение{% endif %} о личной встрече с клиентом {{target}}{% if target_company %} ({{target_company}}){% endif %}',
-        'push_manager': '{{initiator}}{% if initiator_company %} ({{initiator_company}}){% endif %} {% if resp %}согласился с предложением{% else %}отклонил предложение{% endif %} о личной встрече с клиентом {{target}}{% if target_company %} ({{target_company}}){% endif %}',
+        'sms_manager': 'Клиент {{initiator}}{% if initiator_company %} ({{initiator_company}}){% endif %} {% if resp %}согласился с предложением{% else %}отклонил предложение{% endif %} о личной встрече с клиентом {{target}}{% if target_company %} ({{target_company}}){% endif %}',
+        'push_manager': 'Клиент {{initiator}}{% if initiator_company %} ({{initiator_company}}){% endif %} {% if resp %}согласился с предложением{% else %}отклонил предложение{% endif %} о личной встрече с клиентом {{target}}{% if target_company %} ({{target_company}}){% endif %}',
     }
     user_initiator = User()
     await user_initiator.set(id = user_id)
@@ -655,8 +655,8 @@ async def process_connection_response(api, user_id, item_id, params):
 async def process_user_arrive(api, user_id, item_id, params):
     TEMPLATES = {
         'push_target': '{{user}}{% if user_company %} ({{user_company}}){% endif %} прибыл на мероприятие (назначена встреча)',
-        'sms_manager': '{{user}}{% if user_company %} ({{user_company}}){% endif %} прибыл на мероприятие',
-        'push_manager': '{{user}}{% if user_company %} ({{user_company}}){% endif %} прибыл на мероприятие',
+        'sms_manager': 'Клиент {{user}}{% if user_company %} ({{user_company}}){% endif %} прибыл на мероприятие',
+        'push_manager': 'Клиент {{user}}{% if user_company %} ({{user_company}}){% endif %} прибыл на мероприятие',
     }
     user = User()
     await user.set(id = item_id)
@@ -671,6 +671,7 @@ async def process_user_arrive(api, user_id, item_id, params):
             WHERE
                 (user_1_id = $1 OR user_2_id = $1) AND
                 event_id = $2 AND
+                response IS NOT FALSE AND
                 deleted IS FALSE""",
         user.id, params['event_id']
     )

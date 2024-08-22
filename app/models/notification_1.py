@@ -107,7 +107,7 @@ async def create_multiple(users_ids, event, data, mode = 'client'):
     for id in users_ids:
         temp = '($' + str(i) + ', $' + str(i + 1) + ', $' + str(i + 2) + ', $' + str(i + 3) + ')'
         query.append(temp)
-        args.extend([ id, event, data ])
+        args.extend([ id, event, data, mode ])
         i = i + 4
     await api.pg.club.execute(
         """INSERT INTO
@@ -116,3 +116,27 @@ async def create_multiple(users_ids, event, data, mode = 'client'):
                 """ + ', '.join(query),
         *args
     )
+
+
+
+####################################################################
+async def get_connections(events_ids, user_id):
+    api = get_api_context()
+    data = await api.pg.club.fetch(
+        """SELECT
+                event_id, user_1_id, user_2_id, response
+            FROM
+                users_connections
+            WHERE
+                event_id = ANY($1) AND
+                (user_1_id = $2 OR user_2_id = $2) AND
+                deleted IS FALSE""",
+        events_ids, user_id
+    )
+    result = {}
+    for item in data:
+        if str(item['event_id']) not in result:
+            result[str(item['event_id'])] = {}
+        u = item['user_1_id'] if item['user_1_id'] != user_id else item['user_2_id']
+        result[str(item['event_id'])][str(u)] = { 'response': item['response'] }
+    return result
