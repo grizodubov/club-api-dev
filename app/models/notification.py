@@ -682,9 +682,9 @@ async def process_user_arrive(api, user_id, item_id, params):
                 temp.append(item['user_1_id'])
             else:
                 temp.append(item['user_2_id'])
+    link = '/residents/' + str(user.id)
     if temp:
-        link = '/residents/' + str(user.id)
-
+        
         body = Template(TEMPLATES['push_target'])
         message = body.render(
             user = user.name,

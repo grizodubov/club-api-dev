@@ -8,6 +8,7 @@ from app.core.event import dispatch
 from app.utils.validate import validate
 from app.helpers.qr import create_code
 from app.models.event import Event
+from app.models.user import User
 from app.models.notification import create_notifications
 from app.models.notification_1 import create_multiple as create_notification_1_multi, create as create_notification_1
 
