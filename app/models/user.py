@@ -1711,7 +1711,7 @@ class User:
 
 
     ################################################################
-    async def get_suggestions_new(self, filter = None, from_id = None, users_ids = None, today_offset = None):
+    async def get_suggestions_new(self, filter = None, from_id = None, users_ids = None, today_offset = None, no_favorites = True, no_contacts = True):
         api = get_api_context()
         if filter is None:
             filter = [ 'company scope', 'company needs' ]
@@ -1725,6 +1725,21 @@ class User:
         }
         mask = [ 'company scope', 'company needs' ]
         filter = [ f for f in filter if f in mask ]
+        temp_ids = None
+        if no_favorites:
+            temp_ids = await api.pg.club.fetchval(
+                """SELECT
+                        array_agg(target_id)
+                    FROM
+                        users_favorites
+                    WHERE
+                        user_id = $1 AND flag = false""",
+                self.id
+            )
+        ids = [ self.id ]
+        if temp_ids:
+            for temp_id in temp_ids:
+                ids.append(temp_id)
         if filter:
             queries = []
             args = []
@@ -1769,48 +1784,13 @@ class User:
                                 WHERE
                                     t1.id >= 10000 AND
                                     t1.active IS TRUE AND
-                                    t2.tags SIMILAR TO ${v1} ESCAPE '#'""".format(v1 = len(args) + 1, v2 = len(args) + 2, v3 = len(args) + 3)
-                    # query = """SELECT
-                    #                 t1.id, t1.name, t2.time_update AS time_create,
-                    #                 t3.company, t3.position, t3.status, t3.catalog,
-                    #                 t3.link_telegram,
-                    #                 ts_headline(t2.tags, to_tsquery(${v1}::text), 'HighlightAll=true, StartSel=~, StopSel=~') AS tags,
-                    #                 ${v1} AS search,
-                    #                 ${v2} AS offer,
-                    #                 t8.hash AS avatar_hash,
-                    #                 ts_rank_cd(to_tsvector(t2.tags), to_tsquery(${v1}::text), 32) AS __rank
-                    #             FROM
-                    #                 users t1
-                    #             INNER JOIN
-                    #                 users_tags_1 t2 ON t2.user_id = t1.id AND t2.category = ${v3}
-                    #             INNER JOIN
-                    #                 users_info t3 ON t3.user_id = t1.id
-                    #             LEFT JOIN
-                    #                 (
-                    #                     SELECT
-                    #                         r3.user_id, array_agg(r3.alias) AS roles
-                    #                     FROM
-                    #                         (
-                    #                             SELECT
-                    #                                 r1.user_id, r2.alias
-                    #                             FROM
-                    #                                 users_roles r1
-                    #                             INNER JOIN
-                    #                                 roles r2 ON r2.id = r1.role_id
-                    #                         ) r3
-                    #                     GROUP BY
-                    #                         r3.user_id
-                    #                 ) t4 ON t4.user_id = t1.id
-                    #             LEFT JOIN
-                    #                 avatars t8 ON t8.owner_id = t1.id AND t8.active IS TRUE
-                    #             WHERE
-                    #                 t1.id >= 10000 AND
-                    #                 t1.active IS TRUE AND
-                    #                 to_tsvector(t2.tags) @@ to_tsquery(${v1})""".format(v1 = len(args) + 1, v2 = len(args) + 2, v3 = len(args) + 3)
+                                    NOT t1.id = ANY(${v4}) AND
+                                    t2.tags SIMILAR TO ${v1} ESCAPE '#'""".format(v1 = len(args) + 1, v2 = len(args) + 2, v3 = len(args) + 3, v4 = len(args) + 4)
                     queries.append(query)
                     args.append('%(' + '|'.join([ re.sub(r'\|', '#|', t.strip()) for t in p.strip().split('+') if t.strip() ]) + ')%')
                     args.append(offers[f])
                     args.append(f)
+                    args.append(ids)
             if queries:
                 where = []
                 query_where = ''
@@ -1818,8 +1798,9 @@ class User:
                 where.append('id <> ${v} '.format(v = len(args) + 1))
                 args.append(self.id)
                 #
-                where.append('id NOT IN (SELECT contact_id FROM users_contacts WHERE user_id = ${v})'.format(v = len(args) + 1))
-                args.append(self.id)
+                if no_contacts:
+                    where.append('id NOT IN (SELECT contact_id FROM users_contacts WHERE user_id = ${v})'.format(v = len(args) + 1))
+                    args.append(self.id)
                 # from_id
                 if from_id:
                     where.append('id > ${v} '.format(v = len(args) + 1))
@@ -1880,6 +1861,200 @@ class User:
                     *args
                 )
                 return [ dict(item) | { 'online': check_online_by_id(item['id']) } for item in data ]
+        return []
+
+
+    ################################################################
+    async def get_suggestions_new_for_swiper(self, filter = None):
+        api = get_api_context()
+        if filter is None:
+            filter = [ 'company scope', 'company needs' ]
+        offers = {
+            'company scope': 'bid',
+            'company needs': 'ask',
+        }
+        mapping = {
+            'company scope': 'company needs',
+            'company needs': 'company scope',
+        }
+        mask = [ 'company scope', 'company needs' ]
+        filter = [ f for f in filter if f in mask ]
+        if filter:
+            queries = []
+            args = []
+            for f in filter:
+                p = getattr(self, 'tags_1_' + re.sub(r'\s', '_', mapping[f]))
+                if p.strip():
+                    query = """SELECT
+                                    t1.id, t1.name, t2.time_update AS time_create,
+                                    t3.company, t3.position, t3.catalog,
+                                    coalesce(h1.tags, '') AS hobby,
+                                    t2.tags AS tags,
+                                    ${v2} AS offer,
+                                    t8.hash AS avatar_hash,
+                                    cm.id AS community_manager_id,
+                                    cm.name AS community_manager
+                                FROM
+                                    users t1
+                                INNER JOIN
+                                    users_tags_1 t2 ON t2.user_id = t1.id AND t2.category = ${v3}
+                                INNER JOIN
+                                    users_info t3 ON t3.user_id = t1.id
+                                INNER JOIN
+                                    users_roles r1 ON r1.user_id = t1.id
+                                INNER JOIN
+                                    roles r2 ON r2.id = r1.role_id AND r2.alias = 'client'
+                                LEFT JOIN
+                                    users_tags_1 h1 ON h1.user_id = t1.id AND h1.category = 'hobbies'
+                                LEFT JOIN
+                                    users cm ON cm.id = t1.community_manager_id
+                                LEFT JOIN
+                                    avatars t8 ON t8.owner_id = t1.id AND t8.active IS TRUE
+                                WHERE
+                                    t1.id >= 10000 AND
+                                    t1.id NOT IN (
+                                        SELECT target_id FROM users_favorites WHERE user_id = ${v4}
+                                    ) AND
+                                    t1.active IS TRUE AND
+                                    t2.tags SIMILAR TO ${v1} ESCAPE '#'""".format(v1 = len(args) + 1, v2 = len(args) + 2, v3 = len(args) + 3, v4 = len(args) + 4)
+                    queries.append(query)
+                    args.append('%(' + '|'.join([ re.sub(r'\|', '#|', t.strip()) for t in p.strip().split('+') if t.strip() ]) + ')%')
+                    args.append(offers[f])
+                    args.append(f)
+                    args.append(self.id)
+            if queries:
+                where = []
+                query_where = ''
+                #
+                where.append('id <> ${v} '.format(v = len(args) + 1))
+                args.append(self.id)
+                #
+                where.append('id NOT IN (SELECT contact_id FROM users_contacts WHERE user_id = ${v})'.format(v = len(args) + 1))
+                args.append(self.id)
+                if where:
+                    query_where = ' WHERE ' + ' AND '.join(where)
+                data = await api.pg.club.fetch(
+                    """SELECT
+                            id, name, time_create, company, position, catalog, hobby, tags,
+                            community_manager_id, community_manager,
+                            offer, avatar_hash
+                        FROM
+                            (
+                                SELECT * FROM
+                                    (""" + ' UNION ALL '.join(queries) + """
+                                    ) d""" + query_where + """
+                                ORDER BY
+                                    time_create DESC
+                            ) u
+                        ORDER BY
+                            id
+                        LIMIT
+                            20
+                        """,
+                    *args
+                )
+                if data:
+                    result = []
+                    cache = {}
+                    for item in data: 
+                        temp = {}
+                        if item['offer'] == 'bid':
+                            ps = [ t.strip() for t in self.tags_1_company_needs.strip().split('+') if t.strip() ]
+                            pt = [ t.strip() for t in item['tags'].strip().split('+') if t.strip() ]
+                            pi = [ v for v in ps if v in pt ]
+                            if pi:
+                                temp['company scope'] = pt
+                                temp['company scope intersections'] = pi
+                        elif item['offer'] == 'ask':
+                            ps = [ t.strip() for t in self.tags_1_company_scope.strip().split('+') if t.strip() ]
+                            pt = [ t.strip() for t in item['tags'].strip().split('+') if t.strip() ]
+                            pi = [ v for v in ps if v in pt ]
+                            if pi:
+                                temp['company needs'] = pt
+                                temp['company needs intersections'] = pi
+                        if temp:
+                            if str(item['id']) in cache:
+                                i = cache[str(item['id'])]
+                                result[i]['tags'] = result[i]['tags'] | temp
+                                result[i]['time_update'] = result[i]['time_update'] if result[i]['time_update'] > item['time_create'] else item['time_create']
+                                result[i]['offer'].append(item['offer'])
+                            else:
+                                result.append({
+                                    'id': item['id'],
+                                    'name': item['name'],
+                                    'time_update': item['time_create'],
+                                    'company': item['company'],
+                                    'position': item['position'],
+                                    'catalog': [ t.strip() for t in item['catalog'].strip().split(',') if t.strip() ],
+                                    'hobby': [ t.strip() for t in item['hobby'].strip().split('+') if t.strip() ],
+                                    'tags': temp,
+                                    'community_manager_id': item['community_manager_id'],
+                                    'community_manager': item['community_manager'],
+                                    'offer': [ item['offer'] ],
+                                    'avatar_hash': item['avatar_hash'],
+                                    'online': check_online_by_id(item['id']),
+                                })
+                                cache[str(item['id'])] = len(result) - 1
+                    for item in result:
+                        # company tags
+                        l = 0
+                        is_tag = {
+                            'company scope': True,
+                            'company needs': True,
+                        }
+                        current_index = 0
+                        s = {
+                            'company scope': [],
+                            'company needs': [],
+                        }
+                        while is_tag['company scope'] or is_tag['company needs']:
+                            for k in { 'company scope', 'company needs' }:
+                                if is_tag[k]:
+                                    if k + ' intersections' in item['tags']:
+                                        lst = item['tags'][k + ' intersections']
+                                        if (len(lst) > current_index):
+                                            pl = [ pp.strip() for pp in lst[current_index].split('|') if pp.strip()][-1]
+                                            l += len(pl)
+                                            if l > 144:
+                                                if len(s[k]) < 1:
+                                                    s[k].append(pl)
+                                                    if len(lst) > current_index + 1:
+                                                        s[k].append('...')
+                                                else:
+                                                    s[k].append('...')
+                                                is_tag[k] = False
+                                            else:
+                                                s[k].append(pl)
+                                        else:
+                                            is_tag[k] = False
+                                    else:
+                                        is_tag[k] = False
+                            current_index += 1
+                        if s['company scope']:
+                            item['tags']['company scope intersections filtered'] = s['company scope']
+                        if s['company needs']:
+                            item['tags']['company needs intersections filtered'] = s['company needs']
+                        # catalog, hobby
+                        for k in { 'catalog', 'hobby' }:
+                            if item[k]:
+                                s = []
+                                l = 0
+                                i = 0
+                                for p in item[k]:
+                                    pl = [ pp.strip() for pp in p.split('|') if pp.strip()][-1]
+                                    l += len(pl)
+                                    if l > 380:
+                                        if len(s) < 1:
+                                            s.append(pl)
+                                            if len(item[k]) > i + 1:
+                                                s.append('...')
+                                        else:
+                                            s.append('...')
+                                        break
+                                    s.append(pl)
+                                    i += 1
+                                item[k + ' filtered'] = s
+                    return result
         return []
 
 
@@ -1955,7 +2130,8 @@ class User:
                     t7.hash AS user_1_avatar_hash,
                     t8.hash AS user_2_avatar_hash,
                     t222.company AS user_1_company,
-                    t333.company AS user_2_company
+                    t333.company AS user_2_company,
+                    ct.comments
                 FROM
                     users_connections t1
                 LEFT JOIN
@@ -1976,6 +2152,27 @@ class User:
                     avatars t7 ON t7.owner_id = t1.user_1_id AND t7.active IS TRUE
                 LEFT JOIN
                     avatars t8 ON t8.owner_id = t1.user_2_id AND t8.active IS TRUE
+                LEFT JOIN
+                    (
+                        SELECT
+                            ct7.connection_id, array_agg(comment) AS comments
+                        FROM (
+                            SELECT
+                                ct5.connection_id, jsonb_build_object(
+                                    'id', ct5.id,
+                                    'time_create', ct5.time_create,
+                                    'comment', ct5.comment,
+                                    'author_id', ct5.author_id,
+                                    'author_name', ct6.name
+                                ) AS comment
+                            FROM
+                                connections_comments ct5
+                            INNER JOIN
+                                users ct6 ON ct6.id = ct5.author_id
+                            ORDER BY ct5.id DESC
+                        ) ct7
+                        GROUP BY ct7.connection_id
+                    ) ct ON ct.connection_id = t1.id
                 WHERE
                     t1.deleted IS FALSE AND
                     (t1.user_1_id = $1 OR t1.user_2_id = $1)""",
@@ -2020,7 +2217,7 @@ class User:
             """SELECT user_id FROM events_users WHERE event_id = $1 AND user_id = $2""",
             event_id, self.id
         )
-        print(result)
+        #print(result)
         if result:
             return True
         return False
@@ -2952,6 +3149,86 @@ class User:
         if data:
             return [ dict(item) for item in data ]
         return []
+
+
+    ################################################################
+    async def get_favorites_to_select(self):
+        api = get_api_context()
+        exceptions = [ self.id, 10004, 10069, 10077, 10094, 10169, 10170, 10173, 10183, 10295, 10296, 10297, 10298 ]
+        data = await api.pg.club.fetch(
+            """SELECT
+                    t1.id,
+                    t1.name,
+                    t2.company,
+                    t2.catalog,
+                    t3.hash AS avatar_hash
+                FROM
+                    users t1
+                INNER JOIN
+                    users_info t2 ON t2.user_id = t1.id
+                INNER JOIN
+                    users_roles t4 ON t4.user_id = t1.id
+                INNER JOIN
+                    roles t5 ON t5.id = t4.role_id
+                LEFT JOIN
+                    avatars t3 ON t3.owner_id = t1.id AND t3.active IS TRUE
+                WHERE
+                    t5.alias = 'client' AND
+                    t1.active IS TRUE AND
+                    NOT t1.id = ANY($2) AND
+                    t1.id NOT IN (
+                        SELECT target_id FROM users_favorites WHERE user_id = $1
+                    )
+                ORDER BY
+                    t1.time_create
+                LIMIT
+                    10""",
+            self.id, exceptions
+        )
+        if data:
+            return [ dict(item) for item in data ]
+        return []
+
+
+    ################################################################
+    async def set_favorites(self, target_id, flag):
+        api = get_api_context()
+        if flag is None:
+            await api.pg.club.execute(
+                """DELETE FROM
+                        users_favorites
+                    WHERE
+                        user_id = $1 AND target_id = $2""",
+                self.id, target_id
+            )
+        else:
+            await api.pg.club.execute(
+                """INSERT INTO
+                        users_favorites (user_id, target_id, flag)
+                    VALUES
+                        ($1, $2, $3)
+                    ON CONFLICT
+                        (user_id, target_id)
+                    DO UPDATE SET
+                        flag = EXCLUDED.flag""",
+                self.id, target_id, flag
+            )
+
+
+    ################################################################
+    async def get_favorites(self, users_ids):
+        api = get_api_context()
+        data = await api.pg.club.fetch(
+            """SELECT target_id, flag FROM users_favorites WHERE user_id = $1 AND target_id = ANY($2)""",
+            self.id, users_ids
+        )
+        result = {}
+        for item in data:
+            result[str(item['target_id'])] = item['flag']
+        for id in users_ids:
+            if str(id) not in result:
+                result[str(id)] = None
+        return result
 
 
 
@@ -4005,3 +4282,73 @@ async def update_suggestion_comment(user_id, partner_id, comment, author_id):
                 ($1, $2, $3, $4)""",
         user_id, partner_id, comment, author_id
     )
+
+
+
+################################################################
+async def get_users_with_avatars(users_ids):
+    api = get_api_context()
+    query = [ 't2.active IS TRUE' ]
+    args = []
+    if users_ids is not None:
+        query.append('t2.id = ANY($1)')
+        args.append(users_ids)
+    data = await api.pg.club.fetch(
+        """SELECT
+                t2.id,
+                t2.name,
+                t22.company,
+                t22.catalog,
+                t22.annual,
+                t5.hash,
+                coalesce(t3.tags, '') AS tags,
+                coalesce(t3.interests, '') AS interests,
+                t2.community_manager_id,
+                coalesce(t4.name, '') AS community_manager,
+                t2.active,
+                coalesce(tm.stage_id, tm2.stage_id) AS stage,
+                coalesce(tm.rejection, tm2.rejection) AS rejection
+            FROM
+                users t2
+            INNER JOIN
+                users_roles t2r ON t2r.user_id = t2.id
+            INNER JOIN
+                roles r ON r.id = t2r.role_id AND r.alias = 'client'
+            INNER JOIN
+                users_info t22 ON t22.user_id = t2.id
+            INNER JOIN
+                users_tags t3 ON t3.user_id = t2.id
+            LEFT JOIN
+                users_memberships tm ON tm.user_id = t2.id AND tm.active IS TRUE
+            LEFT JOIN
+                users_memberships tm2 ON tm2.user_id = t2.id AND tm2.stage_id = 1
+            LEFT JOIN
+                users t4 ON t4.id = t2.community_manager_id
+            LEFT JOIN
+                avatars t5 ON t5.owner_id = t2.id AND t5.active IS TRUE
+            WHERE
+                """ + ' AND '.join(query),
+        *args
+    )
+    return [ dict(item) for item in data ]
+
+
+################################################################
+async def get_favorites_stats(users_ids):
+    api = get_api_context()
+    data = await api.pg.club.fetch(
+        """SELECT
+                target_id, count(user_id) AS amount
+            FROM
+                users_favorites
+            WHERE
+                target_id = ANY($1)
+            GROUP BY
+                target_id""",
+        users_ids
+    )
+    result = { str(item['target_id']): item['amount'] for item in data }
+    for id in users_ids:
+        if str(id) not in result:
+            result[str(id)] = 0
+    return result

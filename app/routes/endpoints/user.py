@@ -8,7 +8,7 @@ from app.core.request import err
 from app.core.response import OrjsonResponse
 from app.core.event import dispatch
 from app.utils.validate import validate
-from app.models.user import User, get_residents, get_speakers, get_residents_contacts, get_community_managers, get_telegram_pin, get_last_activity, get_users_memberships, get_agents_list, get_agents, create_connection, recover_connection, drop_connection, update_connection_state, update_connection_comment, get_connections, update_connection_rating, get_profiles_views_amount, get_date_profiles_views_amount, create_offline_connection, get_all_clients, update_suggestion, update_suggestion_comment
+from app.models.user import User, get_residents, get_speakers, get_residents_contacts, get_community_managers, get_telegram_pin, get_last_activity, get_users_memberships, get_agents_list, get_agents, create_connection, recover_connection, drop_connection, update_connection_state, update_connection_comment, get_connections, update_connection_rating, get_profiles_views_amount, get_date_profiles_views_amount, create_offline_connection, get_all_clients, update_suggestion, update_suggestion_comment, get_users_with_avatars, get_favorites_stats
 from app.models.event import Event, get_events_confirmations_pendings
 from app.models.item import Item
 from app.models.note import get_last_notes_times
@@ -35,6 +35,8 @@ def routes():
         Route('/user/thumbsup', user_thumbs_up, methods = [ 'POST' ]),
         Route('/user/thumbsoff', user_thumbs_off, methods = [ 'POST' ]),
         Route('/user/profile/view', user_view_profile, methods = [ 'POST' ]),
+        Route('/user/favorites/select', user_favorites_select, methods = [ 'POST' ]),
+        Route('/user/favorites/set', user_favorites_set, methods = [ 'POST' ]),
 
         Route('/user/{id:int}/helpful', user_helpful, methods = [ 'POST' ]),
 
@@ -94,6 +96,8 @@ def routes():
 
         Route('/ma/user/suggestions/state', manager_user_suggestions_state, methods = [ 'POST' ]),
         Route('/ma/user/suggestions/comment', manager_user_suggestions_comment, methods = [ 'POST' ]),
+
+        Route('/ma/user/list', manager_user_list, methods = [ 'POST' ]),
     ]
 
 
@@ -118,6 +122,18 @@ MODELS = {
 			'required': True,
 			'type': 'int',
             'value_min': 1,
+		},
+    },
+    'user_favorites_set': {
+        'target_id': {
+			'required': True,
+			'type': 'int',
+            'value_min': 1,
+		},
+        'flag': {
+			'required': True,
+			'type': 'bool',
+            'null': True,
 		},
     },
     'manager_user_profile_views': {
@@ -1578,6 +1594,39 @@ async def user_view_profile(request):
 
 
 ################################################################
+async def user_favorites_select(request):
+    if request.user.id:
+        result = await request.user.get_suggestions_new_for_swiper()
+        users_ids = [ item['id'] for item in result ]
+        stats = await get_favorites_stats(users_ids)
+        return OrjsonResponse({
+            'users': [ item | { 'favorites_stats': stats[str(item['id'])] } for item in result ],
+        })
+    else:
+        return err(403, 'Нет доступа')
+
+
+
+################################################################
+async def user_favorites_set(request):
+    if request.user.id:
+        if validate(request.params, MODELS['user_favorites_set']):
+            target = User()
+            await target.set(id = request.params['target_id'])
+            if target.id:
+                await request.user.set_favorites(target.id, request.params['flag'])
+                dispatch('user_update', request)
+                return OrjsonResponse({})
+            else:
+                return err(404, 'Пользователь не найден')
+        else:
+            return err(400, 'Неверный поиск')
+    else:
+        return err(403, 'Нет доступа')
+
+
+
+################################################################
 async def user_summary(request):
     if request.user.id:
         result = await request.user.get_summary()
@@ -1971,10 +2020,13 @@ async def user_residents(request):
         if validate(request.path_params, MODELS['user_residents']):
             result = await get_residents(users_ids = request.params['users_ids'] if 'users_ids' in request.params and request.params['users_ids'] else None)
             # result2 = await get_speakers(None)
+            users_ids = [ item.id for item in result ]
+            favorites = await request.user.get_favorites(users_ids = users_ids)
+            favorites_stats = await get_favorites_stats(users_ids = users_ids)
             contacts = await get_residents_contacts(
                 user_id = request.user.id,
                 user_status = request.user.status,
-                contacts_ids = [ item.id for item in result ]
+                contacts_ids = users_ids
             )
             ### remove data for roles
             roles = set(request.user.roles)
@@ -1987,6 +2039,8 @@ async def user_residents(request):
                     temp['company'] = ''
                     temp['position'] = ''
                     temp['link_telegram'] = ''
+                temp['favorites_flag'] = favorites[str(temp['id'])]
+                temp['favorites_stats'] = favorites_stats[str(temp['id'])]
                 residents.append(temp)
             # speakers = []
             # for item in result2:
@@ -2019,6 +2073,24 @@ async def new_user_resident(request):
                 user_status = request.user.status,
                 contacts_ids = [ item.id for item in result ]
             )
+            favorites = await request.user.get_favorites(
+                users_ids = [ request.path_params['id'] ]
+            )
+            suggestions_data = {}
+            suggestions = await request.user.get_suggestions_new(users_ids = [ request.path_params['id'] ], no_favorites = False, no_contacts = False)
+            for item in suggestions:
+                if item['offer'] == 'bid':
+                    temp = [ t.strip() for t in item['tags'].split('+') ]
+                    suggestions_data['company scope'] = []
+                    for t in request.user.tags_1_company_needs.split('+'):
+                        if t.strip() in temp:
+                            suggestions_data['company scope'].append(t.strip())
+                elif item['offer'] == 'ask':
+                    temp = [ t.strip() for t in item['tags'].split('+') ]
+                    suggestions_data['company needs'] = []
+                    for t in request.user.tags_1_company_scope.split('+'):
+                        if t.strip() in temp:
+                            suggestions_data['company needs'].append(t.strip())
             ### remove data for roles
             roles = set(request.user.roles)
             roles.discard('applicant')
@@ -2043,10 +2115,13 @@ async def new_user_resident(request):
                     temp['show'] = False
                 else:
                     temp['show'] = True
+                if str(temp['id']) in favorites:
+                    temp['favorites_flag'] = favorites[str(temp['id'])]
                 residents.append(temp)
             return OrjsonResponse({
                 'residents': residents,
                 'contacts': contacts,
+                'suggestions': suggestions_data,
             })
         else:
             return err(400, 'Неверный запрос')
@@ -3252,5 +3327,20 @@ async def manager_user_suggestions_comment(request):
                 return err(404, 'Пользователь не найден')
         else:
             return err(400, 'Неверный запрос')
+    else:
+        return err(403, 'Нет доступа')
+
+
+
+################################################################
+async def manager_user_list(request):
+    if request.user.id and request.user.check_roles({ 'admin', 'moderator', 'manager', 'chief', 'community manager' }):
+        users_ids = await request.user.get_allowed_clients_ids()
+        print(users_ids)
+        users = await get_users_with_avatars(users_ids)
+        users.sort(key = lambda x: x['name'])
+        return OrjsonResponse({
+            'users': users,
+        })
     else:
         return err(403, 'Нет доступа')

@@ -160,7 +160,7 @@ async def get_clients(config, clients_ids):
     
     if users_ids:
 
-        if { 'Стадия', 'Отказ', 'Контрольная дата', 'Пробный период (дней)' } & set(config.keys()):
+        if { 'Стадия', 'Отказ', 'Отложен', 'Контрольная дата', 'Пробный период (дней)' } & set(config.keys()):
             memberships = await get_users_memberships(users_ids)
         
         if { 'Активность' } & set(config.keys()):
@@ -219,6 +219,19 @@ async def get_clients(config, clients_ids):
                             continue
                 if config['Отказ']['report']:
                     temp.update({ 'rejection': 'Да' if rejection else 'Нет' })
+
+            # Отложен
+            if 'Отложен' in config:
+                ts = memberships[str(item['id'])]['stage']
+                postopen = memberships[str(item['id'])]['stages'][ts]['postopen']
+                if config['Отложен']['filter']:
+                    if config['Отложен']['value'] != '1000':
+                        if config['Отложен']['value'] == '0' and postopen is True:
+                            continue
+                        if config['Отложен']['value'] == '1' and postopen is False:
+                            continue
+                if config['Отложен']['report']:
+                    temp.update({ 'postopen': 'Да' if postopen else 'Нет' })
 
             # Контрольная дата
             if 'Контрольная дата' in config:
@@ -380,6 +393,7 @@ def create_clients_file(data):
         'link_telegram': 'Telegram ID',
         'stage': 'Стадия',
         'rejection': 'Отказ',
+        'postopen': 'Отложен',
         'date_control': 'Контрольная дата',
         'demo': 'Пробный период (дней)',
         'notes': 'Журнал',
