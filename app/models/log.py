@@ -120,7 +120,7 @@ async def get_views(page = 1, community_manager_id = None):
     offset = (page - 1) * 50
     where = ''
     args = []
-    if community_manager_id:
+    if community_manager_id and community_manager_id > 0:
         users_ids = await api.pg.club.fetchval("""SELECT array_agg(id) FROM users WHERE community_manager_id = $1""", community_manager_id)
         if not users_ids:
             return (0, [])

@@ -13,6 +13,7 @@ from app.utils.packager import pack as data_pack, unpack as data_unpack
 from app.models.role import get_roles
 from app.models.message import check_recepient, check_recepients
 from app.models.notification_1 import get_stats
+from app.models.suggestions import suggestions_deactivate, suggestions_process
 
 
 
@@ -758,6 +759,9 @@ class User:
         cursor = 2
         query = []
         args = []
+        # UPDATE SUGGESTIONS LOG
+        suggestions_log = []
+        # UPDATE SUGGESTIONS LOG
         for k in { 'active', 'name', 'email', 'phone', 'password', 'community_manager_id', 'agent_id', 'curator_id' }:
             if k in kwargs:
                 query.append(k + ' = $' + str(cursor))
@@ -766,6 +770,10 @@ class User:
                 else:
                     args.append(kwargs[k])
                 cursor += 1
+        # UPDATE SUGGESTIONS LOG
+        if 'active' in kwargs and self.active != kwargs['active']:
+            suggestions_log.append('deactivate' if self.active else 'activate')
+        # UPDATE SUGGESTIONS LOG
         if query:
             await api.pg.club.execute(
                 """UPDATE
@@ -855,6 +863,14 @@ class User:
                 *update_args
             )
         if 'roles' in kwargs:
+            # UPDATE SUGGESTIONS LOG
+            if 'client' in self.roles:
+                if 'client' not in kwargs['roles']:
+                    suggestions_log.append('deactivate')
+            else:
+                if 'client' in kwargs['roles']:
+                    suggestions_log.append('activate')
+            # UPDATE SUGGESTIONS LOG
             roles = await get_roles()
             await api.pg.club.execute(
                 """DELETE FROM users_roles WHERE user_id = $1""",
@@ -881,6 +897,10 @@ class User:
                 tags_old = set(sorted(re.split(r'\s*\+\s*', getattr(self, ktk))))
                 tags_new = set(sorted(re.split(r'\s*\+\s*', kwargs[ktk].strip())))
                 if tags_old != tags_new:
+                    # UPDATE SUGGESTIONS LOG
+                    if tk in { 'company scope', 'company needs', 'personal expertise', 'personal needs' }:
+                        suggestions_log.append('update')
+                    # UPDATE SUGGESTIONS LOG
                     calls_data = {}
                     call_data = ' + '.join([ t for t in re.split(r'\s*\+\s*', kwargs[ktk].strip()) if t ])
                     calls.append(
@@ -899,6 +919,10 @@ class User:
                     )
         if calls:
             await asyncio.gather(*calls)
+        # UPDATE SUGGESTIONS LOG
+        if suggestions_log:
+            update_suggestions_log(self.id, suggestions_log)
+        # UPDATE SUGGESTIONS LOG
 
 
     ################################################################
@@ -2427,6 +2451,9 @@ class User:
     async def create(self, **kwargs):
         # TODO: сделать полный register (все поля)
         api = get_api_context()
+        # UPDATE SUGGESTIONS LOG
+        suggestions_log = []
+        # UPDATE SUGGESTIONS LOG
         # только мобильники рф
         id = await api.pg.club.fetchval(
             """INSERT INTO
@@ -2488,6 +2515,14 @@ class User:
         )
         roles = await get_roles()
         if kwargs['roles']:
+            # UPDATE SUGGESTIONS LOG
+            if type(kwargs['roles'][0]) == int:
+                if kwargs['roles'][0] == 10002:
+                    suggestions_log.append('create')
+            else:
+                if kwargs['roles'][0] == 'client':
+                    suggestions_log.append('create')
+            # UPDATE SUGGESTIONS LOG
             await api.pg.club.execute(
                 """INSERT INTO
                         users_roles (user_id, role_id)
@@ -2535,6 +2570,10 @@ class User:
             if calls:
                 await asyncio.gather(*calls)
         await self.set(id = id, active = kwargs['active'] if 'active' in kwargs else True)
+        # UPDATE SUGGESTIONS LOG
+        if suggestions_log:
+            update_suggestions_log(self.id, suggestions_log)
+        # UPDATE SUGGESTIONS LOG
 
 
     ################################################################
@@ -2580,6 +2619,10 @@ class User:
             """UPDATE users SET active = FALSE WHERE id = $1""",
             self.id
         )
+        # UPDATE SUGGESTIONS LOG
+        if self.active:
+            update_suggestions_log(self.id, [ 'deactivate' ])
+        # UPDATE SUGGESTIONS LOG
 
 
     ################################################################
@@ -3229,6 +3272,103 @@ class User:
             if str(id) not in result:
                 result[str(id)] = None
         return result
+
+
+    ################################################################
+    async def get_suggestions_new_to_process(self, api, users_ids = None):
+        filter = [ 'company scope', 'company needs', 'personal expertise', 'personal needs' ]
+        offers = {
+            'company scope': 'bid',
+            'company needs': 'ask',
+            'personal expertise': 'bid',
+            'personal needs': 'ask',
+        }
+        mapping = {
+            'company scope': 'company needs',
+            'company needs': 'company scope',
+            'personal expertise': 'personal needs',
+            'personal needs': 'personal expertise',
+        }
+        queries = []
+        args = []
+        for f in filter:
+            p = getattr(self, 'tags_1_' + re.sub(r'\s', '_', mapping[f]))
+            if p.strip():
+                query = """SELECT
+                                t1.id, t1.name, t3.company,
+                                ${v2} AS offer,
+                                ${v3} AS category,
+                                t2.tags AS tags
+                            FROM
+                                users t1
+                            INNER JOIN
+                                users_tags_1 t2 ON t2.user_id = t1.id AND t2.category = ${v3}
+                            INNER JOIN
+                                users_info t3 ON t3.user_id = t1.id
+                            INNER JOIN
+                                users_roles r1 ON r1.user_id = t1.id
+                            INNER JOIN
+                                roles r2 ON r2.id = r1.role_id AND r2.alias = 'client'
+                            WHERE
+                                t1.id >= 10000 AND
+                                t1.id <> ${v4} AND
+                                t1.active IS TRUE AND
+                                t2.tags SIMILAR TO ${v1} ESCAPE '#'""".format(v1 = len(args) + 1, v2 = len(args) + 2, v3 = len(args) + 3, v4 = len(args) + 4)
+                queries.append(query)
+                args.append('%(' + '|'.join([ re.sub(r'\|', '#|', t.strip()) for t in p.strip().split('+') if t.strip() ]) + ')%')
+                args.append(offers[f])
+                args.append(f)
+                args.append(self.id)
+        if queries:
+            where = []
+            query = ''
+            if users_ids:
+                where.append('id ANY ${v} '.format(v = len(args) + 1))
+                args.append(users_ids)
+            if where:
+                query = ' WHERE ' + ' AND '.join(where)
+            data = await api.pg.club.fetch(
+                """SELECT
+                        id, name, company, offer, category, tags
+                    FROM
+                        (
+                            SELECT * FROM
+                                (""" + ' UNION ALL '.join(queries) + """
+                                ) d""" + query + """
+                        ) u""",
+                *args
+            )
+            if data:
+                result = []
+                index_cache = {}
+                for item in data: 
+                    temp = {}
+                    p = getattr(self, 'tags_1_' + re.sub(r'\s', '_', mapping[item['category']]))
+                    ps = [ t.strip() for t in p.strip().split('+') if t.strip() ]
+                    pt = [ t.strip() for t in item['tags'].strip().split('+') if t.strip() ]
+                    pi = [ v for v in ps if v in pt ]
+                    if pi:
+                        temp[item['category']] = pt
+                        temp[item['category'] + ' intersections'] = pi
+                    if temp:
+                        if str(item['id']) in index_cache:
+                            i = index_cache[str(item['id'])]
+                            result[i]['tags'] = result[i]['tags'] | temp
+                            result[i]['offer'].append(item['offer'])
+                            result[i]['offer'] = list(set(result[i]['offer']))
+                            result[i]['category'].append(item['category'])
+                        else:
+                            result.append({
+                                'id': item['id'],
+                                'name': item['name'],
+                                'company': item['company'],
+                                'offer': [ item['offer'] ],
+                                'category': [ item['category'] ],
+                                'tags': temp,
+                            })
+                            index_cache[str(item['id'])] = len(result) - 1
+                return result
+        return []
 
 
 
@@ -4248,17 +4388,27 @@ async def get_all_clients():
 ################################################################
 async def update_suggestion(user_id, partner_id, state):
     api = get_api_context()
-    await api.pg.club.execute(
-        """INSERT INTO
-                users_suggestions (user_id, partner_id, state)
-            VALUES
-                ($1, $2, $3)
-            ON CONFLICT
-                (user_id, partner_id)
-            DO UPDATE SET
-                state = EXCLUDED.state""",
-        user_id, partner_id, state
+    cm_id = await api.pg.club.fetchval(
+        """SELECT community_manager_id FROM users WHERE id = $1""",
+        user_id
     )
+    if cm_id:
+        tm = await api.pg.club.fetchval(
+            """INSERT INTO
+                    users_suggestions (user_id, partner_id, state)
+                VALUES
+                    ($1, $2, $3)
+                ON CONFLICT
+                    (user_id, partner_id)
+                DO UPDATE SET
+                    state = EXCLUDED.state,
+                    time_update = now() at time zone 'utc'
+                RETURNING
+                    time_update""",
+            user_id, partner_id, state
+        )
+        return tm
+    return None
 
 
 
@@ -4275,13 +4425,25 @@ async def update_suggestion_comment(user_id, partner_id, comment, author_id):
             DO NOTHING""",
         user_id, partner_id
     )
-    await api.pg.club.execute(
+    data = await api.pg.club.fetchrow(
         """INSERT INTO
                 suggestions_comments (user_id, partner_id, comment, author_id)
             VALUES
-                ($1, $2, $3, $4)""",
+                ($1, $2, $3, $4)
+            RETURNING
+                id, time_create""",
         user_id, partner_id, comment, author_id
     )
+    state = await api.pg.club.fetchrow(
+        """SELECT
+                state, time_update
+            FROM
+                users_suggestions
+            WHERE
+                user_id = $1 AND partner_id = $2""",
+        user_id, partner_id
+    )
+    return dict(data) | dict (state)
 
 
 
@@ -4333,6 +4495,7 @@ async def get_users_with_avatars(users_ids):
     return [ dict(item) for item in data ]
 
 
+
 ################################################################
 async def get_favorites_stats(users_ids):
     api = get_api_context()
@@ -4352,3 +4515,131 @@ async def get_favorites_stats(users_ids):
         if str(id) not in result:
             result[str(id)] = 0
     return result
+
+
+
+################################################################
+def update_suggestions_log(id, actions):
+    api = get_api_context()
+    # actions: [ 'create', 'activate', 'deactivate', 'update' ]
+    asyncio.create_task(process_suggestions_log(api, id, actions))
+
+
+
+################################################################
+async def process_suggestions_log(api, user_id, actions):
+    user = User()
+    await user.set(id = user_id)
+    if user.id and user.active:
+        if 'create' in actions or 'activate' in actions or 'update' in actions:
+            suggestions = await user.get_suggestions_new_to_process(api)
+            await suggestions_process(api, user.id, suggestions)
+        if 'deactivate' in actions:
+            await suggestions_deactivate(api, user.id)
+    else:
+        print('SUGGESTIONS LOG: WRONG USER')
+
+
+
+################################################################
+async def parse_suggestions():
+    api = get_api_context()
+    data = await api.pg.club.fetch(
+        """SELECT
+                t1.id, t1.name
+            FROM
+                users t1
+            INNER JOIN
+                users_roles t2 ON t2.user_id = t1.id AND t2.role_id = 10002
+            WHERE
+                t1.active IS TRUE"""
+    )
+    #print('PARSE:', len(data))
+    i = 1
+    for item in data:
+        print(str(i) + ':', item['name'])
+        update_suggestions_log(item['id'], [ 'activate' ])
+
+
+
+################################################################
+async def get_user_events_with_connections(user_id, target_id, events_ids):
+    api = get_api_context()
+    data_events = await api.pg.club.fetch(
+        """SELECT
+                event_id, confirmation, audit
+            FROM
+                events_users
+            WHERE
+                user_id = $1 AND event_id = ANY($2)""",
+        target_id, events_ids
+    )
+    data_connections = await api.pg.club.fetch(
+        """SELECT
+                id, event_id, user_1_id, user_2_id, state, creator_id, user_rating_1, user_rating_2, response
+            FROM
+                users_connections
+            WHERE
+                user_1_id = $1 AND user_2_id = $2 AND event_id = ANY($3) AND deleted IS FALSE""",
+        user_id if user_id < target_id else target_id,
+        target_id if target_id > user_id else user_id,
+        events_ids
+    )
+    result = {}
+    for item in data_events:
+        result[str(item['event_id'])] = {
+            'confirmation': dict(item),
+        }
+    for item in data_connections:
+        if str(item['event_id']) not in result:
+            result[str(item['event_id'])] = {}
+        result[str(item['event_id'])]['connection'] = dict(item)
+    return result
+
+
+
+################################################################
+async def get_user_events_with_connections(user_id, events_ids):
+    api = get_api_context()
+    data_connections = await api.pg.club.fetch(
+        """SELECT
+                id, event_id, user_1_id, user_2_id, state, creator_id, user_rating_1, user_rating_2, response
+            FROM
+                users_connections
+            WHERE
+                (user_1_id = $1 OR user_2_id = $1) AND event_id = ANY($2) AND deleted IS FALSE""",
+        user_id,
+        events_ids
+    )
+    users_ids = []
+    for item in data_connections:
+        if user_id != item['user_1_id']:
+            users_ids.append(item['user_1_id'])
+        else:
+            users_ids.append(item['user_2_id'])
+    if users_ids:
+        data_events = await api.pg.club.fetch(
+            """SELECT
+                    event_id, user_id, confirmation, audit
+                FROM
+                    events_users
+                WHERE
+                    user_id = ANY($1) AND event_id = ANY($2)""",
+            users_ids, events_ids
+        )
+        cache = {}
+        for item in data_events:
+            if 
+
+
+        result = {}
+        for item in data_events:
+            result[str(item['event_id'])] = {
+                'confirmation': dict(item),
+            }
+        for item in data_connections:
+            if str(item['event_id']) not in result:
+                result[str(item['event_id'])] = {}
+            result[str(item['event_id'])]['connection'] = dict(item)
+        return result
+    return []

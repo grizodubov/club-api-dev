@@ -84,6 +84,7 @@ MODELS = {
         'time_notify': {
             'required': True,
 			'type': 'str',
+            'null': True,
         },
         'event_id': {
             'required': True,
@@ -406,6 +407,8 @@ async def event_info(request):
 ################################################################
 async def event_connection(request):
     if request.user.id:
+        if not request.user.check_roles({ 'client' }):
+            return OrjsonResponse({ '_notification': 'Назначение встреч доступно только членам клуба и кандидатам во время пробного периода!' })
         if validate(request.params, MODELS['event_connection']):
             event = Event()
             await event.set(id = request.params['event_id'])
@@ -514,10 +517,11 @@ async def event_connection_response(request):
                 user2 = User()
                 await user2.set(id = request.params['user_id'])
                 if user2.id:
-                    await view(
-                        user_id = request.user.id,
-                        time_notify = request.params['time_notify'],
-                    )
+                    if request.params['time_notify']:
+                        await view(
+                            user_id = request.user.id,
+                            time_notify = request.params['time_notify'],
+                        )
                     await update_connection_response(
                         event_id = event.id,
                         user_1_id = request.user.id,

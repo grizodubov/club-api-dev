@@ -15,6 +15,7 @@ from app.routes.endpoints.notification_1 import routes as routes_notification_1
 from app.routes.endpoints.tag import routes as routes_tag
 from app.routes.endpoints.poll import routes as routes_poll
 from app.routes.endpoints.log import routes as routes_log
+from app.routes.endpoints.suggestions import routes as routes_suggestions
 from app.routes.endpoints.note import routes as routes_note
 from app.routes.endpoints.agent_note import routes as routes_agent_note
 from app.routes.endpoints.report import routes as routes_report
@@ -42,6 +43,7 @@ routes = [
     *routes_tag(),
     *routes_poll(),
     *routes_log(),
+    *routes_suggestions(),
     *routes_note(),
     *routes_agent_note(),
     *routes_report(),
