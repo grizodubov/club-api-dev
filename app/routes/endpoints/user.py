@@ -3458,3 +3458,32 @@ async def user_events_connections_all(request):
         })
     else:
         return err(403, 'Нет доступа')
+
+
+
+################################################################
+async def user_events_connections_all_archive(request):
+    if request.user.id:
+        date = datetime.utcnow().replace(hour = 0, minute = 0, second = 0) - datetime(1970, 1, 1)
+        seconds = (date.total_seconds())
+        milliseconds = round(seconds * 1000)
+        perday = 24 * 60 * 60 * 1000
+        data = await Event.list(
+            active_only = True,
+            start = milliseconds,
+            finish = milliseconds + 90 * perday,
+        )
+        events_ids = [ event.id for event in data ]
+        status = await get_user_all_events_with_connections(request.user.id, events_ids)
+        result = []
+        for event in data:
+            temp = event.show()
+            if str(event.id) in status:
+                result.append(temp | { 'users': status[str(event.id)] })
+            else:
+                result.append(temp | { 'users': [] })
+        return OrjsonResponse({
+            'events': result,
+        })
+    else:
+        return err(403, 'Нет доступа')

@@ -4599,15 +4599,18 @@ async def get_user_events_with_connections(user_id, target_id, events_ids):
 
 
 ################################################################
-async def get_user_events_with_connections(user_id, events_ids):
+async def get_user_events_with_connections_all(user_id, events_ids):
     api = get_api_context()
     data_connections = await api.pg.club.fetch(
         """SELECT
-                id, event_id, user_1_id, user_2_id, state, creator_id, user_rating_1, user_rating_2, response
+                id, event_id, user_1_id, user_2_id, state, creator_id, user_rating_1, user_rating_2, response,
+                CASE WHEN user_1_id = $1 THEN user_2_id ELSE user_1_id END AS target_id
             FROM
                 users_connections
             WHERE
-                (user_1_id = $1 OR user_2_id = $1) AND event_id = ANY($2) AND deleted IS FALSE""",
+                (user_1_id = $1 OR user_2_id = $1) AND event_id = ANY($2) AND deleted IS FALSE
+            ORDER BY
+                id""",
         user_id,
         events_ids
     )
@@ -4629,17 +4632,19 @@ async def get_user_events_with_connections(user_id, events_ids):
         )
         cache = {}
         for item in data_events:
-            if 
-
-
+            if str(item['event_id']) not in cache:
+                cache[str(item['event_id'])] = {}
+            cache[str(item['event_id'])][str(item['user_id'])] = dict(item)
         result = {}
-        for item in data_events:
-            result[str(item['event_id'])] = {
-                'confirmation': dict(item),
-            }
         for item in data_connections:
             if str(item['event_id']) not in result:
-                result[str(item['event_id'])] = {}
-            result[str(item['event_id'])]['connection'] = dict(item)
+                result[str(item['event_id'])] = []
+            result[str(item['event_id'])].append(
+                {
+                    'user': {},
+                    'connection': dict(item),
+                    'confirmation': cache[str(item['event_id'])][str(item['target_id'])] if str(item['event_id']) in cache and str(item['target_id']) in cache[str(item['event_id'])] else None,
+                }
+            )
         return result
     return []
