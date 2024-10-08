@@ -4614,13 +4614,26 @@ async def get_user_events_with_connections_all(user_id, events_ids):
         user_id,
         events_ids
     )
-    users_ids = []
-    for item in data_connections:
-        if user_id != item['user_1_id']:
-            users_ids.append(item['user_1_id'])
-        else:
-            users_ids.append(item['user_2_id'])
+    users_ids = [ item['target_id'] for item in data_connections ]
     if users_ids:
+        data_users = await api.pg.club.fetch(
+            """SELECT
+                    t1.id, t1.name, t2.company, t2.position, t2.catalog, t3.hash AS avatar_hash, f1.flag AS favorites_flag
+                FROM
+                    users t1
+                INNER JOIN
+                    users_info t2 ON t2.user_id = t1.id
+                LEFT JOIN
+                    avatars t3 ON t3.owner_id = t1.id AND t3.active IS TRUE
+                LEFT JOIN
+                    users_favorites f1 ON f1.target_id = t1.id AND f1.user_id = $2
+                WHERE
+                    t1.id = ANY($1) AND t1.active IS TRUE""",
+            users_ids, user_id
+        )
+        users = {}
+        for item in data_users:
+            users[str(item['id'])] = dict(item)
         data_events = await api.pg.club.fetch(
             """SELECT
                     event_id, user_id, confirmation, audit
@@ -4639,12 +4652,39 @@ async def get_user_events_with_connections_all(user_id, events_ids):
         for item in data_connections:
             if str(item['event_id']) not in result:
                 result[str(item['event_id'])] = []
-            result[str(item['event_id'])].append(
-                {
-                    'user': {},
-                    'connection': dict(item),
-                    'confirmation': cache[str(item['event_id'])][str(item['target_id'])] if str(item['event_id']) in cache and str(item['target_id']) in cache[str(item['event_id'])] else None,
-                }
-            )
+            if str(item['target_id']) in users:
+                result[str(item['event_id'])].append(
+                    {
+                        'user': users[str(item['target_id'])],
+                        'connection': dict(item),
+                        'confirmation': cache[str(item['event_id'])][str(item['target_id'])] if str(item['event_id']) in cache and str(item['target_id']) in cache[str(item['event_id'])] else None,
+                    }
+                )
         return result
     return []
+
+
+
+################################################################
+async def set_user_event_connection_mark(user_id, connection_id, mark):
+    api = get_api_context()
+    data = await api.pg.club.fetchrow(
+        """SELECT
+                user_1_id, user_2_id
+            FROM
+                users_connections
+            WHERE
+                id = $1""",
+        connection_id
+    )
+    if data:
+        if data['user_1_id'] == user_id:
+            await api.pg.club.execute(
+                """UPDATE users_connections SET user_rating_1 = $2 WHERE id = $1""",
+                connection_id, mark
+            )
+        elif data['user_2_id'] == user_id:
+            await api.pg.club.execute(
+                """UPDATE users_connections SET user_rating_2 = $2 WHERE id = $1""",
+                connection_id, mark
+            )

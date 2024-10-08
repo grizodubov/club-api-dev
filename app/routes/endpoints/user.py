@@ -8,7 +8,7 @@ from app.core.request import err
 from app.core.response import OrjsonResponse
 from app.core.event import dispatch
 from app.utils.validate import validate
-from app.models.user import User, get_residents, get_speakers, get_residents_contacts, get_community_managers, get_telegram_pin, get_last_activity, get_users_memberships, get_agents_list, get_agents, create_connection, recover_connection, drop_connection, update_connection_state, update_connection_comment, get_connections, update_connection_rating, get_profiles_views_amount, get_date_profiles_views_amount, create_offline_connection, get_all_clients, update_suggestion, update_suggestion_comment, get_users_with_avatars, get_favorites_stats, parse_suggestions, get_user_events_with_connections
+from app.models.user import User, get_residents, get_speakers, get_residents_contacts, get_community_managers, get_telegram_pin, get_last_activity, get_users_memberships, get_agents_list, get_agents, create_connection, recover_connection, drop_connection, update_connection_state, update_connection_comment, get_connections, update_connection_rating, get_profiles_views_amount, get_date_profiles_views_amount, create_offline_connection, get_all_clients, update_suggestion, update_suggestion_comment, get_users_with_avatars, get_favorites_stats, parse_suggestions, get_user_events_with_connections, get_user_events_with_connections_all, set_user_event_connection_mark
 from app.models.event import Event, get_events_confirmations_pendings
 from app.models.item import Item
 from app.models.note import get_last_notes_times
@@ -42,7 +42,7 @@ def routes():
 
         Route('/user/events/connections', user_events_connections, methods = [ 'POST' ]),
         Route('/user/events/connections/all', user_events_connections_all, methods = [ 'POST' ]),
-        Route('/user/events/connections/all/archive', user_events_connections_all_archive, methods = [ 'POST' ]),
+        Route('/user/events/connection/mark', user_mark_event_connection, methods = [ 'POST' ]),
 
         Route('/m/user/search', moderator_user_search, methods = [ 'POST' ]),
         Route('/m/user/for/select', moderator_user_for_select, methods = [ 'POST' ]),
@@ -266,6 +266,23 @@ MODELS = {
 			'type': 'int',
             'value_min': 1,
 		},
+    },
+    'user_events_connections_all': {
+        'archive': {
+            'required': True,
+			'type': 'bool',
+        },
+    },
+    'user_mark_event_connection': {
+        'id': {
+            'required': True,
+			'type': 'int',
+            'value_min': 1,
+        },
+        'mark': {
+            'required': True,
+			'type': 'int',
+        },
     },
     'user_favorites_set': {
         'target_id': {
@@ -3435,55 +3452,50 @@ async def user_events_connections(request):
 ################################################################
 async def user_events_connections_all(request):
     if request.user.id:
-        date = datetime.utcnow().replace(hour = 0, minute = 0, second = 0) - datetime(1970, 1, 1)
-        seconds = (date.total_seconds())
-        milliseconds = round(seconds * 1000)
-        perday = 24 * 60 * 60 * 1000
-        data = await Event.list(
-            active_only = True,
-            start = milliseconds,
-            finish = milliseconds + 90 * perday,
-        )
-        events_ids = [ event.id for event in data ]
-        status = await get_user_all_events_with_connections(request.user.id, events_ids)
-        result = []
-        for event in data:
-            temp = event.show()
-            if str(event.id) in status:
-                result.append(temp | { 'users': status[str(event.id)] })
+        if validate(request.params, MODELS['user_events_connections_all']):
+            date = datetime.utcnow().replace(hour = 0, minute = 0, second = 0) - datetime(1970, 1, 1)
+            seconds = (date.total_seconds())
+            milliseconds = round(seconds * 1000)
+            perday = 24 * 60 * 60 * 1000
+            params = [ 0, 0 ]
+            if request.params['archive']:
+                params[0] = milliseconds - 180 * perday
+                params[1] = milliseconds - perday
             else:
-                result.append(temp | { 'users': [] })
-        return OrjsonResponse({
-            'events': result,
-        })
+                params[0] = milliseconds
+                params[1] = milliseconds + 90 * perday
+            data = await Event.list(
+                active_only = True,
+                start = params[0],
+                finish = params[1],
+            )
+            events_ids = [ event.id for event in data ]
+            status = await get_user_events_with_connections_all(request.user.id, events_ids)
+            result = []
+            for event in data:
+                temp = event.show()
+                if str(event.id) in status:
+                    result.append(temp | { 'users': status[str(event.id)] })
+            if request.params['archive']:
+                result.reverse()
+            return OrjsonResponse({
+                'events': result,
+            })
+        else:
+            return err(400, 'Неверный запрос')
     else:
         return err(403, 'Нет доступа')
 
 
 
 ################################################################
-async def user_events_connections_all_archive(request):
+async def user_mark_event_connection(request):
     if request.user.id:
-        date = datetime.utcnow().replace(hour = 0, minute = 0, second = 0) - datetime(1970, 1, 1)
-        seconds = (date.total_seconds())
-        milliseconds = round(seconds * 1000)
-        perday = 24 * 60 * 60 * 1000
-        data = await Event.list(
-            active_only = True,
-            start = milliseconds,
-            finish = milliseconds + 90 * perday,
-        )
-        events_ids = [ event.id for event in data ]
-        status = await get_user_all_events_with_connections(request.user.id, events_ids)
-        result = []
-        for event in data:
-            temp = event.show()
-            if str(event.id) in status:
-                result.append(temp | { 'users': status[str(event.id)] })
-            else:
-                result.append(temp | { 'users': [] })
-        return OrjsonResponse({
-            'events': result,
-        })
+        if validate(request.params, MODELS['user_mark_event_connection']):
+            await set_user_event_connection_mark(request.user.id, request.params['id'], request.params['mark'])
+            dispatch('user_update', request)
+            return OrjsonResponse({})
+        else:
+            return err(400, 'Неверный запрос')
     else:
         return err(403, 'Нет доступа')
