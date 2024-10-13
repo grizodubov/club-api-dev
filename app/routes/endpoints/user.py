@@ -8,7 +8,7 @@ from app.core.request import err
 from app.core.response import OrjsonResponse
 from app.core.event import dispatch
 from app.utils.validate import validate
-from app.models.user import User, get_residents, get_speakers, get_residents_contacts, get_community_managers, get_telegram_pin, get_last_activity, get_users_memberships, get_agents_list, get_agents, create_connection, recover_connection, drop_connection, update_connection_state, update_connection_comment, get_connections, update_connection_rating, get_profiles_views_amount, get_date_profiles_views_amount, create_offline_connection, get_all_clients, update_suggestion, update_suggestion_comment, get_users_with_avatars, get_favorites_stats, parse_suggestions, get_user_events_with_connections, get_user_events_with_connections_all, set_user_event_connection_mark
+from app.models.user import User, get_residents, get_speakers, get_residents_contacts, get_community_managers, get_telegram_pin, get_last_activity, get_users_memberships, get_agents_list, get_agents, create_connection, recover_connection, drop_connection, update_connection_state, update_connection_comment, get_connections, update_connection_rating, get_profiles_views_amount, get_date_profiles_views_amount, create_offline_connection, get_all_clients, update_suggestion, update_suggestion_comment, get_users_with_avatars, get_favorites_stats, parse_suggestions, get_user_events_with_connections, get_user_events_with_connections_all, set_user_connection_mark, get_users_connections_all
 from app.models.event import Event, get_events_confirmations_pendings
 from app.models.item import Item
 from app.models.note import get_last_notes_times
@@ -43,6 +43,7 @@ def routes():
         Route('/user/events/connections', user_events_connections, methods = [ 'POST' ]),
         Route('/user/events/connections/all', user_events_connections_all, methods = [ 'POST' ]),
         Route('/user/events/connection/mark', user_mark_event_connection, methods = [ 'POST' ]),
+        Route('/user/offline/connection/mark', user_mark_offline_connection, methods = [ 'POST' ]),
 
         Route('/m/user/search', moderator_user_search, methods = [ 'POST' ]),
         Route('/m/user/for/select', moderator_user_for_select, methods = [ 'POST' ]),
@@ -282,6 +283,29 @@ MODELS = {
         'mark': {
             'required': True,
 			'type': 'int',
+            'null': True,
+        },
+        'comment': {
+            'required': True,
+			'type': 'str',
+            'null': True,
+        },
+    },
+    'user_mark_offline_connection': {
+        'id': {
+            'required': True,
+			'type': 'int',
+            'value_min': 1,
+        },
+        'mark': {
+            'required': True,
+			'type': 'int',
+            'null': True,
+        },
+        'comment': {
+            'required': True,
+			'type': 'str',
+            'null': True,
         },
     },
     'user_favorites_set': {
@@ -3478,8 +3502,12 @@ async def user_events_connections_all(request):
                     result.append(temp | { 'users': status[str(event.id)] })
             if request.params['archive']:
                 result.reverse()
+            result_offline = await get_users_connections_all(request.user.id, request.params['archive'])
+            if request.params['archive']:
+                result_offline.reverse()
             return OrjsonResponse({
                 'events': result,
+                'offline': result_offline,
             })
         else:
             return err(400, 'Неверный запрос')
@@ -3490,9 +3518,23 @@ async def user_events_connections_all(request):
 
 ################################################################
 async def user_mark_event_connection(request):
-    if request.user.id:
+    if request.user.id and False:
         if validate(request.params, MODELS['user_mark_event_connection']):
-            await set_user_event_connection_mark(request.user.id, request.params['id'], request.params['mark'])
+            await set_user_connection_mark(request.user.id, request.params['id'], request.params['mark'], request.params['comment'])
+            dispatch('user_update', request)
+            return OrjsonResponse({})
+        else:
+            return err(400, 'Неверный запрос')
+    else:
+        return err(403, 'Нет доступа')
+
+
+
+################################################################
+async def user_mark_offline_connection(request):
+    if request.user.id and False:
+        if validate(request.params, MODELS['user_mark_offline_connection']):
+            await set_user_connection_mark(request.user.id, request.params['id'], request.params['mark'], request.params['comment'])
             dispatch('user_update', request)
             return OrjsonResponse({})
         else:

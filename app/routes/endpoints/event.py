@@ -7,7 +7,7 @@ from app.core.response import OrjsonResponse
 from app.core.event import dispatch
 from app.utils.validate import validate
 from app.models.event import Event, find_closest_event, get_participants, get_participants_with_avatars, get_all_speakers, get_future_events, get_speakers, get_events
-from app.models.user import User, get_connections, create_connection, update_connection_response
+from app.models.user import User, get_connections, create_connection, update_connection_response, update_offline_connection_response
 from app.models.notification import create_notifications
 from app.models.notification_1 import create as create_notification_1, view
 
@@ -19,6 +19,7 @@ def routes():
         Route('/event/info', event_info, methods = [ 'POST' ]),
         Route('/event/connection', event_connection, methods = [ 'POST' ]),
         Route('/event/connection/response', event_connection_response, methods = [ 'POST' ]),
+        Route('/offline/connection/response', offline_connection_response, methods = [ 'POST' ]),
 
         Route('/m/event/list', moderator_event_list, methods = [ 'POST' ]),
         Route('/m/event/update', moderator_event_update, methods = [ 'POST' ]),
@@ -92,6 +93,18 @@ MODELS = {
             'value_min': 1,
         },
         'user_id': {
+            'required': True,
+            'type': 'int',
+            'value_min': 1,
+        },
+        'response': {
+            'required': True,
+            'type': 'bool',
+            'null': True,
+        },
+    },
+    'offline_connection_response': {
+        'id': {
             'required': True,
             'type': 'int',
             'value_min': 1,
@@ -614,6 +627,24 @@ async def event_connection_response(request):
     else:
         return err(403, 'Нет доступа')
 
+
+
+################################################################
+async def offline_connection_response(request):
+    if request.user.id:
+        if validate(request.params, MODELS['offline_connection_response']):
+            await update_offline_connection_response(
+                user_id = request.user.id,
+                connection_id = request.params['id'],
+                response = request.params['response'],
+            )
+            dispatch('user_update', request)
+            return OrjsonResponse({})
+        else:
+            return err(400, 'Неверный запрос')
+    else:
+        return err(403, 'Нет доступа')
+        
 
 
 ################################################################

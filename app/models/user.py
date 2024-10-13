@@ -4003,6 +4003,11 @@ async def get_agents_list(community_manager_id, active_only = True):
 async def create_connection(event_id, user_1_id, user_2_id, creator_id):
     api = get_api_context()
     if user_1_id != user_2_id:
+        if event_id:
+            await api.pg.club.execute(
+                """INSERT INTO events_users (event_id, user_id) VALUES ($1, $2), ($1, $3) ON CONFLICT (event_id, user_id) DO NOTHING""",
+                event_id, user_1_id, user_2_id
+            )
         id = await api.pg.club.fetchval(
             """INSERT INTO 
                     users_connections (event_id, user_1_id, user_2_id, creator_id)
@@ -4567,20 +4572,24 @@ async def get_user_events_with_connections(user_id, target_id, events_ids):
     api = get_api_context()
     data_events = await api.pg.club.fetch(
         """SELECT
-                event_id, confirmation, audit
+                t1.event_id, t1.confirmation, t1.audit
             FROM
-                events_users
+                events_users t1
+            INNER JOIN
+                events t2 ON t2.id = t1.event_id
             WHERE
-                user_id = $1 AND event_id = ANY($2)""",
+                t1.user_id = $1 AND t1.event_id = ANY($2) AND t2.format <> 'webinar'""",
         target_id, events_ids
     )
     data_connections = await api.pg.club.fetch(
         """SELECT
-                id, event_id, user_1_id, user_2_id, state, creator_id, user_rating_1, user_rating_2, response
+                t1.id, t1.event_id, t1.user_1_id, t1.user_2_id, t1.state, t1.creator_id, t1.user_rating_1, t1.user_rating_2, t1.response, t1.response_1, t1.response_2
             FROM
-                users_connections
+                users_connections t1
+            INNER JOIN
+                events t2 ON t2.id = t1.event_id
             WHERE
-                user_1_id = $1 AND user_2_id = $2 AND event_id = ANY($3) AND deleted IS FALSE""",
+                t1.user_1_id = $1 AND t1.user_2_id = $2 AND t1.event_id = ANY($3) AND t1.deleted IS FALSE AND t2.format <> 'webinar'""",
         user_id if user_id < target_id else target_id,
         target_id if target_id > user_id else user_id,
         events_ids
@@ -4603,14 +4612,16 @@ async def get_user_events_with_connections_all(user_id, events_ids):
     api = get_api_context()
     data_connections = await api.pg.club.fetch(
         """SELECT
-                id, event_id, user_1_id, user_2_id, state, creator_id, user_rating_1, user_rating_2, response,
-                CASE WHEN user_1_id = $1 THEN user_2_id ELSE user_1_id END AS target_id
+                t1.id, t1.event_id, t1.user_1_id, t1.user_2_id, t1.state, t1.creator_id, t1.user_rating_1, t1.user_rating_2, t1.response, t1.response_1, t1.response_2,
+                CASE WHEN t1.user_1_id = $1 THEN t1.user_2_id ELSE t1.user_1_id END AS target_id
             FROM
-                users_connections
+                users_connections t1
+            INNER JOIN
+                events t2 ON t2.id = t1.event_id
             WHERE
-                (user_1_id = $1 OR user_2_id = $1) AND event_id = ANY($2) AND deleted IS FALSE
+                (t1.user_1_id = $1 OR t1.user_2_id = $1) AND t1.event_id = ANY($2) AND t1.deleted IS FALSE AND t2.format <> 'webinar'
             ORDER BY
-                id""",
+                t1.id""",
         user_id,
         events_ids
     )
@@ -4636,11 +4647,13 @@ async def get_user_events_with_connections_all(user_id, events_ids):
             users[str(item['id'])] = dict(item)
         data_events = await api.pg.club.fetch(
             """SELECT
-                    event_id, user_id, confirmation, audit
+                    t1.event_id, t1.user_id, t1.confirmation, t1.audit
                 FROM
-                    events_users
+                    events_users t1
+                INNER JOIN
+                    events t2 ON t2.id = t1.event_id
                 WHERE
-                    user_id = ANY($1) AND event_id = ANY($2)""",
+                    t1.user_id = ANY($1) AND t1.event_id = ANY($2) AND t2.format <> 'webinar'""",
             users_ids, events_ids
         )
         cache = {}
@@ -4666,7 +4679,57 @@ async def get_user_events_with_connections_all(user_id, events_ids):
 
 
 ################################################################
-async def set_user_event_connection_mark(user_id, connection_id, mark):
+async def get_users_connections_all(user_id, archive = False):
+    api = get_api_context()
+    data_connections = await api.pg.club.fetch(
+        """SELECT
+                id, event_id, user_1_id, user_2_id, state, creator_id, user_rating_1, user_rating_2, response, response_1, response_2,
+                CASE WHEN user_1_id = $1 THEN user_2_id ELSE user_1_id END AS target_id
+            FROM
+                users_connections
+            WHERE
+                (user_1_id = $1 OR user_2_id = $1) AND event_id IS NULL AND deleted IS FALSE AND state = $2
+            ORDER BY
+                id""",
+        user_id, archive
+    )
+    users_ids = [ item['target_id'] for item in data_connections ]
+    if users_ids:
+        data_users = await api.pg.club.fetch(
+            """SELECT
+                    t1.id, t1.name, t2.company, t2.position, t2.catalog, t3.hash AS avatar_hash, f1.flag AS favorites_flag
+                FROM
+                    users t1
+                INNER JOIN
+                    users_info t2 ON t2.user_id = t1.id
+                LEFT JOIN
+                    avatars t3 ON t3.owner_id = t1.id AND t3.active IS TRUE
+                LEFT JOIN
+                    users_favorites f1 ON f1.target_id = t1.id AND f1.user_id = $2
+                WHERE
+                    t1.id = ANY($1) AND t1.active IS TRUE""",
+            users_ids, user_id
+        )
+        users = {}
+        for item in data_users:
+            users[str(item['id'])] = dict(item)
+        result = []
+        for item in data_connections:
+            if str(item['target_id']) in users:
+                result.append(
+                    {
+                        'user': users[str(item['target_id'])],
+                        'connection': dict(item),
+                        'confirmation': None,
+                    }
+                )
+        return result
+    return []
+
+
+
+################################################################
+async def set_user_connection_mark(user_id, connection_id, mark, comment):
     api = get_api_context()
     data = await api.pg.club.fetchrow(
         """SELECT
@@ -4680,11 +4743,37 @@ async def set_user_event_connection_mark(user_id, connection_id, mark):
     if data:
         if data['user_1_id'] == user_id:
             await api.pg.club.execute(
-                """UPDATE users_connections SET user_rating_1 = $2 WHERE id = $1""",
-                connection_id, mark
+                """UPDATE users_connections SET user_rating_1 = $2, user_comment_1 = $3 WHERE id = $1""",
+                connection_id, mark, comment
             )
         elif data['user_2_id'] == user_id:
             await api.pg.club.execute(
-                """UPDATE users_connections SET user_rating_2 = $2 WHERE id = $1""",
-                connection_id, mark
+                """UPDATE users_connections SET user_rating_2 = $2, user_comment_2 = $3 WHERE id = $1""",
+                connection_id, mark, comment
+            )
+
+
+
+################################################################
+async def update_offline_connection_response(user_id, connection_id, response):
+    api = get_api_context()
+    data = await api.pg.club.fetchrow(
+        """SELECT
+                user_1_id, user_2_id
+            FROM
+                users_connections
+            WHERE
+                id = $1""",
+        connection_id
+    )
+    if data:
+        if data['user_1_id'] == user_id:
+            await api.pg.club.execute(
+                """UPDATE users_connections SET response_1 = $2 WHERE id = $1""",
+                connection_id, response
+            )
+        elif data['user_2_id'] == user_id:
+            await api.pg.club.execute(
+                """UPDATE users_connections SET response_2 = $2 WHERE id = $1""",
+                connection_id, response
             )
