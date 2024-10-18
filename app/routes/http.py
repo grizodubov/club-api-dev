@@ -21,6 +21,7 @@ from app.routes.endpoints.agent_note import routes as routes_agent_note
 from app.routes.endpoints.report import routes as routes_report
 from app.routes.endpoints.qr import routes as routes_qr
 from app.routes.endpoints.send import routes as routes_send
+from app.routes.endpoints.filter import routes as routes_filter
 
 from app.routes.endpoints.telegram import routes as routes_telegram
 
@@ -49,6 +50,7 @@ routes = [
     *routes_report(),
     *routes_qr(),
     *routes_send(),
+    *routes_filter(),
 
     *routes_telegram(),
 ]

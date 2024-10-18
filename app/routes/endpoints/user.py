@@ -45,6 +45,8 @@ def routes():
         Route('/user/events/connection/mark', user_mark_event_connection, methods = [ 'POST' ]),
         Route('/user/offline/connection/mark', user_mark_offline_connection, methods = [ 'POST' ]),
 
+        Route('/user/community_manager', get_community_manager, methods = [ 'POST' ]),
+
         Route('/m/user/search', moderator_user_search, methods = [ 'POST' ]),
         Route('/m/user/for/select', moderator_user_for_select, methods = [ 'POST' ]),
         Route('/m/user/update', moderator_user_update, methods = [ 'POST' ]),
@@ -2436,6 +2438,28 @@ async def save_telegram_pin(request):
 
 
 ################################################################
+async def get_community_manager(request):
+    if request.user.id:
+        result = None
+        if request.user.community_manager_id:
+            user = User()
+            await user.set(id = request.user.community_manager_id)
+            result = {
+                'id': user.id,
+                'name': user.name,
+                'phone': user.phone,
+                'avatar_hash': user.avatar_hash,
+                'link_telegram': user.link_telegram,
+            }
+        return OrjsonResponse({
+            'community_manager': result,
+        })
+    else:
+        return err(403, 'Нет доступа')
+
+
+
+################################################################
 async def manager_user_search(request):
     if request.user.id and request.user.check_roles({ 'admin', 'moderator', 'manager', 'chief', 'community manager', 'agent', 'curator' }):
         if validate(request.params, MODELS['manager_user_search']):
@@ -3484,9 +3508,9 @@ async def user_events_connections_all(request):
             params = [ 0, 0 ]
             if request.params['archive']:
                 params[0] = milliseconds - 180 * perday
-                params[1] = milliseconds - perday
+                params[1] = milliseconds + 3 * perday
             else:
-                params[0] = milliseconds
+                params[0] = milliseconds - perday
                 params[1] = milliseconds + 90 * perday
             data = await Event.list(
                 active_only = True,
