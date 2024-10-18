@@ -3508,7 +3508,7 @@ async def user_events_connections_all(request):
             params = [ 0, 0 ]
             if request.params['archive']:
                 params[0] = milliseconds - 180 * perday
-                params[1] = milliseconds + 3 * perday
+                params[1] = milliseconds + 2 * perday
             else:
                 params[0] = milliseconds - perday
                 params[1] = milliseconds + 90 * perday
