@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 import asyncio
 import re
 from random import randint, choices, sample
@@ -269,11 +269,19 @@ MODELS = {
 			'type': 'int',
             'value_min': 1,
 		},
+        'dt': {
+            'required': True,
+            'type': 'str',
+        },
     },
     'user_events_connections_all': {
         'archive': {
             'required': True,
 			'type': 'bool',
+        },
+        'dt': {
+            'required': True,
+            'type': 'str',
         },
     },
     'user_mark_event_connection': {
@@ -3467,7 +3475,8 @@ async def user_events_connections(request):
             user = User()
             await user.set(id = request.params['target_id'])
             if user.id:
-                date = datetime.utcnow().replace(hour = 0, minute = 0, second = 0) - datetime(1970, 1, 1)
+                dt = datetime(int(request.params['dt'][0:4]), int(request.params['dt'][5:7]), int(request.params['dt'][8:]), 0, 0, 0, 0, tzinfo = timezone.utc)
+                date = dt - datetime(1970, 1, 1, 0, 0, 0, 0, tzinfo = timezone.utc)
                 seconds = (date.total_seconds())
                 milliseconds = round(seconds * 1000)
                 perday = 24 * 60 * 60 * 1000
@@ -3501,16 +3510,17 @@ async def user_events_connections(request):
 async def user_events_connections_all(request):
     if request.user.id:
         if validate(request.params, MODELS['user_events_connections_all']):
-            date = datetime.utcnow().replace(hour = 0, minute = 0, second = 0) - datetime(1970, 1, 1)
+            dt = datetime(int(request.params['dt'][0:4]), int(request.params['dt'][5:7]), int(request.params['dt'][8:]), 0, 0, 0, 0, tzinfo = timezone.utc)
+            date = dt - datetime(1970, 1, 1, 0, 0, 0, 0, tzinfo = timezone.utc)
             seconds = (date.total_seconds())
             milliseconds = round(seconds * 1000)
             perday = 24 * 60 * 60 * 1000
             params = [ 0, 0 ]
             if request.params['archive']:
                 params[0] = milliseconds - 180 * perday
-                params[1] = milliseconds + 2 * perday
+                params[1] = milliseconds + perday
             else:
-                params[0] = milliseconds - perday
+                params[0] = milliseconds
                 params[1] = milliseconds + 90 * perday
             data = await Event.list(
                 active_only = True,
@@ -3542,13 +3552,16 @@ async def user_events_connections_all(request):
 
 ################################################################
 async def user_mark_event_connection(request):
-    if request.user.id and False:
-        if validate(request.params, MODELS['user_mark_event_connection']):
-            await set_user_connection_mark(request.user.id, request.params['id'], request.params['mark'], request.params['comment'])
-            dispatch('user_update', request)
-            return OrjsonResponse({})
+    if request.user.id:
+        if request.params['mark'] is not None:
+            if validate(request.params, MODELS['user_mark_event_connection']):
+                await set_user_connection_mark(request.user.id, request.params['id'], request.params['mark'], request.params['comment'])
+                dispatch('user_update', request)
+                return OrjsonResponse({})
+            else:
+                return err(400, 'Неверный запрос')
         else:
-            return err(400, 'Неверный запрос')
+            return err(403, 'Нет доступа')
     else:
         return err(403, 'Нет доступа')
 
@@ -3556,12 +3569,15 @@ async def user_mark_event_connection(request):
 
 ################################################################
 async def user_mark_offline_connection(request):
-    if request.user.id and False:
-        if validate(request.params, MODELS['user_mark_offline_connection']):
-            await set_user_connection_mark(request.user.id, request.params['id'], request.params['mark'], request.params['comment'])
-            dispatch('user_update', request)
-            return OrjsonResponse({})
+    if request.user.id:
+        if request.params['mark'] is not None:
+            if validate(request.params, MODELS['user_mark_offline_connection']):
+                await set_user_connection_mark(request.user.id, request.params['id'], request.params['mark'], request.params['comment'])
+                dispatch('user_update', request)
+                return OrjsonResponse({})
+            else:
+                return err(400, 'Неверный запрос')
         else:
-            return err(400, 'Неверный запрос')
+            return err(403, 'Нет доступа')
     else:
         return err(403, 'Нет доступа')

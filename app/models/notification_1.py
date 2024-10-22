@@ -104,7 +104,7 @@ async def create_multiple(users_ids, event, data, mode = 'client'):
     i = 1
     query = []
     args = []
-    for id in users_ids:
+    for id in set(users_ids):
         temp = '($' + str(i) + ', $' + str(i + 1) + ', $' + str(i + 2) + ', $' + str(i + 3) + ')'
         query.append(temp)
         args.extend([ id, event, data, mode ])
