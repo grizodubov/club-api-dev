@@ -66,7 +66,7 @@ async def get_connections_list(page = 1, community_manager_id = None, state = No
         args.append(offset)
         data_connections = await api.pg.club.fetch(
             """SELECT
-                    t1.id, t1.event_id, t1.user_1_id, t1.user_2_id,
+                    t1.id, t1.event_id, t1.user_1_id, t1.user_2_id, u1_1.active AS user_1_active, u2_1.active AS user_2_active,
                     t1.state, t1.creator_id, t1.rating_1, t1.rating_2,
                     t1.user_rating_1, t1.user_rating_2,
                     t1.response, t1.response_1, t1.response_2,
@@ -75,7 +75,7 @@ async def get_connections_list(page = 1, community_manager_id = None, state = No
                     u2_1.name AS user_2, u2_2.company AS user_2_company, u2_3.hash AS avatar_2_hash,
                     m1_1.id AS community_manager_1_id, m1_1.name AS community_manager_1,
                     m2_1.id AS community_manager_2_id, m2_1.name AS community_manager_2,
-                    t1.time_create
+                    t1.time_create, t1.time_user_rating_1, t1.time_user_rating_2
                 FROM
                     users_connections t1
                 INNER JOIN

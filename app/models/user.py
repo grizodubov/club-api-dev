@@ -4743,12 +4743,12 @@ async def set_user_connection_mark(user_id, connection_id, mark, comment):
     if data:
         if data['user_1_id'] == user_id:
             await api.pg.club.execute(
-                """UPDATE users_connections SET user_rating_1 = $2, user_comment_1 = $3 WHERE id = $1""",
+                """UPDATE users_connections SET user_rating_1 = $2, user_comment_1 = $3, time_user_rating_1 = now() at time zone 'utc' WHERE id = $1""",
                 connection_id, mark, comment
             )
         elif data['user_2_id'] == user_id:
             await api.pg.club.execute(
-                """UPDATE users_connections SET user_rating_2 = $2, user_comment_2 = $3 WHERE id = $1""",
+                """UPDATE users_connections SET user_rating_2 = $2, user_comment_2 = $3, time_user_rating_2 = now() at time zone 'utc' WHERE id = $1""",
                 connection_id, mark, comment
             )
 
