@@ -1,0 +1,14 @@
+image: atlassian/default-image:latest
+
+clone:
+  depth: full
+pipelines:
+  default:
+      - step:
+          name: 'Build and Test'
+          script:
+            - echo "Your build and test goes here..."
+      - step:
+          name: 'Sync Bitbucket repo to GitHub'
+          script:
+            - git push --mirror git@github.com:grizodubov/club-api-dev.git
